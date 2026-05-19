@@ -1,0 +1,68 @@
+import type { CaseMeta, CaseStep } from '../../../shared/types';
+
+/**
+ * 生成 Playwright TypeScript 测试文件。
+ */
+export function generateSpec(item: CaseMeta) {
+  const lines = [
+    "import { test, expect } from '@playwright/test';",
+    '',
+    `test(${quote(item.name)}, async ({ page }) => {`,
+    `  await page.goto(${quote(item.startPath)});`
+  ];
+
+  for (const step of item.steps) {
+    lines.push(renderStep(step));
+  }
+
+  lines.push('});', '');
+
+  return lines.join('\n');
+}
+
+/**
+ * 生成单个步骤的测试代码。
+ */
+function renderStep(step: CaseStep) {
+  switch (step.type) {
+    case 'goto':
+      return `  await page.goto(${quote(step.value ?? '/')});`;
+    case 'click':
+      return `  await page.locator(${quote(requireText(step.selector, '点击选择器'))}).click();`;
+    case 'fill':
+      return `  await page.locator(${quote(requireText(step.selector, '输入选择器'))}).fill(${quote(step.value ?? '')});`;
+    case 'select':
+      return `  await page.locator(${quote(requireText(step.selector, '下拉选择器'))}).selectOption(${quote(step.value ?? '')});`;
+    case 'wait':
+      // 等待时间单位是毫秒，Playwright 的 waitForTimeout 也使用毫秒。
+      return `  await page.waitForTimeout(${step.timeout ?? 1000});`;
+    case 'assertText':
+      return `  await expect(page.locator(${quote(requireText(step.selector, '文本断言选择器'))})).toContainText(${quote(step.value ?? '')});`;
+    case 'assertVisible':
+      return `  await expect(page.locator(${quote(requireText(step.selector, '可见断言选择器'))})).toBeVisible();`;
+    case 'assertUrl':
+      return `  await expect(page).toHaveURL(${quote(step.value ?? '')});`;
+    case 'assertTitle':
+      return `  await expect(page).toHaveTitle(${quote(step.value ?? '')});`;
+    default:
+      return `  // 暂不支持的步骤类型：${String(step.type)}`;
+  }
+}
+
+/**
+ * 生成安全字符串字面量。
+ */
+function quote(value: string) {
+  return JSON.stringify(value).replace(/^"|"$/g, "'");
+}
+
+/**
+ * 要求字段必须存在。
+ */
+function requireText(value: string | undefined, name: string) {
+  if (!value) {
+    throw new Error(`${name}不能为空`);
+  }
+
+  return value;
+}
