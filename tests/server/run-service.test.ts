@@ -7,7 +7,7 @@ import { createRun } from '../../server/src/lib/run-store';
 import { createProject } from '../../server/src/lib/project-store';
 import { createAuthState, getProjectAuthPath, hasProjectAuth } from '../../server/src/services/auth-session';
 import { exportRun } from '../../server/src/services/export';
-import { getProjectRunFiles, runProject } from '../../server/src/services/runner';
+import { getProjectRunFiles, RunError, runProject } from '../../server/src/services/runner';
 
 const spawnMock = vi.hoisted(() => vi.fn());
 
@@ -105,5 +105,67 @@ describe('运行服务', () => {
       ['playwright', 'test', '--config', 'playwright.config.ts', `.*crm.*cases.*${item.key}.*case\\.spec\\.ts`],
       expect.objectContaining({ cwd: process.cwd() })
     );
+  });
+
+  it('运行成功时返回可直接打开的报告地址', async () => {
+    await createProject({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    await createCase('crm', {
+      name: '创建订单',
+      startPath: '/orders/create'
+    });
+    spawnMock.mockReturnValue({
+      on(event: string, callback: (code: number) => void) {
+        if (event === 'exit') {
+          callback(0);
+        }
+      }
+    });
+
+    const run = await runProject('crm');
+
+    expect(run.reportUrl).toBe(`/api/projects/crm/runs/${run.id}/report/`);
+  });
+
+  it('运行失败时返回用例和阶段摘要以及报告地址', async () => {
+    await createProject({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    await createCase('crm', {
+      name: '创建订单',
+      startPath: '/orders/create'
+    });
+    spawnMock.mockReturnValue({
+      stdout: {
+        on(event: string, callback: (data: Buffer) => void) {
+          if (event === 'data') {
+            callback(Buffer.from('  1) [chromium] › data\\projects\\crm\\cases\\case-1\\case.spec.ts:3:1 › 创建订单\n'));
+            callback(Buffer.from('    Error: expect(locator).toBeVisible failed\n'));
+          }
+        }
+      },
+      stderr: {
+        on(event: string, callback: (data: Buffer) => void) {
+          if (event === 'data') {
+            callback(Buffer.from('Timeout 1000ms exceeded\n'));
+          }
+        }
+      },
+      on(event: string, callback: (code: number) => void) {
+        if (event === 'exit') {
+          callback(1);
+        }
+      }
+    });
+
+    await expect(runProject('crm')).rejects.toMatchObject({
+      message: '用例“创建订单”在断言可见阶段失败：元素在 1000ms 内没有变为可见',
+      reportUrl: expect.stringMatching(/^\/api\/projects\/crm\/runs\/\d+\/report\/$/)
+    } satisfies Partial<RunError>);
   });
 });

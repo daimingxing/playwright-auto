@@ -83,4 +83,25 @@ describe('用例生成器', () => {
     expect(code).toContain("await page.locator('#save').click({ timeout: 1000 });");
     expect(code).toContain("await page.locator('#name').fill('测试订单', { timeout: 1000 });");
   });
+
+  it('生成悬停、双击和右键点击步骤', () => {
+    const item: CaseMeta = {
+      name: '鼠标操作',
+      key: 'case-mouse',
+      startPath: '/orders',
+      createdAt: '2026-05-20T00:00:00.000Z',
+      updatedAt: '2026-05-20T00:00:00.000Z',
+      steps: [
+        { id: 's1', type: 'hover', selector: "getByRole('link', { name: '售后 QQ' })", timeout: 1000 },
+        { id: 's2', type: 'doubleClick', selector: '#more', timeout: 1000 },
+        { id: 's3', type: 'rightClick', selector: '.order-row', timeout: 1000 }
+      ]
+    };
+
+    const code = generateSpec(item);
+
+    expect(code).toContain("await page.getByRole('link', { name: '售后 QQ' }).hover({ timeout: 1000 });");
+    expect(code).toContain("await page.locator('#more').dblclick({ timeout: 1000 });");
+    expect(code).toContain("await page.locator('.order-row').click({ button: 'right', timeout: 1000 });");
+  });
 });

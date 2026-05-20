@@ -16,6 +16,8 @@ const authPath = ref('');
 const hasAuth = ref(false);
 const sessionId = ref('');
 const reportPath = ref('');
+const reportUrl = ref('');
+const runError = ref('');
 
 /**
  * 加载项目登录态状态。
@@ -68,6 +70,17 @@ async function saveAuth() {
 }
 
 /**
+ * 打开本次测试的 HTML 报告。
+ */
+function openReport() {
+  if (!reportUrl.value) {
+    return;
+  }
+
+  window.open(reportUrl.value, '_blank', 'noopener,noreferrer');
+}
+
+/**
  * 使用已保存登录态运行测试。
  */
 async function startRun() {
@@ -78,16 +91,37 @@ async function startRun() {
 
   running.value = true;
   reportPath.value = '';
+  reportUrl.value = '';
+  runError.value = '';
 
   try {
     const run = await runProject(projectKey);
     reportPath.value = run.reportPath;
+    reportUrl.value = run.reportUrl ?? '';
     ElMessage.success('测试运行完成');
+    openReport();
   } catch (error) {
-    ElMessage.error(getErrorMessage(error));
+    runError.value = getErrorMessage(error);
+    reportPath.value = getErrorInfo(error, 'reportPath');
+    reportUrl.value = getErrorInfo(error, 'reportUrl');
+    openReport();
+    ElMessage.error(runError.value);
   } finally {
     running.value = false;
   }
+}
+
+/**
+ * 从接口错误中读取附加字段。
+ */
+function getErrorInfo(error: unknown, key: 'reportPath' | 'reportUrl') {
+  if (error && typeof error === 'object' && key in error) {
+    const value = error[key as keyof typeof error];
+
+    return typeof value === 'string' ? value : '';
+  }
+
+  return '';
 }
 
 onMounted(loadAuthState);
@@ -116,7 +150,22 @@ onMounted(loadAuthState);
       </div>
 
       <el-alert v-if="authPath" class="result" type="info" :closable="false" :title="authPath" />
-      <el-alert v-if="reportPath" class="result" type="success" :closable="false" :title="`报告目录：${reportPath}`" />
+      <el-alert v-if="reportPath" class="result" type="success" :closable="false" title="测试运行完成，已打开 HTML 报告">
+        <template #default>
+          <div class="report-row">
+            <span class="report-path">{{ reportPath }}</span>
+            <el-button v-if="reportUrl" size="small" @click="openReport">打开报告</el-button>
+          </div>
+        </template>
+      </el-alert>
+      <el-alert
+        v-if="runError"
+        class="result"
+        type="error"
+        :closable="false"
+        :title="runError"
+        show-icon
+      />
     </el-card>
   </section>
 </template>
@@ -144,5 +193,20 @@ onMounted(loadAuthState);
   display: flex;
   gap: 12px;
   margin-top: 18px;
+}
+
+.report-row {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.report-path {
+  color: #606266;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

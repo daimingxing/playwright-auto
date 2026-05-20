@@ -12,7 +12,9 @@ export async function requestJson<T>(url: string, init?: RequestInit) {
 
   if (!res.ok) {
     const data = await res.json().catch(() => ({ message: '请求失败' }));
-    throw new Error(data.message ?? '请求失败');
+    const error = new Error(data.message ?? '请求失败');
+    Object.assign(error, data);
+    throw error;
   }
 
   if (res.status === 204) {

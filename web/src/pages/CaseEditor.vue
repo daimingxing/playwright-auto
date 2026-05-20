@@ -15,6 +15,9 @@ const recordId = ref('');
 const isRecording = ref(false);
 const stepTypes: StepType[] = [
   'click',
+  'rightClick',
+  'doubleClick',
+  'hover',
   'fill',
   'wait',
   'assertText',

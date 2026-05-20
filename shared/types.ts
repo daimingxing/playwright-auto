@@ -1,6 +1,9 @@
 export type StepType =
   | 'goto'
   | 'click'
+  | 'rightClick'
+  | 'doubleClick'
+  | 'hover'
   | 'fill'
   | 'select'
   | 'wait'
@@ -51,6 +54,7 @@ export interface RunMeta {
   envKey: string;
   status: 'created' | 'running' | 'passed' | 'failed';
   reportPath: string;
+  reportUrl?: string;
   createdAt: string;
   updatedAt: string;
 }

@@ -51,11 +51,23 @@ function parseAwaitStep(node: ts.Node, source: ts.SourceFile): Omit<CaseStep, 'i
   const target = call.expression.expression;
 
   if (method === 'goto') {
-    return { type: 'goto', value: readTextArg(call, 0) ?? '/', timeout: 5000 };
+    return { type: 'goto', value: readTextArg(call, 0) ?? '/', timeout: 10000 };
   }
 
   if (method === 'click') {
+    if (hasRightButton(call)) {
+      return { type: 'rightClick', selector: readSelector(target, source), timeout: 1000 };
+    }
+
     return { type: 'click', selector: readSelector(target, source), timeout: 1000 };
+  }
+
+  if (method === 'dblclick') {
+    return { type: 'doubleClick', selector: readSelector(target, source), timeout: 1000 };
+  }
+
+  if (method === 'hover') {
+    return { type: 'hover', selector: readSelector(target, source), timeout: 1000 };
   }
 
   if (method === 'fill') {
@@ -143,6 +155,30 @@ function readTextArg(call: ts.CallExpression, index: number) {
   }
 
   return undefined;
+}
+
+/**
+ * 判断 click 调用是否为右键点击。
+ */
+function hasRightButton(call: ts.CallExpression) {
+  const arg = call.arguments[0];
+
+  if (!arg || !ts.isObjectLiteralExpression(arg)) {
+    return false;
+  }
+
+  return arg.properties.some((property) => {
+    if (!ts.isPropertyAssignment(property) || !ts.isIdentifier(property.name)) {
+      return false;
+    }
+
+    if (property.name.text !== 'button') {
+      return false;
+    }
+
+    // codegen 的右键写法是 click({ button: 'right' })。
+    return ts.isStringLiteralLike(property.initializer) && property.initializer.text === 'right';
+  });
 }
 
 /**

@@ -29,6 +29,12 @@ function renderStep(step: CaseStep) {
       return `  await page.goto(${quote(step.value ?? '/')}${renderTimeoutOption(step)});`;
     case 'click':
       return `  await ${renderLocator(step.selector, '点击选择器')}.click(${renderTimeoutArg(step)});`;
+    case 'rightClick':
+      return `  await ${renderLocator(step.selector, '右键点击选择器')}.click(${renderRightClickArg(step)});`;
+    case 'doubleClick':
+      return `  await ${renderLocator(step.selector, '双击选择器')}.dblclick(${renderTimeoutArg(step)});`;
+    case 'hover':
+      return `  await ${renderLocator(step.selector, '悬停选择器')}.hover(${renderTimeoutArg(step)});`;
     case 'fill':
       return `  await ${renderLocator(step.selector, '输入选择器')}.fill(${quote(step.value ?? '')}${renderTimeoutOption(step)});`;
     case 'select':
@@ -60,6 +66,17 @@ function renderTimeoutArg(step: CaseStep) {
   }
 
   return `{ timeout: ${step.timeout} }`;
+}
+
+/**
+ * 生成右键点击参数。
+ */
+function renderRightClickArg(step: CaseStep) {
+  if (step.timeout === undefined) {
+    return `{ button: 'right' }`;
+  }
+
+  return `{ button: 'right', timeout: ${step.timeout} }`;
 }
 
 /**
