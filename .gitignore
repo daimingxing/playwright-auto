@@ -4,7 +4,8 @@ coverage
 playwright-report
 test-results
 .vite
-
+data/projects/*
+!data/projects/.gitkeep
 .serena
 *.log
 vendor/*
