@@ -6,8 +6,11 @@ export type StepType =
   | 'wait'
   | 'assertText'
   | 'assertVisible'
+  | 'assertValue'
   | 'assertUrl'
   | 'assertTitle';
+
+export type MatchType = 'contains' | 'equals' | 'regex';
 
 export interface EnvMeta {
   name: string;
@@ -30,6 +33,7 @@ export interface CaseStep {
   selector?: string;
   value?: string;
   timeout?: number;
+  match?: MatchType;
 }
 
 export interface CaseMeta {

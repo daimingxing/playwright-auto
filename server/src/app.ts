@@ -4,6 +4,7 @@ import { casesRouter, trashRouter } from './routes/cases';
 import { projectsRouter } from './routes/projects';
 import { runsRouter } from './routes/runs';
 import { authRouter } from './routes/auth';
+import { recordRouter } from './routes/record';
 
 /**
  * 创建本地 API 服务。
@@ -20,6 +21,7 @@ export function createApp() {
 
   app.use('/api/projects', projectsRouter);
   app.use('/api/projects/:projectKey/cases', casesRouter);
+  app.use('/api/projects/:projectKey/cases/:caseKey/record', recordRouter);
   app.use('/api/projects/:projectKey/trash', trashRouter);
   app.use('/api/projects/:projectKey/runs', runsRouter);
   app.use('/api/projects/:projectKey/auth', authRouter);

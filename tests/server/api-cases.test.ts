@@ -17,6 +17,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   delete process.env.DATA_ROOT;
+  delete process.env.NODE_ENV;
   await rm(root, { recursive: true, force: true });
 });
 
@@ -101,5 +102,30 @@ describe('用例接口', () => {
 
     expect(restored.status).toBe(200);
     expect(restored.body.key).toBe('case-1');
+  });
+
+  it('通过接口开始和停止录制并覆盖用例步骤', async () => {
+    process.env.NODE_ENV = 'test';
+    const app = createApp();
+    await request(app).post('/api/projects').send({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    const created = await request(app).post('/api/projects/crm/cases').send({
+      name: '创建订单',
+      startPath: '/orders/create'
+    });
+
+    const started = await request(app).post(`/api/projects/crm/cases/${created.body.key}/record/start`).send();
+    expect(started.status).toBe(201);
+    expect(started.body.sessionId).toEqual(expect.any(String));
+
+    const stopped = await request(app)
+      .post(`/api/projects/crm/cases/${created.body.key}/record/stop`)
+      .send({ sessionId: started.body.sessionId });
+
+    expect(stopped.status).toBe(200);
+    expect(stopped.body.steps.length).toBeGreaterThan(0);
   });
 });

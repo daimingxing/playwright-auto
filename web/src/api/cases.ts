@@ -6,6 +6,11 @@ export interface CreateCaseInput {
   startPath: string;
 }
 
+export interface RecordSessionResult {
+  sessionId: string;
+  url: string;
+}
+
 /**
  * 获取项目用例列表。
  */
@@ -71,5 +76,25 @@ export function updateCase(projectKey: string, caseKey: string, input: CaseMeta)
   return requestJson<CaseMeta>(`/api/projects/${projectKey}/cases/${caseKey}`, {
     method: 'PUT',
     body: JSON.stringify(input)
+  });
+}
+
+/**
+ * 开始录制当前测试用例。
+ */
+export function startRecord(projectKey: string, caseKey: string) {
+  return requestJson<RecordSessionResult>(`/api/projects/${projectKey}/cases/${caseKey}/record/start`, {
+    method: 'POST',
+    body: JSON.stringify({})
+  });
+}
+
+/**
+ * 停止录制并导入当前测试用例。
+ */
+export function stopRecord(projectKey: string, caseKey: string, sessionId: string) {
+  return requestJson<CaseMeta>(`/api/projects/${projectKey}/cases/${caseKey}/record/stop`, {
+    method: 'POST',
+    body: JSON.stringify({ sessionId })
   });
 }

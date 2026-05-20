@@ -24,4 +24,42 @@ describe('用例生成器', () => {
     expect(code).toContain("await page.locator('#name').fill('测试订单');");
     expect(code).toContain("await expect(page.locator('.message')).toContainText('创建成功');");
   });
+
+  it('生成输入框值断言和精确文本断言', () => {
+    const item: CaseMeta = {
+      name: '检查编辑结果',
+      key: 'case-assert',
+      startPath: '/profile',
+      createdAt: '2026-05-20T00:00:00.000Z',
+      updatedAt: '2026-05-20T00:00:00.000Z',
+      steps: [
+        { id: 's1', type: 'assertValue', selector: '#nickname', value: '张三' },
+        { id: 's2', type: 'assertText', selector: '.title', value: '个人资料', match: 'equals' }
+      ]
+    };
+
+    const code = generateSpec(item);
+
+    expect(code).toContain("await expect(page.locator('#nickname')).toHaveValue('张三');");
+    expect(code).toContain("await expect(page.locator('.title')).toHaveText('个人资料');");
+  });
+
+  it('生成 codegen locator 表达式步骤', () => {
+    const item: CaseMeta = {
+      name: '保存订单',
+      key: 'case-locator',
+      startPath: '/orders',
+      createdAt: '2026-05-20T00:00:00.000Z',
+      updatedAt: '2026-05-20T00:00:00.000Z',
+      steps: [
+        { id: 's1', type: 'click', selector: "getByRole('button', { name: '保存' })" },
+        { id: 's2', type: 'assertVisible', selector: "getByText('保存成功')" }
+      ]
+    };
+
+    const code = generateSpec(item);
+
+    expect(code).toContain("await page.getByRole('button', { name: '保存' }).click();");
+    expect(code).toContain("await expect(page.getByText('保存成功')).toBeVisible();");
+  });
 });

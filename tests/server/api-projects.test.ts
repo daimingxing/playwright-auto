@@ -1,9 +1,10 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../../server/src/app';
+import { getProjectsRoot } from '../../server/src/lib/path';
 
 let root = '';
 
@@ -35,5 +36,21 @@ describe('项目接口', () => {
     expect(list.status).toBe(200);
     expect(list.body).toHaveLength(1);
     expect(list.body[0].name).toBe('CRM 系统');
+  });
+
+  it('读取项目列表时忽略 projects 目录下的占位文件', async () => {
+    const app = createApp();
+    await mkdir(getProjectsRoot(), { recursive: true });
+    await writeFile(join(getProjectsRoot(), '.gitkeep'), '', 'utf8');
+    await request(app).post('/api/projects').send({
+      name: 'CCTQ',
+      key: 'cctq',
+      baseUrl: 'https://www.cctq.ai/'
+    });
+
+    const list = await request(app).get('/api/projects');
+
+    expect(list.status).toBe(200);
+    expect(list.body.map((item: { key: string }) => item.key)).toEqual(['cctq']);
   });
 });

@@ -28,18 +28,20 @@ function renderStep(step: CaseStep) {
     case 'goto':
       return `  await page.goto(${quote(step.value ?? '/')});`;
     case 'click':
-      return `  await page.locator(${quote(requireText(step.selector, '点击选择器'))}).click();`;
+      return `  await ${renderLocator(step.selector, '点击选择器')}.click();`;
     case 'fill':
-      return `  await page.locator(${quote(requireText(step.selector, '输入选择器'))}).fill(${quote(step.value ?? '')});`;
+      return `  await ${renderLocator(step.selector, '输入选择器')}.fill(${quote(step.value ?? '')});`;
     case 'select':
-      return `  await page.locator(${quote(requireText(step.selector, '下拉选择器'))}).selectOption(${quote(step.value ?? '')});`;
+      return `  await ${renderLocator(step.selector, '下拉选择器')}.selectOption(${quote(step.value ?? '')});`;
     case 'wait':
       // 等待时间单位是毫秒，Playwright 的 waitForTimeout 也使用毫秒。
       return `  await page.waitForTimeout(${step.timeout ?? 1000});`;
     case 'assertText':
-      return `  await expect(page.locator(${quote(requireText(step.selector, '文本断言选择器'))})).toContainText(${quote(step.value ?? '')});`;
+      return renderTextAssert(step);
     case 'assertVisible':
-      return `  await expect(page.locator(${quote(requireText(step.selector, '可见断言选择器'))})).toBeVisible();`;
+      return `  await expect(${renderLocator(step.selector, '可见断言选择器')}).toBeVisible();`;
+    case 'assertValue':
+      return `  await expect(${renderLocator(step.selector, '输入值断言选择器')}).toHaveValue(${quote(step.value ?? '')});`;
     case 'assertUrl':
       return `  await expect(page).toHaveURL(${quote(step.value ?? '')});`;
     case 'assertTitle':
@@ -47,6 +49,37 @@ function renderStep(step: CaseStep) {
     default:
       return `  // 暂不支持的步骤类型：${String(step.type)}`;
   }
+}
+
+/**
+ * 生成文本断言代码。
+ */
+function renderTextAssert(step: CaseStep) {
+  const target = renderLocator(step.selector, '文本断言选择器');
+  const value = step.value ?? '';
+
+  if (step.match === 'equals') {
+    return `  await expect(${target}).toHaveText(${quote(value)});`;
+  }
+
+  if (step.match === 'regex') {
+    return `  await expect(${target}).toContainText(new RegExp(${quote(value)}));`;
+  }
+
+  return `  await expect(${target}).toContainText(${quote(value)});`;
+}
+
+/**
+ * 生成 Playwright locator 表达式。
+ */
+function renderLocator(selector: string | undefined, name: string) {
+  const value = requireText(selector, name);
+
+  if (/^(locator|getByRole|getByText|getByLabel|getByPlaceholder|getByTestId|getByTitle|frameLocator)\(/.test(value)) {
+    return `page.${value}`;
+  }
+
+  return `page.locator(${quote(value)})`;
 }
 
 /**

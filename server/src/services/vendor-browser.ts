@@ -26,6 +26,18 @@ export const vendorBrowserList = [
 
 const registryMap = [
   {
+    name: 'Chromium 1223',
+    source: 'chrome-win64',
+    target: join('chromium-1223', 'chrome-win64'),
+    files: ['chrome.exe']
+  },
+  {
+    name: 'Chromium Headless Shell 1223',
+    source: 'chrome-headless-shell-win64',
+    target: join('chromium_headless_shell-1223', 'chrome-headless-shell-win64'),
+    files: ['chrome-headless-shell.exe']
+  },
+  {
     name: 'FFmpeg 1011',
     source: 'ffmpeg-win64',
     target: 'ffmpeg-1011',
@@ -113,19 +125,26 @@ export async function assertVendorBrowser(rootPath = vendorRoot) {
 async function linkRegistryDir(rootPath: string, sourceDir: string, targetDir: string, files: readonly string[]) {
   const sourcePath = join(rootPath, sourceDir);
   const targetPath = join(getVendorRegistryPath(rootPath), targetDir);
+  const shouldLinkDir = files.every((file) => !file.includes('\\') && !file.includes('/'));
 
   await rm(targetPath, { recursive: true, force: true });
   await mkdir(dirname(targetPath), { recursive: true });
 
-  try {
-    await symlink(sourcePath, targetPath, 'junction');
-    return;
-  } catch {
-    await mkdir(targetPath, { recursive: true });
+  if (shouldLinkDir) {
+    try {
+      await symlink(sourcePath, targetPath, 'junction');
+      return;
+    } catch {
+      await mkdir(targetPath, { recursive: true });
+    }
   }
 
   for (const file of files) {
-    await copyFile(join(sourcePath, file), join(targetPath, file));
+    const fileName = file.split(/[\\/]/).at(-1) ?? file;
+    const targetFile = join(targetPath, file);
+
+    await mkdir(dirname(targetFile), { recursive: true });
+    await copyFile(join(sourcePath, fileName), targetFile);
   }
 }
 

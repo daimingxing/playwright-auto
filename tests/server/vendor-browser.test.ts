@@ -52,6 +52,10 @@ describe('vendor 浏览器依赖', () => {
 
     await prepareVendorBrowser(root);
 
+    await access(join(root, '.registry', 'chromium-1223', 'chrome-win64', 'chrome.exe'));
+    await access(
+      join(root, '.registry', 'chromium_headless_shell-1223', 'chrome-headless-shell-win64', 'chrome-headless-shell.exe')
+    );
     await access(join(root, '.registry', 'ffmpeg-1011', 'ffmpeg-win64.exe'));
     await access(join(root, '.registry', 'winldd-1007', 'PrintDeps.exe'));
   });

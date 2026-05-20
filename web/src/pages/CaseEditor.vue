@@ -1,15 +1,28 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import type { CaseMeta, CaseStep, StepType } from '../../../shared/types';
-import { getCase, updateCase } from '../api/cases';
+import { getCase, startRecord, stopRecord, updateCase } from '../api/cases';
+import { getErrorMessage } from '../utils/error';
 
 const route = useRoute();
 const router = useRouter();
 const projectKey = String(route.params.projectKey);
 const caseKey = String(route.params.caseKey);
 const item = ref<CaseMeta | null>(null);
-const stepTypes: StepType[] = ['click', 'fill', 'wait', 'assertText', 'assertVisible', 'assertUrl', 'assertTitle'];
+const recordId = ref('');
+const isRecording = ref(false);
+const stepTypes: StepType[] = [
+  'click',
+  'fill',
+  'wait',
+  'assertText',
+  'assertVisible',
+  'assertValue',
+  'assertUrl',
+  'assertTitle'
+];
 
 /**
  * 加载当前用例。
@@ -58,6 +71,46 @@ async function saveCase() {
   await router.push(`/projects/${projectKey}`);
 }
 
+/**
+ * 启动有头浏览器录制当前用例。
+ */
+async function startRecordCase() {
+  try {
+    await ElMessageBox.confirm(
+      '录制完成后会用录制结果覆盖当前步骤，请确认当前改动已保存。',
+      '开始录制',
+      { type: 'warning' }
+    );
+
+    const result = await startRecord(projectKey, caseKey);
+    recordId.value = result.sessionId;
+    isRecording.value = true;
+    ElMessage.success('录制窗口已打开，请在浏览器中完成操作和断言');
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error(getErrorMessage(error));
+    }
+  }
+}
+
+/**
+ * 停止录制并导入录制步骤。
+ */
+async function stopRecordCase() {
+  if (!recordId.value) {
+    return;
+  }
+
+  try {
+    item.value = await stopRecord(projectKey, caseKey, recordId.value);
+    recordId.value = '';
+    isRecording.value = false;
+    ElMessage.success('录制结果已导入当前用例');
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error));
+  }
+}
+
 onMounted(loadCase);
 </script>
 
@@ -68,8 +121,21 @@ onMounted(loadCase);
         <el-button text @click="router.push(`/projects/${projectKey}`)">返回用例管理</el-button>
         <h2>{{ item.name }}</h2>
       </div>
-      <el-button type="primary" @click="saveCase">保存并生成测试文件</el-button>
+      <div class="toolbar-actions">
+        <el-button v-if="!isRecording" @click="startRecordCase">开始录制</el-button>
+        <el-button v-else type="warning" @click="stopRecordCase">停止录制</el-button>
+        <el-button type="primary" :disabled="isRecording" @click="saveCase">保存并生成测试文件</el-button>
+      </div>
     </div>
+
+    <el-alert
+      v-if="isRecording"
+      class="record-alert"
+      title="正在录制，请在有头浏览器中完成操作和断言，完成后点击停止录制。"
+      type="warning"
+      show-icon
+      :closable="false"
+    />
 
     <el-form label-width="90px">
       <el-form-item label="用例名称">
@@ -123,6 +189,16 @@ onMounted(loadCase);
 
 .toolbar h2 {
   margin: 8px 0 0;
+}
+
+.toolbar-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.record-alert {
+  margin-bottom: 16px;
 }
 
 .step-actions {

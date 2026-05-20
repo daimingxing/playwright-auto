@@ -65,8 +65,9 @@ export async function listProjects() {
   }
 
   const names = await readdir(root);
+  const projectNames = names.filter((name) => existsSync(join(root, name, 'project.json')));
   const items = await Promise.all(
-    names.map((name) => readJson<ProjectMeta>(join(root, name, 'project.json')))
+    projectNames.map((name) => readJson<ProjectMeta>(join(root, name, 'project.json')))
   );
 
   return items;
