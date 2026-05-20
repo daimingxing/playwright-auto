@@ -1,5 +1,14 @@
 import { Router } from 'express';
-import { createCase, deleteCase, getCase, listCases, listTrash, updateCase } from '../lib/case-store';
+import {
+  createCase,
+  deleteCase,
+  getCase,
+  listCases,
+  listTrash,
+  removeTrashCase,
+  restoreTrashCase,
+  updateCase
+} from '../lib/case-store';
 
 interface ProjectParams {
   projectKey: string;
@@ -58,6 +67,23 @@ export const trashRouter = Router({ mergeParams: true });
 trashRouter.get<ProjectParams>('/', async (req, res, next) => {
   try {
     res.json(await listTrash(req.params.projectKey));
+  } catch (error) {
+    next(error);
+  }
+});
+
+trashRouter.post<CaseParams>('/:caseKey/restore', async (req, res, next) => {
+  try {
+    res.json(await restoreTrashCase(req.params.projectKey, req.params.caseKey));
+  } catch (error) {
+    next(error);
+  }
+});
+
+trashRouter.delete<CaseParams>('/:caseKey', async (req, res, next) => {
+  try {
+    await removeTrashCase(req.params.projectKey, req.params.caseKey);
+    res.status(204).send();
   } catch (error) {
     next(error);
   }

@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { ElMessage } from 'element-plus';
 import { onMounted, ref } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { getAuthState, saveLogin, startLogin } from '../api/auth';
 import { runProject } from '../api/runs';
 import { getErrorMessage } from '../utils/error';
 
 const route = useRoute();
+const router = useRouter();
 const projectKey = String(route.params.projectKey);
 const loading = ref(false);
 const saving = ref(false);
@@ -94,7 +95,12 @@ onMounted(loadAuthState);
 
 <template>
   <section class="page">
-    <h2>运行中心</h2>
+    <div class="toolbar">
+      <div>
+        <el-button text @click="router.push(`/projects/${projectKey}`)">返回用例管理</el-button>
+        <h2>运行中心</h2>
+      </div>
+    </div>
     <el-card shadow="never">
       <el-alert
         class="result"
@@ -118,6 +124,16 @@ onMounted(loadAuthState);
 <style scoped>
 .page {
   padding: 28px;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.toolbar h2 {
+  margin: 8px 0 0;
 }
 
 .result {

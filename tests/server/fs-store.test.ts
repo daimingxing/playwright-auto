@@ -2,11 +2,21 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createCase, deleteCase, listCases } from '../../server/src/lib/case-store';
+import {
+  createCase,
+  deleteCase,
+  listCases,
+  listTrash,
+  removeTrashCase,
+  restoreTrashCase
+} from '../../server/src/lib/case-store';
 import { createProject, getProject } from '../../server/src/lib/project-store';
 import { createRun } from '../../server/src/lib/run-store';
+import { writeJson } from '../../server/src/lib/fs';
+import { getTrashPath } from '../../server/src/lib/path';
 
 let root = '';
+const caseKeyPattern = /^case-\d{8}-\d{6}-[a-f0-9]{4}$/;
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'playwright-auto-'));
@@ -43,12 +53,80 @@ describe('文件存储', () => {
       startPath: '/orders/create'
     });
 
-    expect(item.key).toBe('case-1');
+    expect(item.key).toMatch(caseKeyPattern);
     expect(await listCases('crm')).toHaveLength(1);
 
     await deleteCase('crm', item.key);
 
     expect(await listCases('crm')).toHaveLength(0);
+  });
+
+  it('创建用例时生成不复用的时间随机标识', async () => {
+    await createProject({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    const first = await createCase('crm', {
+      name: '创建订单',
+      startPath: '/orders/create'
+    });
+
+    await deleteCase('crm', first.key);
+    const second = await createCase('crm', {
+      name: '查询订单',
+      startPath: '/orders'
+    });
+
+    expect(second.key).toMatch(caseKeyPattern);
+    expect(second.key).not.toBe(first.key);
+    expect((await listTrash('crm')).map((item) => item.key)).toEqual([first.key]);
+  });
+
+  it('可以恢复回收站用例并彻底删除回收站用例', async () => {
+    await createProject({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    const first = await createCase('crm', {
+      name: '创建订单',
+      startPath: '/orders/create'
+    });
+    const second = await createCase('crm', {
+      name: '查询订单',
+      startPath: '/orders'
+    });
+
+    await deleteCase('crm', first.key);
+    await deleteCase('crm', second.key);
+    await restoreTrashCase('crm', first.key);
+    await removeTrashCase('crm', second.key);
+
+    expect((await listCases('crm')).map((item) => item.key)).toEqual([first.key]);
+    expect(await listTrash('crm')).toHaveLength(0);
+  });
+
+  it('恢复旧编号用例时保留原有目录编号', async () => {
+    await createProject({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    await writeJson(join(getTrashPath('crm', 'case-1'), 'case.json'), {
+      name: '创建订单',
+      key: 'case-1',
+      startPath: '/orders/create',
+      steps: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+
+    const restored = await restoreTrashCase('crm', 'case-1');
+
+    expect(restored.key).toBe('case-1');
+    expect((await listCases('crm')).map((item) => item.key)).toEqual(['case-1']);
+    expect(await listTrash('crm')).toHaveLength(0);
   });
 
   it('创建运行记录时生成运行目录', async () => {

@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
-import { readdir, writeFile } from 'node:fs/promises';
+import { randomBytes } from 'node:crypto';
+import { readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { CaseMeta } from '../../../shared/types';
 import { ensureDir, movePath, readJson, writeJson } from './fs';
@@ -84,6 +85,28 @@ export async function deleteCase(projectKey: string, caseKey: string) {
 }
 
 /**
+ * 将回收站中的用例恢复到可用用例目录。
+ */
+export async function restoreTrashCase(projectKey: string, caseKey: string) {
+  const targetKey = await getRestoreCaseKey(projectKey, caseKey);
+  const item = await readJson<CaseMeta>(join(getTrashPath(projectKey, caseKey), 'case.json'));
+
+  item.key = targetKey;
+  item.updatedAt = new Date().toISOString();
+  await writeJson(join(getTrashPath(projectKey, caseKey), 'case.json'), item);
+  await movePath(getTrashPath(projectKey, caseKey), getCasePath(projectKey, targetKey));
+
+  return item;
+}
+
+/**
+ * 从回收站中彻底删除用例目录。
+ */
+export async function removeTrashCase(projectKey: string, caseKey: string) {
+  await rm(getTrashPath(projectKey, caseKey), { recursive: true, force: false });
+}
+
+/**
  * 更新结构化用例并重新生成测试文件。
  */
 export async function updateCase(projectKey: string, caseKey: string, input: CaseMeta) {
@@ -100,13 +123,73 @@ export async function updateCase(projectKey: string, caseKey: string, input: Cas
 }
 
 /**
- * 生成连续的用例标识。
+ * 生成带时间和短随机后缀的用例标识。
  */
 async function getNextCaseKey(projectKey: string) {
-  const items = await listCases(projectKey);
+  const items = await Promise.all([listCases(projectKey), listTrash(projectKey)]);
+  const keys = new Set(items.flat().map((item) => item.key));
+  let caseKey = createCaseKey();
 
-  // 第一版先使用顺序编号，避免中文名称转拼音带来额外依赖。
-  return `case-${items.length + 1}`;
+  while (keys.has(caseKey)) {
+    caseKey = createCaseKey();
+  }
+
+  return caseKey;
+}
+
+/**
+ * 获取回收站恢复时可使用的用例标识。
+ */
+async function getRestoreCaseKey(projectKey: string, caseKey: string) {
+  const items = await listCases(projectKey);
+  const keys = new Set(items.map((item) => item.key));
+
+  if (!keys.has(caseKey)) {
+    return caseKey;
+  }
+
+  return getNextCaseKey(projectKey);
+}
+
+/**
+ * 创建便于人工排查且不复用的用例标识。
+ */
+function createCaseKey() {
+  const now = new Date();
+  const date = formatDatePart(now);
+  const time = formatTimePart(now);
+  const suffix = randomBytes(2).toString('hex');
+
+  return `case-${date}-${time}-${suffix}`;
+}
+
+/**
+ * 格式化用例标识中的日期部分。
+ */
+function formatDatePart(date: Date) {
+  const year = date.getFullYear();
+  const month = padNumber(date.getMonth() + 1);
+  const day = padNumber(date.getDate());
+
+  return `${year}${month}${day}`;
+}
+
+/**
+ * 格式化用例标识中的时间部分。
+ */
+function formatTimePart(date: Date) {
+  const hour = padNumber(date.getHours());
+  const minute = padNumber(date.getMinutes());
+  const second = padNumber(date.getSeconds());
+
+  return `${hour}${minute}${second}`;
+}
+
+/**
+ * 将数字补齐为两位字符串。
+ */
+function padNumber(value: number) {
+  return String(value).padStart(2, '0');
 }
 
 /**

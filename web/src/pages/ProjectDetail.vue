@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import { ElMessage, ElMessageBox } from 'element-plus';
 import { onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { CaseMeta } from '../../../shared/types';
-import { createCase, deleteCase, listCases, listTrash } from '../api/cases';
+import { createCase, deleteCase, listCases, listTrash, removeTrashCase, restoreCase } from '../api/cases';
+import { getErrorMessage } from '../utils/error';
 
 const route = useRoute();
 const router = useRouter();
@@ -38,8 +40,49 @@ async function submitCase() {
  * 删除用例到回收站。
  */
 async function removeCase(item: CaseMeta) {
-  await deleteCase(projectKey, item.key);
-  await loadData();
+  try {
+    await deleteCase(projectKey, item.key);
+    await loadData();
+    ElMessage.success('已移入回收站');
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error));
+  }
+}
+
+/**
+ * 恢复回收站中的用例。
+ */
+async function restoreItem(item: CaseMeta) {
+  try {
+    await restoreCase(projectKey, item.key);
+    await loadData();
+    ElMessage.success('已恢复用例');
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error));
+  }
+}
+
+/**
+ * 彻底删除回收站中的用例。
+ */
+async function removeTrashItem(item: CaseMeta) {
+  const confirmed = await ElMessageBox.confirm(`确认彻底删除「${item.name}」吗？删除后不可恢复。`, '彻底删除用例', {
+    confirmButtonText: '彻底删除',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).catch(() => false);
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    await removeTrashCase(projectKey, item.key);
+    await loadData();
+    ElMessage.success('已彻底删除用例');
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error));
+  }
 }
 
 onMounted(loadData);
@@ -71,7 +114,16 @@ onMounted(loadData);
 
     <section class="trash">
       <h3>回收站</h3>
-      <el-tag v-for="item in trash" :key="item.key" type="info">{{ item.name }}</el-tag>
+      <el-table :data="trash" border empty-text="回收站暂无用例">
+        <el-table-column prop="name" label="用例名称" />
+        <el-table-column prop="key" label="目录编号" width="140" />
+        <el-table-column label="操作" width="220">
+          <template #default="{ row }">
+            <el-button size="small" @click="restoreItem(row)">恢复</el-button>
+            <el-button size="small" type="danger" @click="removeTrashItem(row)">彻底删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
     </section>
 
     <el-dialog v-model="dialogOpen" title="新建测试用例" width="520px">

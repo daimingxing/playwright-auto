@@ -4,7 +4,8 @@ coverage
 playwright-report
 test-results
 .vite
-data/*
+
+.serena
 *.log
 vendor/*
 !vendor/playwright/

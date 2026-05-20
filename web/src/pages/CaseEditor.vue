@@ -55,6 +55,7 @@ async function saveCase() {
   }
 
   item.value = await updateCase(projectKey, caseKey, item.value);
+  await router.push(`/projects/${projectKey}`);
 }
 
 onMounted(loadCase);
@@ -64,7 +65,7 @@ onMounted(loadCase);
   <section class="page" v-if="item">
     <div class="toolbar">
       <div>
-        <el-button text @click="router.push(`/projects/${projectKey}`)">返回项目</el-button>
+        <el-button text @click="router.push(`/projects/${projectKey}`)">返回用例管理</el-button>
         <h2>{{ item.name }}</h2>
       </div>
       <el-button type="primary" @click="saveCase">保存并生成测试文件</el-button>

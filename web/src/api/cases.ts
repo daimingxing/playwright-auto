@@ -47,6 +47,24 @@ export function deleteCase(projectKey: string, caseKey: string) {
 }
 
 /**
+ * 恢复回收站中的测试用例。
+ */
+export function restoreCase(projectKey: string, caseKey: string) {
+  return requestJson<CaseMeta>(`/api/projects/${projectKey}/trash/${caseKey}/restore`, {
+    method: 'POST'
+  });
+}
+
+/**
+ * 彻底删除回收站中的测试用例。
+ */
+export function removeTrashCase(projectKey: string, caseKey: string) {
+  return requestJson<void>(`/api/projects/${projectKey}/trash/${caseKey}`, {
+    method: 'DELETE'
+  });
+}
+
+/**
  * 更新测试用例。
  */
 export function updateCase(projectKey: string, caseKey: string, input: CaseMeta) {
