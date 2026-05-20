@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -18,6 +19,7 @@ interface RecordSession {
 }
 
 const sessions = new Map<string, RecordSession>();
+const resolveModule = createRequire(import.meta.url).resolve;
 
 /**
  * 启动 Playwright codegen 录制会话。
@@ -45,7 +47,7 @@ export async function startRecordSession(projectKey: string, caseKey: string) {
   await assertVendorBrowser();
 
   const args = [
-    'playwright',
+    getPlaywrightCliPath(),
     'codegen',
     '--target',
     'playwright-test',
@@ -61,13 +63,13 @@ export async function startRecordSession(projectKey: string, caseKey: string) {
     args.splice(args.length - 1, 0, '--load-storage', getProjectAuthPath(projectKey));
   }
 
-  const child = spawn('npx', args, {
+  const child = spawn(process.execPath, args, {
     cwd: process.cwd(),
     env: {
       ...process.env,
       ...getVendorEnv()
     },
-    shell: true,
+    shell: false,
     stdio: 'ignore'
   });
 
@@ -92,9 +94,7 @@ export async function stopRecordSession(projectKey: string, caseKey: string, ses
     throw new Error('录制会话不存在或已结束');
   }
 
-  if (session.child && !session.child.killed) {
-    session.child.kill();
-  }
+  await stopChild(session.child);
 
   const item = await getCase(projectKey, caseKey);
   const code = await readFile(session.outputPath, 'utf8');
@@ -107,6 +107,56 @@ export async function stopRecordSession(projectKey: string, caseKey: string, ses
   sessions.delete(sessionId);
 
   return updateCase(projectKey, caseKey, nextItem);
+}
+
+/**
+ * 尽量温和地停止 codegen 子进程。
+ */
+async function stopChild(child: ChildProcess | undefined) {
+  if (!child || child.killed || child.exitCode !== null) {
+    return;
+  }
+
+  if (process.platform === 'win32' && child.pid) {
+    await killProcessTree(child.pid);
+    return;
+  }
+
+  child.kill('SIGTERM');
+
+  await new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, 1500);
+
+    child.once('exit', () => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+}
+
+/**
+ * 获取当前系统可直接执行的 npx 命令。
+ */
+/**
+ * 获取当前项目安装的 Playwright CLI 入口。
+ */
+function getPlaywrightCliPath() {
+  return resolveModule('@playwright/test/cli');
+}
+
+/**
+ * 在 Windows 下结束 codegen 进程树。
+ */
+async function killProcessTree(pid: number) {
+  await new Promise<void>((resolve) => {
+    const killer = spawn('taskkill', ['/PID', String(pid), '/T', '/F'], {
+      shell: false,
+      stdio: 'ignore'
+    });
+
+    killer.once('exit', () => resolve());
+    killer.once('error', () => resolve());
+  });
 }
 
 /**

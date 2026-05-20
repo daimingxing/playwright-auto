@@ -20,9 +20,9 @@ test('test', async ({ page }) => {
     const result = parseCodegenSpec(code);
 
     expect(result.steps).toMatchObject([
-      { type: 'goto', value: 'https://example.test/orders' },
-      { type: 'fill', selector: "getByRole('textbox', { name: '名称' })", value: '测试订单' },
-      { type: 'click', selector: "getByRole('button', { name: '保存' })" },
+      { type: 'goto', value: 'https://example.test/orders', timeout: 5000 },
+      { type: 'fill', selector: "getByRole('textbox', { name: '名称' })", value: '测试订单', timeout: 1000 },
+      { type: 'click', selector: "getByRole('button', { name: '保存' })", timeout: 1000 },
       { type: 'assertVisible', selector: "getByText('保存成功')" },
       { type: 'assertValue', selector: "getByLabel('名称')", value: '测试订单' },
       { type: 'assertUrl', value: '/.*orders/' },
@@ -45,7 +45,7 @@ test('test', async ({ page }) => {
     const result = parseCodegenSpec(code);
 
     expect(result.steps).toMatchObject([
-      { type: 'click', selector: "getByRole('button', { name: '导出' })" }
+      { type: 'click', selector: "getByRole('button', { name: '导出' })", timeout: 1000 }
     ]);
   });
 });

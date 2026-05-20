@@ -20,8 +20,7 @@ export async function runProject(projectKey: string, input: RunInput = {}) {
   const project = await getProject(projectKey);
   const envKey = input.envKey ?? project.defaultEnv;
   const envMeta = project.envs.find((item) => item.key === envKey);
-  const cases = await listCases(projectKey);
-  const files = cases.map((item) => join(getCasePath(projectKey, item.key), 'case.spec.ts'));
+  const files = await getProjectRunFiles(projectKey);
 
   if (!envMeta) {
     throw new Error('运行环境不存在');
@@ -46,7 +45,7 @@ export async function runProject(projectKey: string, input: RunInput = {}) {
   };
 
   await new Promise<void>((resolve, reject) => {
-    const child = spawn('npx', ['playwright', 'test', ...files], {
+    const child = spawn('npx', ['playwright', 'test', '--config', 'playwright.config.ts', ...files], {
       cwd: process.cwd(),
       env,
       shell: true,
@@ -63,4 +62,25 @@ export async function runProject(projectKey: string, input: RunInput = {}) {
     ...run,
     reportPath: join(getProjectPath(projectKey), 'runs', run.id, 'html-report')
   };
+}
+
+/**
+ * 获取 Playwright 运行时使用的项目内用例文件参数。
+ */
+export async function getProjectRunFiles(projectKey: string) {
+  const cases = await listCases(projectKey);
+
+  return cases.map((item) => {
+    const project = escapeRegExp(projectKey);
+    const key = escapeRegExp(item.key);
+
+    return `.*${project}.*cases.*${key}.*case\\.spec\\.ts`;
+  });
+}
+
+/**
+ * 转义 Playwright 测试过滤正则中的特殊字符。
+ */
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

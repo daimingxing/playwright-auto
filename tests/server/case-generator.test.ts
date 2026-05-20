@@ -62,4 +62,25 @@ describe('用例生成器', () => {
     expect(code).toContain("await page.getByRole('button', { name: '保存' }).click();");
     expect(code).toContain("await expect(page.getByText('保存成功')).toBeVisible();");
   });
+
+  it('给带等待时间的动作步骤生成 Playwright timeout 参数', () => {
+    const item: CaseMeta = {
+      name: '等待点击',
+      key: 'case-timeout',
+      startPath: '/orders',
+      createdAt: '2026-05-20T00:00:00.000Z',
+      updatedAt: '2026-05-20T00:00:00.000Z',
+      steps: [
+        { id: 's1', type: 'goto', value: 'https://crm.test.local/orders', timeout: 5000 },
+        { id: 's2', type: 'click', selector: '#save', timeout: 1000 },
+        { id: 's3', type: 'fill', selector: '#name', value: '测试订单', timeout: 1000 }
+      ]
+    };
+
+    const code = generateSpec(item);
+
+    expect(code).toContain("await page.goto('https://crm.test.local/orders', { timeout: 5000 });");
+    expect(code).toContain("await page.locator('#save').click({ timeout: 1000 });");
+    expect(code).toContain("await page.locator('#name').fill('测试订单', { timeout: 1000 });");
+  });
 });

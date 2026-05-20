@@ -51,19 +51,24 @@ function parseAwaitStep(node: ts.Node, source: ts.SourceFile): Omit<CaseStep, 'i
   const target = call.expression.expression;
 
   if (method === 'goto') {
-    return { type: 'goto', value: readTextArg(call, 0) ?? '/' };
+    return { type: 'goto', value: readTextArg(call, 0) ?? '/', timeout: 5000 };
   }
 
   if (method === 'click') {
-    return { type: 'click', selector: readSelector(target, source) };
+    return { type: 'click', selector: readSelector(target, source), timeout: 1000 };
   }
 
   if (method === 'fill') {
-    return { type: 'fill', selector: readSelector(target, source), value: readTextArg(call, 0) ?? '' };
+    return { type: 'fill', selector: readSelector(target, source), value: readTextArg(call, 0) ?? '', timeout: 1000 };
   }
 
   if (method === 'selectOption') {
-    return { type: 'select', selector: readSelector(target, source), value: readTextArg(call, 0) ?? '' };
+    return {
+      type: 'select',
+      selector: readSelector(target, source),
+      value: readTextArg(call, 0) ?? '',
+      timeout: 1000
+    };
   }
 
   return parseExpectStep(call, source);

@@ -26,13 +26,13 @@ export function generateSpec(item: CaseMeta) {
 function renderStep(step: CaseStep) {
   switch (step.type) {
     case 'goto':
-      return `  await page.goto(${quote(step.value ?? '/')});`;
+      return `  await page.goto(${quote(step.value ?? '/')}${renderTimeoutOption(step)});`;
     case 'click':
-      return `  await ${renderLocator(step.selector, '点击选择器')}.click();`;
+      return `  await ${renderLocator(step.selector, '点击选择器')}.click(${renderTimeoutArg(step)});`;
     case 'fill':
-      return `  await ${renderLocator(step.selector, '输入选择器')}.fill(${quote(step.value ?? '')});`;
+      return `  await ${renderLocator(step.selector, '输入选择器')}.fill(${quote(step.value ?? '')}${renderTimeoutOption(step)});`;
     case 'select':
-      return `  await ${renderLocator(step.selector, '下拉选择器')}.selectOption(${quote(step.value ?? '')});`;
+      return `  await ${renderLocator(step.selector, '下拉选择器')}.selectOption(${quote(step.value ?? '')}${renderTimeoutOption(step)});`;
     case 'wait':
       // 等待时间单位是毫秒，Playwright 的 waitForTimeout 也使用毫秒。
       return `  await page.waitForTimeout(${step.timeout ?? 1000});`;
@@ -49,6 +49,28 @@ function renderStep(step: CaseStep) {
     default:
       return `  // 暂不支持的步骤类型：${String(step.type)}`;
   }
+}
+
+/**
+ * 生成只有超时配置的动作参数。
+ */
+function renderTimeoutArg(step: CaseStep) {
+  if (step.timeout === undefined) {
+    return '';
+  }
+
+  return `{ timeout: ${step.timeout} }`;
+}
+
+/**
+ * 生成追加到已有动作参数后的超时配置。
+ */
+function renderTimeoutOption(step: CaseStep) {
+  if (step.timeout === undefined) {
+    return '';
+  }
+
+  return `, { timeout: ${step.timeout} }`;
 }
 
 /**

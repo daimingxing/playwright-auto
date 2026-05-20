@@ -10,8 +10,8 @@ const headless = process.env.PLAYWRIGHT_HEADLESS !== 'false';
 Object.assign(process.env, getVendorEnv());
 
 export default defineConfig({
-  testDir: '.',
-  testMatch: ['data/projects/**/cases/**/*.spec.ts'],
+  testDir: 'data/projects',
+  testMatch: ['**/cases/**/*.spec.ts'],
   timeout: 60_000,
   reporter: [['html', { outputFolder: `${output}/html-report`, open: 'never' }]],
   outputDir: `${output}/test-results`,
