@@ -37,6 +37,8 @@ export interface CaseStep {
   value?: string;
   timeout?: number;
   match?: MatchType;
+  pageAlias?: string;
+  opensPageAlias?: string;
 }
 
 export interface CaseMeta {

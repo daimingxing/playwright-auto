@@ -104,4 +104,60 @@ describe('用例生成器', () => {
     expect(code).toContain("await page.locator('#more').dblclick({ timeout: 1000 });");
     expect(code).toContain("await page.locator('.order-row').click({ button: 'right', timeout: 1000 });");
   });
+
+  it('兼容历史数据中的 codegen 页面别名选择器', () => {
+    const item: CaseMeta = {
+      name: '历史录制',
+      key: 'case-page-alias',
+      startPath: '/dashboard',
+      createdAt: '2026-05-20T00:00:00.000Z',
+      updatedAt: '2026-05-20T00:00:00.000Z',
+      steps: [
+        { id: 's1', type: 'click', selector: "page1.getByText('---请选择---').first()", timeout: 1000 },
+        {
+          id: 's2',
+          type: 'assertVisible',
+          selector: "page1.locator('div').filter({ hasText: '查询成功' })"
+        }
+      ]
+    };
+
+    const code = generateSpec(item);
+
+    expect(code).toContain("await page.getByText('---请选择---').first().click({ timeout: 1000 });");
+    expect(code).toContain("await expect(page.locator('div').filter({ hasText: '查询成功' })).toBeVisible();");
+  });
+
+  it('生成打开新标签页并在新页面继续操作的步骤', () => {
+    const item: CaseMeta = {
+      name: '新标签页',
+      key: 'case-popup',
+      startPath: '/dashboard',
+      createdAt: '2026-05-20T00:00:00.000Z',
+      updatedAt: '2026-05-20T00:00:00.000Z',
+      steps: [
+        {
+          id: 's1',
+          type: 'click',
+          selector: "getByRole('link', { name: '采矿设备型号定义' })",
+          timeout: 1000,
+          opensPageAlias: 'page1'
+        },
+        {
+          id: 's2',
+          type: 'click',
+          selector: "getByRole('button', { name: 'select' }).first()",
+          timeout: 1000,
+          pageAlias: 'page1'
+        }
+      ]
+    };
+
+    const code = generateSpec(item);
+
+    expect(code).toContain("const page1Promise = page.waitForEvent('popup');");
+    expect(code).toContain("await page.getByRole('link', { name: '采矿设备型号定义' }).click({ timeout: 1000 });");
+    expect(code).toContain('const page1 = await page1Promise;');
+    expect(code).toContain("await page1.getByRole('button', { name: 'select' }).first().click({ timeout: 1000 });");
+  });
 });

@@ -41,6 +41,19 @@ describe('运行报告接口', () => {
     expect(res.text).toContain('报告');
   });
 
+  it('可以通过接口打开 Playwright HTML 报告静态资源', async () => {
+    const app = createApp();
+    const run = await createRun('crm', 'default');
+    const reportDir = join(root, 'projects', 'crm', 'runs', run.id, 'html-report');
+    const dataDir = join(reportDir, 'data');
+    await mkdir(dataDir, { recursive: true });
+    await writeFile(join(dataDir, 'demo.png'), Buffer.from([137, 80, 78, 71]));
+
+    const res = await request(app).get(`/api/projects/crm/runs/${run.id}/report/data/demo.png`);
+
+    expect(res.status).toBe(200);
+  });
+
   it('运行失败时返回简短失败信息和报告入口', async () => {
     const app = createApp();
     await createProject({

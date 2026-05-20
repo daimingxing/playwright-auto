@@ -11,9 +11,15 @@ export interface ParseResult {
 export function parseCodegenSpec(code: string): ParseResult {
   const source = ts.createSourceFile('record.spec.ts', code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const steps: CaseStep[] = [];
+  const state: ParseState = {
+    popupPromises: new Map(),
+    pendingPopupAlias: ''
+  };
 
   walk(source, (node) => {
-    const step = parseAwaitStep(node, source);
+    updatePopupState(node, state);
+
+    const step = parseAwaitStep(node, source, state);
 
     if (step) {
       steps.push({
@@ -24,6 +30,11 @@ export function parseCodegenSpec(code: string): ParseResult {
   });
 
   return { steps };
+}
+
+interface ParseState {
+  popupPromises: Map<string, string>;
+  pendingPopupAlias: string;
 }
 
 /**
@@ -37,7 +48,7 @@ function walk(node: ts.Node, visitor: (node: ts.Node) => void) {
 /**
  * 解析单条 await 语句。
  */
-function parseAwaitStep(node: ts.Node, source: ts.SourceFile): Omit<CaseStep, 'id'> | null {
+function parseAwaitStep(node: ts.Node, source: ts.SourceFile, state: ParseState): Omit<CaseStep, 'id'> | null {
   if (!ts.isExpressionStatement(node) || !ts.isAwaitExpression(node.expression)) {
     return null;
   }
@@ -49,29 +60,31 @@ function parseAwaitStep(node: ts.Node, source: ts.SourceFile): Omit<CaseStep, 'i
 
   const method = call.expression.name.text;
   const target = call.expression.expression;
+  const pageAlias = readPageAlias(target);
+  const extra = createStepMeta(pageAlias, state);
 
   if (method === 'goto') {
-    return { type: 'goto', value: readTextArg(call, 0) ?? '/', timeout: 10000 };
+    return { type: 'goto', value: readTextArg(call, 0) ?? '/', timeout: 20000, ...extra };
   }
 
   if (method === 'click') {
     if (hasRightButton(call)) {
-      return { type: 'rightClick', selector: readSelector(target, source), timeout: 1000 };
+      return { type: 'rightClick', selector: readSelector(target, source), timeout: 2000, ...extra };
     }
 
-    return { type: 'click', selector: readSelector(target, source), timeout: 1000 };
+    return { type: 'click', selector: readSelector(target, source), timeout: 2000, ...extra };
   }
 
   if (method === 'dblclick') {
-    return { type: 'doubleClick', selector: readSelector(target, source), timeout: 1000 };
+    return { type: 'doubleClick', selector: readSelector(target, source), timeout: 2000, ...extra };
   }
 
   if (method === 'hover') {
-    return { type: 'hover', selector: readSelector(target, source), timeout: 1000 };
+    return { type: 'hover', selector: readSelector(target, source), timeout: 2000, ...extra };
   }
 
   if (method === 'fill') {
-    return { type: 'fill', selector: readSelector(target, source), value: readTextArg(call, 0) ?? '', timeout: 1000 };
+    return { type: 'fill', selector: readSelector(target, source), value: readTextArg(call, 0) ?? '', timeout: 2000, ...extra };
   }
 
   if (method === 'selectOption') {
@@ -79,17 +92,18 @@ function parseAwaitStep(node: ts.Node, source: ts.SourceFile): Omit<CaseStep, 'i
       type: 'select',
       selector: readSelector(target, source),
       value: readTextArg(call, 0) ?? '',
-      timeout: 1000
+      timeout: 2000,
+      ...extra
     };
   }
 
-  return parseExpectStep(call, source);
+  return parseExpectStep(call, source, state);
 }
 
 /**
  * 解析 expect 断言语句。
  */
-function parseExpectStep(call: ts.CallExpression, source: ts.SourceFile): Omit<CaseStep, 'id'> | null {
+function parseExpectStep(call: ts.CallExpression, source: ts.SourceFile, state: ParseState): Omit<CaseStep, 'id'> | null {
   if (!ts.isPropertyAccessExpression(call.expression)) {
     return null;
   }
@@ -102,9 +116,11 @@ function parseExpectStep(call: ts.CallExpression, source: ts.SourceFile): Omit<C
   }
 
   const target = expectCall.arguments[0];
+  const pageAlias = readPageAlias(target);
+  const extra = createStepMeta(pageAlias, state);
 
   if (matcher === 'toBeVisible') {
-    return { type: 'assertVisible', selector: readSelector(target, source) };
+    return { type: 'assertVisible', selector: readSelector(target, source), ...extra };
   }
 
   if (matcher === 'toContainText') {
@@ -112,7 +128,8 @@ function parseExpectStep(call: ts.CallExpression, source: ts.SourceFile): Omit<C
       type: 'assertText',
       selector: readSelector(target, source),
       value: readTextArg(call, 0) ?? '',
-      match: 'contains'
+      match: 'contains',
+      ...extra
     };
   }
 
@@ -121,23 +138,85 @@ function parseExpectStep(call: ts.CallExpression, source: ts.SourceFile): Omit<C
       type: 'assertText',
       selector: readSelector(target, source),
       value: readTextArg(call, 0) ?? '',
-      match: 'equals'
+      match: 'equals',
+      ...extra
     };
   }
 
   if (matcher === 'toHaveValue') {
-    return { type: 'assertValue', selector: readSelector(target, source), value: readTextArg(call, 0) ?? '' };
+    return { type: 'assertValue', selector: readSelector(target, source), value: readTextArg(call, 0) ?? '', ...extra };
   }
 
   if (matcher === 'toHaveURL') {
-    return { type: 'assertUrl', value: readExpectValue(call, source) };
+    return { type: 'assertUrl', value: readExpectValue(call, source), ...extra };
   }
 
   if (matcher === 'toHaveTitle') {
-    return { type: 'assertTitle', value: readExpectValue(call, source) };
+    return { type: 'assertTitle', value: readExpectValue(call, source), ...extra };
   }
 
   return null;
+}
+
+/**
+ * 追踪 codegen 生成的新标签页 promise 和页面变量。
+ */
+function updatePopupState(node: ts.Node, state: ParseState) {
+  if (!ts.isVariableDeclaration(node) || !ts.isIdentifier(node.name)) {
+    return;
+  }
+
+  const init = node.initializer;
+
+  if (init && isWaitForPopupCall(init)) {
+    state.popupPromises.set(node.name.text, node.name.text.replace(/Promise$/, ''));
+    state.pendingPopupAlias = node.name.text.replace(/Promise$/, '');
+    return;
+  }
+
+  if (init && ts.isAwaitExpression(init) && ts.isIdentifier(init.expression)) {
+    const alias = state.popupPromises.get(init.expression.text);
+
+    if (alias) {
+      state.popupPromises.set(init.expression.text, node.name.text);
+      state.pendingPopupAlias = '';
+    }
+  }
+}
+
+/**
+ * 判断表达式是否为 page.waitForEvent('popup')。
+ */
+function isWaitForPopupCall(node: ts.Expression) {
+  if (!ts.isCallExpression(node) || !ts.isPropertyAccessExpression(node.expression)) {
+    return false;
+  }
+
+  const target = node.expression.expression;
+
+  return (
+    node.expression.name.text === 'waitForEvent' &&
+    ts.isIdentifier(target) &&
+    /^page\d*$/.test(target.text) &&
+    readTextArg(node, 0) === 'popup'
+  );
+}
+
+/**
+ * 根据页面变量生成步骤元信息。
+ */
+function createStepMeta(pageAlias: string, state: ParseState) {
+  const meta: Pick<CaseStep, 'pageAlias' | 'opensPageAlias'> = {};
+
+  if (pageAlias && pageAlias !== 'page') {
+    meta.pageAlias = pageAlias;
+  }
+
+  if (state.pendingPopupAlias) {
+    meta.opensPageAlias = state.pendingPopupAlias;
+  }
+
+  return meta;
 }
 
 /**
@@ -212,7 +291,33 @@ function readSelector(node: ts.Node | undefined, source: ts.SourceFile) {
     return text.slice('page.'.length);
   }
 
+  if (/^page\d+\./.test(text)) {
+    return text.replace(/^page\d+\./, '');
+  }
+
   return text;
+}
+
+/**
+ * 读取 locator 所属的页面变量名。
+ */
+function readPageAlias(node: ts.Node | undefined): string {
+  if (!node) {
+    return '';
+  }
+
+  let current: ts.Node = node;
+
+  while (ts.isCallExpression(current) || ts.isPropertyAccessExpression(current)) {
+    if (ts.isCallExpression(current)) {
+      current = current.expression;
+      continue;
+    }
+
+    current = current.expression;
+  }
+
+  return ts.isIdentifier(current) ? current.text : '';
 }
 
 /**

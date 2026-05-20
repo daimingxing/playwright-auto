@@ -54,4 +54,57 @@ test('test', async ({ page }) => {
       { type: 'click', selector: "getByRole('button', { name: '导出' })", timeout: 1000 }
     ]);
   });
+
+  it('把 codegen 页面别名选择器规范化为当前页面选择器', () => {
+    const code = `
+import { test, expect } from '@playwright/test';
+
+test('test', async ({ page }) => {
+  await page1.getByText('---请选择---').first().click();
+  await expect(page1.locator('div').filter({ hasText: '查询成功' })).toBeVisible();
+});
+`;
+
+    const result = parseCodegenSpec(code);
+
+    expect(result.steps).toMatchObject([
+      { type: 'click', selector: "getByText('---请选择---').first()", timeout: 1000 },
+      { type: 'assertVisible', selector: "locator('div').filter({ hasText: '查询成功' })" }
+    ]);
+  });
+
+  it('保留点击打开新标签页后的页面归属', () => {
+    const code = `
+import { test, expect } from '@playwright/test';
+
+test('test', async ({ page }) => {
+  const page1Promise = page.waitForEvent('popup');
+  await page.getByRole('link', { name: '采矿设备型号定义' }).click();
+  const page1 = await page1Promise;
+  await page1.getByRole('button', { name: 'select' }).first().click();
+  await expect(page1.locator('#ef_form_head')).toContainText('采矿设备型号定义 > IMEQ09');
+});
+`;
+
+    const result = parseCodegenSpec(code);
+
+    expect(result.steps).toMatchObject([
+      {
+        type: 'click',
+        selector: "getByRole('link', { name: '采矿设备型号定义' })",
+        opensPageAlias: 'page1'
+      },
+      {
+        type: 'click',
+        selector: "getByRole('button', { name: 'select' }).first()",
+        pageAlias: 'page1'
+      },
+      {
+        type: 'assertText',
+        selector: "locator('#ef_form_head')",
+        value: '采矿设备型号定义 > IMEQ09',
+        pageAlias: 'page1'
+      }
+    ]);
+  });
 });
