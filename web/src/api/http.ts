@@ -25,6 +25,27 @@ export async function requestJson<T>(url: string, init?: RequestInit) {
 }
 
 /**
+ * 下载本地 API 文件。
+ */
+export async function downloadFile(url: string, fileName: string) {
+  const res = await fetch(resolveApiUrl(url));
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({ message: '下载失败' }));
+    throw new Error(data.message ?? '下载失败');
+  }
+
+  const blob = await res.blob();
+  const href = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+
+  link.href = href;
+  link.download = fileName;
+  link.click();
+  URL.revokeObjectURL(href);
+}
+
+/**
  * 解析本地 API 地址。
  */
 export function resolveApiUrl(url: string) {

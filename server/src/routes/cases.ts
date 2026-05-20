@@ -9,6 +9,8 @@ import {
   restoreTrashCase,
   updateCase
 } from '../lib/case-store';
+import { getCasePath } from '../lib/path';
+import { zipDir } from '../services/export';
 
 interface ProjectParams {
   projectKey: string;
@@ -40,6 +42,24 @@ casesRouter.post<ProjectParams>('/', async (req, res, next) => {
 casesRouter.get<CaseParams>('/:caseKey', async (req, res, next) => {
   try {
     res.json(await getCase(req.params.projectKey, req.params.caseKey));
+  } catch (error) {
+    next(error);
+  }
+});
+
+casesRouter.get<CaseParams>('/:caseKey/export', async (req, res, next) => {
+  try {
+    const casePath = getCasePath(req.params.projectKey, req.params.caseKey);
+    await getCase(req.params.projectKey, req.params.caseKey);
+    const file = await zipDir(casePath, `${req.params.projectKey}-${req.params.caseKey}`);
+
+    res.download(file.zipPath, `${req.params.projectKey}-${req.params.caseKey}.zip`, (error) => {
+      file.dispose().catch(next);
+
+      if (error) {
+        next(error);
+      }
+    });
   } catch (error) {
     next(error);
   }

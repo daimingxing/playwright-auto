@@ -2,7 +2,8 @@ import { stat } from 'node:fs/promises';
 import { join, resolve, relative } from 'node:path';
 import { Router } from 'express';
 import { getRunPath } from '../lib/path';
-import { exportRun } from '../services/export';
+import { deleteRun, listRuns } from '../lib/run-store';
+import { zipDir } from '../services/export';
 import { runProject } from '../services/runner';
 
 interface ProjectParams {
@@ -15,6 +16,14 @@ interface RunParams extends ProjectParams {
 
 export const runsRouter = Router({ mergeParams: true });
 
+runsRouter.get<ProjectParams>('/', async (req, res, next) => {
+  try {
+    res.json(await listRuns(req.params.projectKey));
+  } catch (error) {
+    next(error);
+  }
+});
+
 runsRouter.post<ProjectParams>('/', async (req, res, next) => {
   try {
     res.status(201).json(await runProject(req.params.projectKey, req.body));
@@ -23,9 +32,28 @@ runsRouter.post<ProjectParams>('/', async (req, res, next) => {
   }
 });
 
-runsRouter.post<RunParams>('/:runId/export', async (req, res, next) => {
+runsRouter.get<RunParams>('/:runId/export', async (req, res, next) => {
   try {
-    res.json({ path: await exportRun(req.params.projectKey, req.params.runId) });
+    const runPath = getRunPath(req.params.projectKey, req.params.runId);
+    await assertRunRoot(runPath);
+    const file = await zipDir(runPath, `${req.params.projectKey}-${req.params.runId}`);
+
+    res.download(file.zipPath, `${req.params.projectKey}-${req.params.runId}.zip`, (error) => {
+      file.dispose().catch(next);
+
+      if (error) {
+        next(error);
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+runsRouter.delete<RunParams>('/:runId', async (req, res, next) => {
+  try {
+    await deleteRun(req.params.projectKey, req.params.runId);
+    res.status(204).send();
   } catch (error) {
     next(error);
   }
@@ -57,6 +85,17 @@ runsRouter.use<RunParams>('/:runId/report', async (req, res, next) => {
  */
 function getReportPath(projectKey: string, runId: string) {
   return join(getRunPath(projectKey, runId), 'html-report');
+}
+
+/**
+ * 确认运行目录已存在。
+ */
+async function assertRunRoot(runPath: string) {
+  try {
+    await stat(runPath);
+  } catch {
+    throw new Error('测试报告尚未生成');
+  }
 }
 
 /**

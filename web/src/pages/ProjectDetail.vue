@@ -3,7 +3,15 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { CaseMeta } from '../../../shared/types';
-import { createCase, deleteCase, listCases, listTrash, removeTrashCase, restoreCase } from '../api/cases';
+import {
+  createCase,
+  deleteCase,
+  exportCase,
+  listCases,
+  listTrash,
+  removeTrashCase,
+  restoreCase
+} from '../api/cases';
 import { getErrorMessage } from '../utils/error';
 
 const route = useRoute();
@@ -44,6 +52,18 @@ async function removeCase(item: CaseMeta) {
     await deleteCase(projectKey, item.key);
     await loadData();
     ElMessage.success('已移入回收站');
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error));
+  }
+}
+
+/**
+ * 导出单条测试用例。
+ */
+async function exportItem(item: CaseMeta) {
+  try {
+    await exportCase(projectKey, item.key);
+    ElMessage.success('已开始下载测试用例');
   } catch (error) {
     ElMessage.error(getErrorMessage(error));
   }
@@ -107,6 +127,7 @@ onMounted(loadData);
       <el-table-column label="操作" width="240">
         <template #default="{ row }">
           <el-button size="small" @click="router.push(`/projects/${projectKey}/cases/${row.key}`)">编辑</el-button>
+          <el-button size="small" @click="exportItem(row)">导出</el-button>
           <el-button size="small" type="danger" @click="removeCase(row)">删除</el-button>
         </template>
       </el-table-column>

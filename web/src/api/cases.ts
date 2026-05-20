@@ -1,4 +1,5 @@
 import type { CaseMeta } from '../../../shared/types';
+import { downloadFile } from './http';
 import { requestJson } from './http';
 
 export interface CreateCaseInput {
@@ -49,6 +50,13 @@ export function deleteCase(projectKey: string, caseKey: string) {
   return requestJson<void>(`/api/projects/${projectKey}/cases/${caseKey}`, {
     method: 'DELETE'
   });
+}
+
+/**
+ * 下载单条测试用例压缩包。
+ */
+export function exportCase(projectKey: string, caseKey: string) {
+  return downloadFile(`/api/projects/${projectKey}/cases/${caseKey}/export`, `${projectKey}-${caseKey}.zip`);
 }
 
 /**

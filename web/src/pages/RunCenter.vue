@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import type { RunMeta } from '../../../shared/types';
 import { getAuthState, saveLogin, startLogin } from '../api/auth';
-import { runProject } from '../api/runs';
+import { deleteRun, exportRun, listRuns, runProject } from '../api/runs';
 import { getErrorMessage } from '../utils/error';
 
 const route = useRoute();
@@ -18,12 +19,20 @@ const sessionId = ref('');
 const reportPath = ref('');
 const reportUrl = ref('');
 const runError = ref('');
+const reports = ref<RunMeta[]>([]);
+
+/**
+ * 加载项目下的测试报告列表。
+ */
+async function loadReports() {
+  reports.value = await listRuns(projectKey);
+}
 
 /**
  * 加载项目登录态状态。
  */
 async function loadAuthState() {
-  const state = await getAuthState(projectKey);
+  const [state] = await Promise.all([getAuthState(projectKey), loadReports()]);
   hasAuth.value = state.exists;
   authPath.value = state.path;
 }
@@ -81,6 +90,52 @@ function openReport() {
 }
 
 /**
+ * 打开指定测试报告。
+ */
+function openRunReport(item: RunMeta) {
+  if (!item.reportUrl) {
+    return;
+  }
+
+  window.open(item.reportUrl, '_blank', 'noopener,noreferrer');
+}
+
+/**
+ * 导出指定测试报告。
+ */
+async function exportReport(item: RunMeta) {
+  try {
+    await exportRun(projectKey, item.id);
+    ElMessage.success('已开始下载测试报告');
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error));
+  }
+}
+
+/**
+ * 删除指定测试报告目录。
+ */
+async function removeReport(item: RunMeta) {
+  const confirmed = await ElMessageBox.confirm(`确认删除测试报告「${item.id}」吗？删除后不可恢复。`, '删除测试报告', {
+    confirmButtonText: '删除',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).catch(() => false);
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    await deleteRun(projectKey, item.id);
+    await loadReports();
+    ElMessage.success('已删除测试报告');
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error));
+  }
+}
+
+/**
  * 使用已保存登录态运行测试。
  */
 async function startRun() {
@@ -98,12 +153,14 @@ async function startRun() {
     const run = await runProject(projectKey);
     reportPath.value = run.reportPath;
     reportUrl.value = run.reportUrl ?? '';
+    await loadReports();
     ElMessage.success('测试运行完成');
     openReport();
   } catch (error) {
     runError.value = getErrorMessage(error);
     reportPath.value = getErrorInfo(error, 'reportPath');
     reportUrl.value = getErrorInfo(error, 'reportUrl');
+    await loadReports();
     openReport();
     ElMessage.error(runError.value);
   } finally {
@@ -167,6 +224,28 @@ onMounted(loadAuthState);
         show-icon
       />
     </el-card>
+
+    <el-card class="report-card" shadow="never">
+      <template #header>
+        <div class="card-header">
+          <span>测试报告</span>
+          <el-button text @click="loadReports">刷新</el-button>
+        </div>
+      </template>
+      <el-table :data="reports" border empty-text="暂无测试报告">
+        <el-table-column prop="id" label="报告编号" min-width="180" />
+        <el-table-column prop="envKey" label="环境" width="120" />
+        <el-table-column prop="status" label="状态" width="120" />
+        <el-table-column prop="createdAt" label="创建时间" min-width="190" />
+        <el-table-column label="操作" width="260">
+          <template #default="{ row }">
+            <el-button size="small" @click="openRunReport(row)">打开</el-button>
+            <el-button size="small" @click="exportReport(row)">导出</el-button>
+            <el-button size="small" type="danger" @click="removeReport(row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-card>
   </section>
 </template>
 
@@ -208,5 +287,15 @@ onMounted(loadAuthState);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.report-card {
+  margin-top: 20px;
+}
+
+.card-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
 }
 </style>

@@ -49,6 +49,26 @@ describe('用例接口', () => {
     expect(trash.body).toHaveLength(1);
   });
 
+  it('可以下载单条测试用例压缩包', async () => {
+    const app = createApp();
+    await request(app).post('/api/projects').send({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    const created = await request(app).post('/api/projects/crm/cases').send({
+      name: '创建订单',
+      startPath: '/orders/create'
+    });
+
+    const res = await request(app).get(`/api/projects/crm/cases/${created.body.key}/export`);
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('application/zip');
+    expect(res.headers['content-disposition']).toContain(`${created.body.key}.zip`);
+    expect(Number(res.headers['content-length'])).toBeGreaterThan(0);
+  });
+
   it('通过接口恢复和彻底删除回收站用例', async () => {
     const app = createApp();
     await request(app).post('/api/projects').send({
