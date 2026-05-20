@@ -1,38 +1,28 @@
 # Playwright 自动化测试平台
 
-这是一个本地 Web 页面 + Node 服务的浏览器自动化测试平台。测试人员可以通过页面创建项目、维护测试用例，并按项目运行 Playwright 测试。
+这是一个本地运行的浏览器自动化测试平台。测试人员可以通过 Web 页面创建项目、维护测试用例、录制操作步骤、保存登录态，并按项目运行 Playwright 测试与查看报告。
+
+## 技术栈
+
+- 前端：Vue 3、Vue Router、Element Plus、Vite
+- 后端：Node.js、Express、Zod
+- 自动化：Playwright
+- 测试：Vitest、Supertest、Playwright Test
+- 存储：本地文件系统
 
 ## 安装
 
-项目不再在安装阶段下载 Playwright 浏览器内核、FFmpeg 或 Windows 依赖检查工具。请先把离线依赖放到 `vendor/playwright`，再执行：
+项目使用离线 Playwright 浏览器依赖。请先把依赖放到 `vendor/playwright`，再安装 npm 包：
 
 ```bash
 npm install
 ```
 
-安装脚本只会检查依赖是否存在；如果缺少文件，会列出缺失项并退出。
+安装脚本只检查离线依赖是否存在，不会联网下载浏览器、FFmpeg 或 Windows 依赖检查工具。
 
-## Vendor 依赖清单
+## 离线依赖
 
-当前项目锁定 `@playwright/test` 为 `1.60.0`，对应的 Windows 依赖如下：
-
-| 依赖 | 版本 | 用途 | 目标文件 |
-|---|---|---|---|
-| Chromium | `1223` / Chrome for Testing `148.0.7778.96` | 浏览器自动化 | `vendor/playwright/chrome-win64/chrome.exe` |
-| Chromium Headless Shell | `1223` / `148.0.7778.96` | Playwright Chromium 配套依赖 | `vendor/playwright/chrome-headless-shell-win64/chrome-headless-shell.exe` |
-| FFmpeg | `1011` | 失败视频录制 | `vendor/playwright/ffmpeg-win64/ffmpeg-win64.exe` |
-| Winldd | `1007` | Windows 依赖检查 | `vendor/playwright/winldd-win64/PrintDeps.exe` |
-
-下载地址：
-
-```text
-https://cdn.playwright.dev/builds/cft/148.0.7778.96/win64/chrome-win64.zip
-https://cdn.playwright.dev/builds/cft/148.0.7778.96/win64/chrome-headless-shell-win64.zip
-https://cdn.playwright.dev/dbazure/download/playwright/builds/ffmpeg/1011/ffmpeg-win64.zip
-https://cdn.playwright.dev/dbazure/download/playwright/builds/winldd/1007/winldd-win64.zip
-```
-
-解压后请按下面结构放置：
+当前项目锁定 `@playwright/test` 为 `1.60.0`，Windows 依赖目录如下：
 
 ```text
 vendor/
@@ -47,6 +37,15 @@ vendor/
       PrintDeps.exe
 ```
 
+对应下载地址：
+
+```text
+https://cdn.playwright.dev/builds/cft/148.0.7778.96/win64/chrome-win64.zip
+https://cdn.playwright.dev/builds/cft/148.0.7778.96/win64/chrome-headless-shell-win64.zip
+https://cdn.playwright.dev/dbazure/download/playwright/builds/ffmpeg/1011/ffmpeg-win64.zip
+https://cdn.playwright.dev/dbazure/download/playwright/builds/winldd/1007/winldd-win64.zip
+```
+
 ## 启动
 
 ```bash
@@ -57,6 +56,17 @@ npm run dev
 
 - 前端页面：http://localhost:5173
 - 本地服务：http://localhost:3001
+- 健康检查：http://localhost:3001/health
+
+## 功能
+
+- 项目管理：创建项目并维护多个环境地址
+- 用例管理：创建、编辑、删除、恢复和永久删除测试用例
+- 用例导出：导出单条用例目录，包含结构化数据和 Playwright spec
+- 步骤编辑：支持跳转、点击、右键、双击、悬停、输入、选择、等待和断言步骤
+- 录制导入：通过 Playwright codegen 录制操作，并导入为步骤数据
+- 登录态：通过有头浏览器手动登录，保存 storageState 后复用
+- 运行管理：按项目运行测试，查看运行状态、报告地址并导出报告
 
 ## 数据目录
 
@@ -73,45 +83,44 @@ data/
       auth/
 ```
 
-`cases/` 是可用测试用例，`trash/` 是回收站。迁移用例时可以直接复制某个项目下的 `cases/` 目录。
-
-## 用例文件
+`cases/` 是可用测试用例，`trash/` 是回收站，`runs/` 保存运行记录和报告，`auth/` 保存登录态。
 
 每条测试用例保存为独立目录：
 
 ```text
 cases/
-  case-1/
+  <caseKey>/
     case.json
     case.spec.ts
 ```
 
 `case.json` 是步骤级可视化编辑的数据源，`case.spec.ts` 是可迁移的 Playwright TypeScript 测试文件。
 
-## 录制用例
-
-在用例编辑页点击“开始录制”后，平台会打开 Playwright codegen 有头浏览器。测试人员可以在浏览器中完成操作，并使用 Playwright Inspector 的断言工具添加可见性、文本和值断言。
-
-点击“停止录制”后，平台会把录制结果导入当前用例，并覆盖原有步骤。导入后仍可在编辑页调整步骤，再点击“保存并生成测试文件”。
-
-第一阶段录制主要支持点击、输入、选择、跳转、文本断言、可见性断言、输入值断言、URL 断言和标题断言；原生 `alert`、文件上传、下载、多标签页等复杂流程后续补充。
-
-## 登录态
-
-第一版不要求测试人员填写 CSS 选择器，也不长期保存用户名和密码。用户在运行中心点击“打开浏览器登录”，在有头浏览器中自行完成一次登录，然后回到页面点击“我已完成登录，保存登录态”。
-
-登录态保存到项目目录：
+登录态保存到：
 
 ```text
 data/projects/<projectKey>/auth/default.storageState.json
 ```
 
-后续运行测试会自动复用这份登录态，不需要每次重新生成。
-
-## 检查
+## 常用命令
 
 ```bash
-npm run lint
+npm run dev
+npm run typecheck
 npm run test
 npm run build
+npm run test:e2e
 ```
+
+`npm run lint` 当前等同于 `npm run typecheck`。
+
+## 目录说明
+
+- `web/src/pages`：前端页面
+- `web/src/api`：前端 API 调用
+- `server/src/routes`：后端 HTTP 路由
+- `server/src/services`：运行、录制、导出、登录态等业务逻辑
+- `server/src/lib`：文件存储、路径、schema 等基础逻辑
+- `shared/types.ts`：前后端共享类型
+- `tests`：单元测试、接口测试和冒烟测试
+- `docs/agent-code-map.md`：AI 按需使用的代码定位地图
