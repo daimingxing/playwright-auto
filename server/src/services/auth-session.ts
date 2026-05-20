@@ -6,6 +6,7 @@ import { writeJson } from '../lib/fs';
 import { getProjectPath } from '../lib/path';
 import { getProject } from '../lib/project-store';
 import { getBrowserPath } from './browser-path';
+import { assertVendorBrowser } from './vendor-browser';
 
 interface StorageState {
   cookies: unknown[];
@@ -79,6 +80,8 @@ export async function startLoginSession(projectKey: string, input: ManualLoginIn
       url: envMeta.baseUrl
     };
   }
+
+  await assertVendorBrowser();
 
   const browser = await chromium.launch({
     headless: false,

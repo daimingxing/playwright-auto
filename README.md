@@ -1,36 +1,51 @@
 # Playwright 自动化测试平台
 
-这是一个本地 Web 界面 + Node 服务的浏览器自动化测试平台。测试人员通过页面创建项目、填写项目 URL、录制或维护测试用例，并按项目运行 Playwright 测试。
+这是一个本地 Web 页面 + Node 服务的浏览器自动化测试平台。测试人员可以通过页面创建项目、维护测试用例，并按项目运行 Playwright 测试。
 
 ## 安装
 
-```bash
-npm install
-```
-
-安装完成后会自动执行：
+项目不再在安装阶段下载 Playwright 浏览器内核、FFmpeg 或 Windows 依赖检查工具。请先把离线依赖放到 `vendor/playwright`，再执行：
 
 ```bash
-playwright install chromium
-```
-
-这会安装 Playwright 所需的 Chromium 浏览器内核，并同时安装录制视频需要的 FFmpeg。浏览器路径由 Playwright 自己管理，代码中不会写死任何人的本地路径。
-
-如果本机已经有可用的 Chromium，可以通过环境变量跳过下载：
-
-```powershell
-$env:PLAYWRIGHT_CHROMIUM_DIR='C:\path\to\chrome-win'
 npm install
 ```
 
-也可以直接指定浏览器可执行文件：
+安装脚本只会检查依赖是否存在；如果缺少文件，会列出缺失项并退出。
 
-```powershell
-$env:PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH='C:\path\to\chrome-win\chrome.exe'
-npm install
+## Vendor 依赖清单
+
+当前项目锁定 `@playwright/test` 为 `1.60.0`，对应的 Windows 依赖如下：
+
+| 依赖 | 版本 | 用途 | 目标文件 |
+|---|---|---|---|
+| Chromium | `1223` / Chrome for Testing `148.0.7778.96` | 浏览器自动化 | `vendor/playwright/chrome-win64/chrome.exe` |
+| Chromium Headless Shell | `1223` / `148.0.7778.96` | Playwright Chromium 配套依赖 | `vendor/playwright/chrome-headless-shell-win64/chrome-headless-shell.exe` |
+| FFmpeg | `1011` | 失败视频录制 | `vendor/playwright/ffmpeg-win64/ffmpeg-win64.exe` |
+| Winldd | `1007` | Windows 依赖检查 | `vendor/playwright/winldd-win64/PrintDeps.exe` |
+
+下载地址：
+
+```text
+https://cdn.playwright.dev/builds/cft/148.0.7778.96/win64/chrome-win64.zip
+https://cdn.playwright.dev/builds/cft/148.0.7778.96/win64/chrome-headless-shell-win64.zip
+https://cdn.playwright.dev/dbazure/download/playwright/builds/ffmpeg/1011/ffmpeg-win64.zip
+https://cdn.playwright.dev/dbazure/download/playwright/builds/winldd/1007/winldd-win64.zip
 ```
 
-普通使用者不需要设置这个变量，直接 `npm install` 即可。
+解压后请按下面结构放置：
+
+```text
+vendor/
+  playwright/
+    chrome-win64/
+      chrome.exe
+    chrome-headless-shell-win64/
+      chrome-headless-shell.exe
+    ffmpeg-win64/
+      ffmpeg-win64.exe
+    winldd-win64/
+      PrintDeps.exe
+```
 
 ## 启动
 

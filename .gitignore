@@ -4,5 +4,10 @@ coverage
 playwright-report
 test-results
 .vite
+data/*
 *.log
-data/projects/*/runs
+vendor/*
+!vendor/playwright/
+vendor/playwright/*
+!vendor/playwright/.gitkeep
+vendor/playwright/.registry

@@ -5,6 +5,7 @@ import { getCasePath, getProjectPath, getRunPath } from '../lib/path';
 import { listCases } from '../lib/case-store';
 import { getProject } from '../lib/project-store';
 import { getProjectAuthPath, hasProjectAuth } from './auth-session';
+import { assertVendorBrowser, getVendorEnv } from './vendor-browser';
 
 interface RunInput {
   envKey?: string;
@@ -30,9 +31,12 @@ export async function runProject(projectKey: string, input: RunInput = {}) {
     throw new Error('当前项目没有可运行用例');
   }
 
+  await assertVendorBrowser();
+
   const storageState = input.storageState ?? ((await hasProjectAuth(projectKey)) ? getProjectAuthPath(projectKey) : '');
   const env = {
     ...process.env,
+    ...getVendorEnv(),
     PLAYWRIGHT_AUTO_PROJECT: projectKey,
     PLAYWRIGHT_AUTO_RUN: run.id,
     PLAYWRIGHT_AUTO_OUTPUT: getRunPath(projectKey, run.id),
