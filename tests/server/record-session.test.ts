@@ -3,7 +3,8 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createCase, getCase } from '../../server/src/lib/case-store';
-import { createProject } from '../../server/src/lib/project-store';
+import { addProjectEnv, createProject } from '../../server/src/lib/project-store';
+import { createAuthState, getProjectAuthPath } from '../../server/src/services/auth-session';
 import { startRecordSession, stopRecordSession } from '../../server/src/services/record-session';
 
 const spawnMock = vi.hoisted(() => vi.fn());
@@ -79,6 +80,39 @@ describe('录制会话服务', () => {
     expect(spawnMock).toHaveBeenCalledWith(
       process.execPath,
       expect.arrayContaining(['codegen']),
+      expect.objectContaining({ shell: false })
+    );
+  });
+
+  it('真实录制启动时使用指定环境地址和登录态', async () => {
+    process.env.NODE_ENV = 'development';
+    await createProject({ name: 'CRM', key: 'crm', baseUrl: 'https://crm.test.local' });
+    await addProjectEnv('crm', {
+      name: '预发环境',
+      key: 'pre',
+      baseUrl: 'https://pre.crm.test.local'
+    });
+    await createAuthState('crm', { cookies: [], origins: [] }, 'pre');
+    const item = await createCase('crm', { name: '创建订单', startPath: '/orders' });
+    spawnMock.mockReturnValue({
+      pid: 1234,
+      killed: false,
+      exitCode: null,
+      stdin: undefined,
+      once() {
+        return this;
+      },
+      kill() {
+        return true;
+      }
+    });
+
+    const session = await startRecordSession('crm', item.key, { envKey: 'pre' });
+
+    expect(session.url).toBe('https://pre.crm.test.local/orders');
+    expect(spawnMock).toHaveBeenCalledWith(
+      process.execPath,
+      expect.arrayContaining(['--load-storage', getProjectAuthPath('crm', 'pre'), 'https://pre.crm.test.local/orders']),
       expect.objectContaining({ shell: false })
     );
   });

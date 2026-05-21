@@ -10,6 +10,19 @@ export const createProjectSchema = z.object({
   baseUrl: urlSchema
 });
 
+export const envKeySchema = projectKeySchema;
+
+export const createEnvSchema = z.object({
+  name: z.string().min(1).max(80),
+  key: envKeySchema,
+  baseUrl: urlSchema
+});
+
+export const updateEnvSchema = z.object({
+  name: z.string().min(1).max(80),
+  baseUrl: urlSchema
+});
+
 export const createCaseSchema = z.object({
   name: z.string().min(1).max(120),
   startPath: z.string().min(1).default('/')

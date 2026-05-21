@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
-import { createRun } from '../lib/run-store';
+import { createRun, updateRun } from '../lib/run-store';
 import { getProjectPath, getRunPath } from '../lib/path';
 import { listCases } from '../lib/case-store';
 import { getProject } from '../lib/project-store';
@@ -31,9 +31,8 @@ export class RunError extends Error {
  * 按项目运行当前可用测试用例。
  */
 export async function runProject(projectKey: string, input: RunInput = {}) {
-  const run = await createRun(projectKey, input.envKey ?? 'default');
   const project = await getProject(projectKey);
-  const envKey = input.envKey ?? project.defaultEnv;
+  const envKey = input.envKey ?? 'default';
   const envMeta = project.envs.find((item) => item.key === envKey);
   const files = await getProjectRunFiles(projectKey);
 
@@ -45,9 +44,11 @@ export async function runProject(projectKey: string, input: RunInput = {}) {
     throw new Error('当前项目没有可运行用例');
   }
 
+  const run = await createRun(projectKey, envKey);
+
   await assertVendorBrowser();
 
-  const storageState = input.storageState ?? ((await hasProjectAuth(projectKey)) ? getProjectAuthPath(projectKey) : '');
+  const storageState = input.storageState ?? ((await hasProjectAuth(projectKey, envKey)) ? getProjectAuthPath(projectKey, envKey) : '');
   const runPath = getRunPath(projectKey, run.id);
   const reportPath = join(runPath, 'html-report');
   const reportUrl = createReportUrl(projectKey, run.id);
@@ -62,7 +63,8 @@ export async function runProject(projectKey: string, input: RunInput = {}) {
     PLAYWRIGHT_HEADLESS: 'false'
   };
 
-  await new Promise<void>((resolve, reject) => {
+  try {
+    await new Promise<void>((resolve, reject) => {
     let output = '';
     const child = spawn('npx', ['playwright', 'test', '--config', 'playwright.config.ts', ...files], {
       cwd: process.cwd(),
@@ -87,10 +89,16 @@ export async function runProject(projectKey: string, input: RunInput = {}) {
 
       reject(new RunError(createRunErrorMessage(code, output), reportPath, reportUrl));
     });
-  });
+    });
+  } catch (error) {
+    await updateRun(projectKey, run.id, { status: 'failed' });
+    throw error;
+  }
+
+  const nextRun = await updateRun(projectKey, run.id, { status: 'passed' });
 
   return {
-    ...run,
+    ...nextRun,
     reportPath: join(getProjectPath(projectKey), 'runs', run.id, 'html-report'),
     reportUrl
   };

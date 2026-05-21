@@ -18,16 +18,21 @@ interface RecordSession {
   createdAt: string;
 }
 
+interface RecordInput {
+  envKey?: string;
+}
+
 const sessions = new Map<string, RecordSession>();
 const resolveModule = createRequire(import.meta.url).resolve;
 
 /**
  * 启动 Playwright codegen 录制会话。
  */
-export async function startRecordSession(projectKey: string, caseKey: string) {
+export async function startRecordSession(projectKey: string, caseKey: string, input: RecordInput = {}) {
   const project = await getProject(projectKey);
   const item = await getCase(projectKey, caseKey);
-  const envMeta = project.envs.find((env) => env.key === project.defaultEnv);
+  const envKey = input.envKey ?? 'default';
+  const envMeta = project.envs.find((env) => env.key === envKey);
 
   if (!envMeta) {
     throw new Error('录制环境不存在');
@@ -58,9 +63,9 @@ export async function startRecordSession(projectKey: string, caseKey: string) {
     startUrl
   ];
 
-  if (await hasProjectAuth(projectKey)) {
+  if (await hasProjectAuth(projectKey, envKey)) {
     // codegen 的最后一个参数必须是 URL，登录态参数插入到 URL 前面。
-    args.splice(args.length - 1, 0, '--load-storage', getProjectAuthPath(projectKey));
+    args.splice(args.length - 1, 0, '--load-storage', getProjectAuthPath(projectKey, envKey));
   }
 
   const child = spawn(process.execPath, args, {

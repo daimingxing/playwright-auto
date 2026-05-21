@@ -62,4 +62,37 @@ describe('登录接口', () => {
     expect(saved.status).toBe(201);
     expect(saved.body.path).toContain('default.storageState.json');
   });
+
+  it('按环境分别保存和查询登录态', async () => {
+    const app = createApp();
+    await request(app).post('/api/projects').send({
+      name: 'CCTQ',
+      key: 'cctq',
+      baseUrl: 'https://www.cctq.ai'
+    });
+    await request(app).post('/api/projects/cctq/envs').send({
+      name: '预发环境',
+      key: 'pre',
+      baseUrl: 'https://pre.cctq.ai'
+    });
+
+    const defaultSession = await request(app).post('/api/projects/cctq/auth/start').send({ envKey: 'default' });
+    const preSession = await request(app).post('/api/projects/cctq/auth/start').send({ envKey: 'pre' });
+    const defaultSaved = await request(app).post('/api/projects/cctq/auth/save').send({
+      sessionId: defaultSession.body.sessionId
+    });
+    const preSaved = await request(app).post('/api/projects/cctq/auth/save').send({
+      sessionId: preSession.body.sessionId
+    });
+    const defaultState = await request(app).get('/api/projects/cctq/auth/state').query({ envKey: 'default' });
+    const preState = await request(app).get('/api/projects/cctq/auth/state').query({ envKey: 'pre' });
+
+    expect(defaultSaved.body.path).toContain('default.storageState.json');
+    expect(preSession.body.url).toBe('https://pre.cctq.ai');
+    expect(preSaved.body.path).toContain('pre.storageState.json');
+    expect(defaultState.body.exists).toBe(true);
+    expect(preState.body.exists).toBe(true);
+    expect(defaultState.body.path).toContain('default.storageState.json');
+    expect(preState.body.path).toContain('pre.storageState.json');
+  });
 });

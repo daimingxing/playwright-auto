@@ -2,6 +2,10 @@ import type { RunMeta } from '../../../shared/types';
 import { downloadFile } from './http';
 import { requestJson } from './http';
 
+export interface RunInput {
+  envKey?: string;
+}
+
 /**
  * 获取项目测试报告列表。
  */
@@ -12,10 +16,10 @@ export function listRuns(projectKey: string) {
 /**
  * 按项目运行测试。
  */
-export function runProject(projectKey: string) {
+export function runProject(projectKey: string, input: RunInput = {}) {
   return requestJson<RunMeta>(`/api/projects/${projectKey}/runs`, {
     method: 'POST',
-    body: JSON.stringify({})
+    body: JSON.stringify(input)
   });
 }
 

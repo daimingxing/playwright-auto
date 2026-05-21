@@ -34,6 +34,25 @@ export async function createRun(projectKey: string, envKey: string) {
 }
 
 /**
+ * 更新一次测试运行记录。
+ */
+export async function updateRun(projectKey: string, runId: string, input: Partial<Pick<RunMeta, 'status'>>) {
+  assertRunId(runId);
+
+  const runPath = getRunPath(projectKey, runId);
+  const current = await readJson<RunMeta>(join(runPath, 'run.json'));
+  const nextRun: RunMeta = {
+    ...current,
+    ...input,
+    updatedAt: new Date().toISOString()
+  };
+
+  await writeJson(join(runPath, 'run.json'), nextRun);
+
+  return nextRun;
+}
+
+/**
  * 读取项目下的测试运行记录。
  */
 export async function listRuns(projectKey: string) {

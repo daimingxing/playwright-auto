@@ -12,6 +12,10 @@ export interface RecordSessionResult {
   url: string;
 }
 
+export interface RecordInput {
+  envKey?: string;
+}
+
 /**
  * 获取项目用例列表。
  */
@@ -90,10 +94,10 @@ export function updateCase(projectKey: string, caseKey: string, input: CaseMeta)
 /**
  * 开始录制当前测试用例。
  */
-export function startRecord(projectKey: string, caseKey: string) {
+export function startRecord(projectKey: string, caseKey: string, input: RecordInput = {}) {
   return requestJson<RecordSessionResult>(`/api/projects/${projectKey}/cases/${caseKey}/record/start`, {
     method: 'POST',
-    body: JSON.stringify({})
+    body: JSON.stringify(input)
   });
 }
 

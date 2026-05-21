@@ -4,7 +4,10 @@ import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createCase } from '../../server/src/lib/case-store';
 import { createRun } from '../../server/src/lib/run-store';
-import { createProject } from '../../server/src/lib/project-store';
+import { getRunPath } from '../../server/src/lib/path';
+import { readJson } from '../../server/src/lib/fs';
+import type { RunMeta } from '../../shared/types';
+import { addProjectEnv, createProject } from '../../server/src/lib/project-store';
 import { createAuthState, getProjectAuthPath, hasProjectAuth } from '../../server/src/services/auth-session';
 import { exportRun } from '../../server/src/services/export';
 import { getProjectRunFiles, RunError, runProject } from '../../server/src/services/runner';
@@ -62,6 +65,46 @@ describe('运行服务', () => {
 
     expect(auth.path).toBe(getProjectAuthPath('crm'));
     expect(await hasProjectAuth('crm')).toBe(true);
+  });
+
+  it('运行指定环境时复用对应环境的登录态', async () => {
+    await createProject({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    await createCase('crm', {
+      name: '创建订单',
+      startPath: '/orders/create'
+    });
+    await addProjectEnv('crm', {
+      name: '预发环境',
+      key: 'pre',
+      baseUrl: 'https://pre.crm.test.local'
+    });
+    await createAuthState('crm', {
+      cookies: [],
+      origins: []
+    }, 'pre');
+    spawnMock.mockReturnValue({
+      on(event: string, callback: (code: number) => void) {
+        if (event === 'exit') {
+          callback(0);
+        }
+      }
+    });
+
+    await runProject('crm', { envKey: 'pre' });
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      'npx',
+      expect.any(Array),
+      expect.objectContaining({
+        env: expect.objectContaining({
+          PLAYWRIGHT_STORAGE_STATE: getProjectAuthPath('crm', 'pre')
+        })
+      })
+    );
   });
 
   it('生成匹配项目用例文件的 Playwright 过滤参数', async () => {
@@ -126,8 +169,10 @@ describe('运行服务', () => {
     });
 
     const run = await runProject('crm');
+    const stored = await readJson<RunMeta>(join(getRunPath('crm', run.id), 'run.json'));
 
     expect(run.reportUrl).toBe(`/api/projects/crm/runs/${run.id}/report/`);
+    expect(stored.status).toBe('passed');
   });
 
   it('运行失败时返回用例和阶段摘要以及报告地址', async () => {
@@ -167,5 +212,10 @@ describe('运行服务', () => {
       message: '用例“创建订单”在断言可见阶段失败：元素在 1000ms 内没有变为可见',
       reportUrl: expect.stringMatching(/^\/api\/projects\/crm\/runs\/\d+\/report\/$/)
     } satisfies Partial<RunError>);
+
+    const runsRoot = join(root, 'projects', 'crm', 'runs');
+    const runIds = await import('node:fs/promises').then(({ readdir }) => readdir(runsRoot));
+    const stored = await readJson<RunMeta>(join(runsRoot, runIds[0], 'run.json'));
+    expect(stored.status).toBe('failed');
   });
 });
