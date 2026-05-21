@@ -5,6 +5,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { ArrowDown, ArrowUp, CopyDocument, Delete, MoreFilled, Plus } from '@element-plus/icons-vue';
 import type { CaseMeta, CaseStep, StepType } from '../../../shared/types';
 import { getCase, startRecord, stopRecord, updateCase } from '../api/cases';
+import { getAppStepConfig } from '../api/projects';
 import { getErrorMessage } from '../utils/error';
 import {
   copyStep,
@@ -17,7 +18,8 @@ import {
   moveStep,
   removeStep,
   stepGroups,
-  stepLabels
+  stepLabels,
+  stepTimeouts
 } from './case-editor';
 
 const route = useRoute();
@@ -25,6 +27,7 @@ const router = useRouter();
 const projectKey = String(route.params.projectKey);
 const caseKey = String(route.params.caseKey);
 const item = ref<CaseMeta | null>(null);
+const stepConfig = ref(stepTimeouts);
 const recordId = ref('');
 const isRecording = ref(false);
 const selectedId = ref('');
@@ -59,7 +62,9 @@ const reviewMap = computed(() => {
  * 加载当前用例。
  */
 async function loadCase() {
-  item.value = await getCase(projectKey, caseKey);
+  const [caseInfo, config] = await Promise.all([getCase(projectKey, caseKey), getAppStepConfig()]);
+  item.value = caseInfo;
+  stepConfig.value = config.steps.timeouts;
 }
 
 /**
@@ -70,7 +75,7 @@ function addStep(type: StepType) {
     return;
   }
 
-  const row = insertStep(item.value.steps, getInsertIndex(item.value.steps, selectedId.value), type);
+  const row = insertStep(item.value.steps, getInsertIndex(item.value.steps, selectedId.value), type, stepConfig.value);
   setActiveStep(row);
 }
 

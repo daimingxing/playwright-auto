@@ -1,5 +1,6 @@
 import ts from 'typescript';
-import type { CaseStep } from '../../../shared/types';
+import type { CaseStep, StepTimeoutConfig } from '../../../shared/types';
+import { getAppConfig } from '../lib/app-config';
 
 export interface ParseResult {
   steps: CaseStep[];
@@ -8,7 +9,7 @@ export interface ParseResult {
 /**
  * 解析 Playwright codegen 生成的测试脚本。
  */
-export function parseCodegenSpec(code: string): ParseResult {
+export function parseCodegenSpec(code: string, timeouts: StepTimeoutConfig = getAppConfig().steps.timeouts): ParseResult {
   const source = ts.createSourceFile('record.spec.ts', code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const steps: CaseStep[] = [];
   const state: ParseState = {
@@ -19,7 +20,7 @@ export function parseCodegenSpec(code: string): ParseResult {
   walk(source, (node) => {
     updatePopupState(node, state);
 
-    const step = parseAwaitStep(node, source, state);
+    const step = parseAwaitStep(node, source, state, timeouts);
 
     if (step) {
       steps.push({
@@ -48,7 +49,12 @@ function walk(node: ts.Node, visitor: (node: ts.Node) => void) {
 /**
  * 解析单条 await 语句。
  */
-function parseAwaitStep(node: ts.Node, source: ts.SourceFile, state: ParseState): Omit<CaseStep, 'id'> | null {
+function parseAwaitStep(
+  node: ts.Node,
+  source: ts.SourceFile,
+  state: ParseState,
+  timeouts: StepTimeoutConfig
+): Omit<CaseStep, 'id'> | null {
   if (!ts.isExpressionStatement(node) || !ts.isAwaitExpression(node.expression)) {
     return null;
   }
@@ -64,27 +70,27 @@ function parseAwaitStep(node: ts.Node, source: ts.SourceFile, state: ParseState)
   const extra = createStepMeta(pageAlias, state);
 
   if (method === 'goto') {
-    return { type: 'goto', value: readTextArg(call, 0) ?? '/', timeout: 20000, ...extra };
+    return { type: 'goto', value: readTextArg(call, 0) ?? '/', timeout: timeouts.navigation, ...extra };
   }
 
   if (method === 'click') {
     if (hasRightButton(call)) {
-      return { type: 'rightClick', selector: readSelector(target, source), timeout: 2000, ...extra };
+      return { type: 'rightClick', selector: readSelector(target, source), timeout: timeouts.action, ...extra };
     }
 
-    return { type: 'click', selector: readSelector(target, source), timeout: 2000, ...extra };
+    return { type: 'click', selector: readSelector(target, source), timeout: timeouts.action, ...extra };
   }
 
   if (method === 'dblclick') {
-    return { type: 'doubleClick', selector: readSelector(target, source), timeout: 2000, ...extra };
+    return { type: 'doubleClick', selector: readSelector(target, source), timeout: timeouts.action, ...extra };
   }
 
   if (method === 'hover') {
-    return { type: 'hover', selector: readSelector(target, source), timeout: 2000, ...extra };
+    return { type: 'hover', selector: readSelector(target, source), timeout: timeouts.action, ...extra };
   }
 
   if (method === 'fill') {
-    return { type: 'fill', selector: readSelector(target, source), value: readTextArg(call, 0) ?? '', timeout: 2000, ...extra };
+    return { type: 'fill', selector: readSelector(target, source), value: readTextArg(call, 0) ?? '', timeout: timeouts.action, ...extra };
   }
 
   if (method === 'selectOption') {
@@ -92,7 +98,7 @@ function parseAwaitStep(node: ts.Node, source: ts.SourceFile, state: ParseState)
       type: 'select',
       selector: readSelector(target, source),
       value: readTextArg(call, 0) ?? '',
-      timeout: 2000,
+      timeout: timeouts.action,
       ...extra
     };
   }

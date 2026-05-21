@@ -33,6 +33,13 @@ describe('应用配置', () => {
         headlessWorkers: 4,
         headedWorkers: 1,
         maxWorkers: 8
+      },
+      steps: {
+        timeouts: {
+          navigation: 20000,
+          action: 2000,
+          wait: 1000
+        }
       }
     });
   });
@@ -47,6 +54,13 @@ describe('应用配置', () => {
         headlessWorkers: 12,
         headedWorkers: 2,
         maxWorkers: 16
+      },
+      steps: {
+        timeouts: {
+          navigation: 30000,
+          action: 3000,
+          wait: 1500
+        }
       }
     });
     const { getAppConfig } = await importFreshConfig();
@@ -60,6 +74,13 @@ describe('应用配置', () => {
         headlessWorkers: 12,
         headedWorkers: 2,
         maxWorkers: 16
+      },
+      steps: {
+        timeouts: {
+          navigation: 30000,
+          action: 3000,
+          wait: 1500
+        }
       }
     });
   });
@@ -74,6 +95,13 @@ describe('应用配置', () => {
         headlessWorkers: 12,
         headedWorkers: 2,
         maxWorkers: 16
+      },
+      steps: {
+        timeouts: {
+          navigation: 30000,
+          action: 3000,
+          wait: 1500
+        }
       }
     });
     process.env.PORT = '3200';
@@ -92,6 +120,13 @@ describe('应用配置', () => {
         headlessWorkers: 20,
         headedWorkers: 3,
         maxWorkers: 24
+      },
+      steps: {
+        timeouts: {
+          navigation: 30000,
+          action: 3000,
+          wait: 1500
+        }
       }
     });
   });

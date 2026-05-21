@@ -59,17 +59,35 @@ describe('用例编辑器步骤工具', () => {
 
   it('会为不同步骤生成合适的默认字段', () => {
     const goto = createStep('goto');
+    const click = createStep('click');
     const wait = createStep('wait');
 
     expect(goto.type).toBe('goto');
     expect(goto.selector).toBeUndefined();
     expect(goto.value).toBe('');
-    expect(goto.timeout).toBeUndefined();
+    expect(goto.timeout).toBe(20000);
+
+    expect(click.type).toBe('click');
+    expect(click.selector).toBe('');
+    expect(click.timeout).toBe(2000);
 
     expect(wait.type).toBe('wait');
     expect(wait.selector).toBeUndefined();
     expect(wait.value).toBeUndefined();
     expect(wait.timeout).toBe(1000);
+  });
+
+  it('创建步骤时支持传入自定义默认等待时间', () => {
+    const timeouts = {
+      navigation: 30000,
+      action: 3000,
+      wait: 1500
+    };
+
+    expect(createStep('goto', timeouts).timeout).toBe(30000);
+    expect(createStep('fill', timeouts).timeout).toBe(3000);
+    expect(createStep('wait', timeouts).timeout).toBe(1500);
+    expect(createStep('assertVisible', timeouts).timeout).toBeUndefined();
   });
 
   it('可以在指定位置插入步骤', () => {

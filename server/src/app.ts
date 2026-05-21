@@ -6,6 +6,7 @@ import { runsRouter } from './routes/runs';
 import { authRouter } from './routes/auth';
 import { recordRouter } from './routes/record';
 import { RunError } from './services/runner';
+import { getAppConfig } from './lib/app-config';
 
 /**
  * 创建本地 API 服务。
@@ -18,6 +19,10 @@ export function createApp() {
 
   app.get('/health', (_req, res) => {
     res.json({ ok: true });
+  });
+
+  app.get('/api/app-config', (_req, res) => {
+    res.json({ steps: getAppConfig().steps });
   });
 
   app.use('/api/projects', projectsRouter);

@@ -73,6 +73,28 @@ test('test', async ({ page }) => {
     ]);
   });
 
+  it('解析 codegen 时支持自定义默认等待时间', () => {
+    const code = `
+import { test, expect } from '@playwright/test';
+
+test('test', async ({ page }) => {
+  await page.goto('/orders/list');
+  await page.getByRole('button', { name: '保存' }).click();
+});
+`;
+
+    const result = parseCodegenSpec(code, {
+      navigation: 30000,
+      action: 3000,
+      wait: 1500
+    });
+
+    expect(result.steps).toMatchObject([
+      { type: 'goto', timeout: 30000 },
+      { type: 'click', timeout: 3000 }
+    ]);
+  });
+
   it('把 codegen 页面别名选择器规范化为当前页面选择器', () => {
     const code = `
 import { test, expect } from '@playwright/test';

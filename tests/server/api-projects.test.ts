@@ -12,14 +12,29 @@ let root = '';
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'playwright-auto-api-'));
   process.env.DATA_ROOT = root;
+  process.env.PLAYWRIGHT_AUTO_CONFIG = join(root, 'playwright-auto.config.json');
 });
 
 afterEach(async () => {
   delete process.env.DATA_ROOT;
+  delete process.env.PLAYWRIGHT_AUTO_CONFIG;
   await rm(root, { recursive: true, force: true });
 });
 
 describe('项目接口', () => {
+  it('可以读取全局步骤配置', async () => {
+    const app = createApp();
+
+    const res = await request(app).get('/api/app-config');
+
+    expect(res.status).toBe(200);
+    expect(res.body.steps.timeouts).toEqual({
+      navigation: 20000,
+      action: 2000,
+      wait: 1000
+    });
+  });
+
   it('通过接口创建并读取项目', async () => {
     const app = createApp();
 

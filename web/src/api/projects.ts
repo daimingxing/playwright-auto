@@ -12,6 +12,16 @@ export interface EnvList {
   defaultEnv: string;
 }
 
+export interface AppStepConfig {
+  steps: {
+    timeouts: {
+      navigation: number;
+      action: number;
+      wait: number;
+    };
+  };
+}
+
 export interface UpdateEnvInput {
   name: string;
   baseUrl: string;
@@ -75,4 +85,11 @@ export function deleteProjectEnv(projectKey: string, envKey: string) {
   return requestJson<void>(`/api/projects/${projectKey}/envs/${envKey}`, {
     method: 'DELETE'
   });
+}
+
+/**
+ * 获取全局步骤配置。
+ */
+export function getAppStepConfig() {
+  return requestJson<AppStepConfig>('/api/app-config');
 }

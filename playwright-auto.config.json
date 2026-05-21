@@ -7,5 +7,12 @@
     "headlessWorkers": 8,
     "headedWorkers": 1,
     "maxWorkers": 20
+  },
+  "steps": {
+    "timeouts": {
+      "navigation": 20000,
+      "action": 2000,
+      "wait": 1000
+    }
   }
 }

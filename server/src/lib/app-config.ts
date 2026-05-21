@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import type { StepTimeoutConfig } from '../../../shared/types';
 
 interface FileConfig {
   server?: {
@@ -10,6 +11,13 @@ interface FileConfig {
     headlessWorkers?: unknown;
     headedWorkers?: unknown;
     maxWorkers?: unknown;
+  };
+  steps?: {
+    timeouts?: {
+      navigation?: unknown;
+      action?: unknown;
+      wait?: unknown;
+    };
   };
 }
 
@@ -22,6 +30,13 @@ const DEFAULT_CONFIG = {
     headlessWorkers: 4,
     headedWorkers: 1,
     maxWorkers: 8
+  },
+  steps: {
+    timeouts: {
+      navigation: 20000,
+      action: 2000,
+      wait: 1000
+    }
   }
 };
 
@@ -45,6 +60,7 @@ export function getAppConfig() {
     1,
     maxWorkers
   );
+  const timeouts = readStepTimeouts(fileConfig);
 
   return {
     server: {
@@ -55,6 +71,9 @@ export function getAppConfig() {
       headlessWorkers,
       headedWorkers,
       maxWorkers
+    },
+    steps: {
+      timeouts
     }
   };
 }
@@ -108,6 +127,19 @@ function readText(envValue: unknown, fileValue: unknown, defaultValue: string) {
   }
 
   return defaultValue;
+}
+
+/**
+ * 读取步骤默认等待时间配置。
+ */
+function readStepTimeouts(fileConfig: FileConfig): StepTimeoutConfig {
+  const fileTimeouts = fileConfig.steps?.timeouts;
+
+  return {
+    navigation: readInt(undefined, fileTimeouts?.navigation, DEFAULT_CONFIG.steps.timeouts.navigation, 0, 600000),
+    action: readInt(undefined, fileTimeouts?.action, DEFAULT_CONFIG.steps.timeouts.action, 0, 600000),
+    wait: readInt(undefined, fileTimeouts?.wait, DEFAULT_CONFIG.steps.timeouts.wait, 0, 600000)
+  };
 }
 
 /**

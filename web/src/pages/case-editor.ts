@@ -1,4 +1,4 @@
-import type { CaseStep, StepType } from '../../../shared/types';
+import type { CaseStep, StepTimeoutConfig, StepType } from '../../../shared/types';
 
 export const stepTypes: StepType[] = [
   'goto',
@@ -38,17 +38,47 @@ export const stepGroups: Array<{ label: string; types: StepType[] }> = [
   { label: '断言', types: ['assertText', 'assertVisible', 'assertValue', 'assertUrl', 'assertTitle'] }
 ];
 
+export const stepTimeouts: StepTimeoutConfig = {
+  navigation: 20000,
+  action: 2000,
+  wait: 1000
+};
+
 /**
  * 创建一条新的步骤数据。
  */
-export function createStep(type: StepType): CaseStep {
+/**
+ * 创建一条新的步骤数据。
+ */
+export function createStep(type: StepType, timeouts: StepTimeoutConfig = stepTimeouts): CaseStep {
+  const timeout = readTimeout(type, timeouts);
+
   return {
     id: crypto.randomUUID(),
     type,
     selector: hasSelector(type) ? '' : undefined,
     value: hasValue(type) ? '' : undefined,
-    timeout: type === 'wait' ? 1000 : undefined
+    timeout
   };
+}
+
+/**
+ * 读取步骤默认等待时间。
+ */
+export function readTimeout(type: StepType, timeouts: StepTimeoutConfig) {
+  if (type === 'goto') {
+    return timeouts.navigation;
+  }
+
+  if (type === 'wait') {
+    return timeouts.wait;
+  }
+
+  if (hasTimeout(type)) {
+    return timeouts.action;
+  }
+
+  return undefined;
 }
 
 /**
@@ -98,8 +128,8 @@ export function hasTimeout(type: StepType) {
 /**
  * 在指定位置插入步骤。
  */
-export function insertStep(steps: CaseStep[], index: number, type: StepType) {
-  const row = createStep(type);
+export function insertStep(steps: CaseStep[], index: number, type: StepType, timeouts: StepTimeoutConfig = stepTimeouts) {
+  const row = createStep(type, timeouts);
   steps.splice(index, 0, row);
   return row;
 }

@@ -104,6 +104,20 @@ export interface RunConfig {
   maxWorkers: number;
 }
 
+export interface StepTimeoutConfig {
+  navigation: number;
+  action: number;
+  wait: number;
+}
+
+export interface StepConfig {
+  timeouts: StepTimeoutConfig;
+}
+
+export interface AppConfig {
+  steps: StepConfig;
+}
+
 export interface AuthState {
   path: string;
   createdAt: string;
