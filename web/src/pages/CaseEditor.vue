@@ -2,9 +2,23 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { ArrowDown, ArrowUp, CopyDocument, Delete, MoreFilled, Plus } from '@element-plus/icons-vue';
 import type { CaseMeta, CaseStep, StepType } from '../../../shared/types';
 import { getCase, startRecord, stopRecord, updateCase } from '../api/cases';
 import { getErrorMessage } from '../utils/error';
+import {
+  copyStep,
+  formatStepType,
+  getInsertIndex,
+  hasSelector,
+  hasTimeout,
+  hasValue,
+  insertStep,
+  moveStep,
+  removeStep,
+  stepGroups,
+  stepLabels
+} from './case-editor';
 
 const route = useRoute();
 const router = useRouter();
@@ -13,6 +27,10 @@ const caseKey = String(route.params.caseKey);
 const item = ref<CaseMeta | null>(null);
 const recordId = ref('');
 const isRecording = ref(false);
+const selectedId = ref('');
+const highlightId = ref('');
+const stepFlashMs = 180;
+let highlightTimer: ReturnType<typeof window.setTimeout> | undefined;
 const reviewLabels = {
   error: '错误',
   danger: '高危',
@@ -25,19 +43,6 @@ const reviewTypes = {
   warning: 'warning',
   info: 'info'
 } as const;
-const stepTypes: StepType[] = [
-  'click',
-  'rightClick',
-  'doubleClick',
-  'hover',
-  'fill',
-  'wait',
-  'assertText',
-  'assertVisible',
-  'assertValue',
-  'assertUrl',
-  'assertTitle'
-];
 const reviewMap = computed(() => {
   const map = new Map<string, NonNullable<CaseMeta['review']>['items']>();
 
@@ -58,31 +63,100 @@ async function loadCase() {
 }
 
 /**
- * 新增一个步骤。
+ * 按当前选中位置新增一个步骤。
  */
 function addStep(type: StepType) {
   if (!item.value) {
     return;
   }
 
-  item.value.steps.push({
-    id: crypto.randomUUID(),
-    type,
-    selector: type.includes('Url') || type.includes('Title') ? undefined : '',
-    value: '',
-    timeout: type === 'wait' ? 1000 : undefined
-  });
+  const row = insertStep(item.value.steps, getInsertIndex(item.value.steps, selectedId.value), type);
+  setActiveStep(row);
 }
 
 /**
  * 删除一个步骤。
  */
-function removeStep(step: CaseStep) {
+function deleteStep(index: number) {
   if (!item.value) {
     return;
   }
 
-  item.value.steps = item.value.steps.filter((row) => row.id !== step.id);
+  const row = item.value.steps[index];
+  removeStep(item.value.steps, index);
+
+  if (row?.id === selectedId.value) {
+    selectedId.value = '';
+  }
+}
+
+/**
+ * 复制一个步骤并插入到其后方。
+ */
+function duplicateStep(index: number) {
+  if (!item.value) {
+    return;
+  }
+
+  const row = copyStep(item.value.steps, index);
+  setActiveStep(row);
+}
+
+/**
+ * 调整步骤顺序。
+ */
+function shiftStep(index: number, offset: -1 | 1) {
+  if (!item.value) {
+    return;
+  }
+
+  const row = moveStep(item.value.steps, index, offset);
+  setActiveStep(row);
+}
+
+/**
+ * 设置当前焦点步骤和短暂高亮。
+ */
+function setActiveStep(step?: CaseStep) {
+  if (!step) {
+    return;
+  }
+
+  selectedId.value = step.id;
+  highlightId.value = step.id;
+
+  if (highlightTimer) {
+    window.clearTimeout(highlightTimer);
+  }
+
+  // 高亮时长与 CSS 动画保持一致，避免移动后视觉反馈拖沓。
+  highlightTimer = window.setTimeout(() => {
+    highlightId.value = '';
+  }, stepFlashMs);
+}
+
+/**
+ * 单击行时切换当前步骤焦点。
+ */
+function selectStep(row: CaseStep) {
+  selectedId.value = row.id;
+}
+
+/**
+ * 生成步骤行的状态类名。
+ */
+function getRowClass({ row }: { row: CaseStep }) {
+  const classes: string[] = [];
+
+  if (row.id === selectedId.value) {
+    classes.push('is-selected-step');
+  }
+
+  if (row.id === highlightId.value) {
+    classes.push('is-step-flash');
+  }
+
+  return classes.join(' ');
 }
 
 /**
@@ -182,14 +256,47 @@ onMounted(loadCase);
         </el-form>
 
         <div class="step-actions">
-          <el-button v-for="type in stepTypes" :key="type" size="small" @click="addStep(type)">添加 {{ type }}</el-button>
+          <el-dropdown trigger="click" @command="(type) => addStep(type as StepType)">
+            <el-button type="primary">
+              <el-icon><Plus /></el-icon>
+              <span>添加步骤</span>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu class="step-menu">
+                <template v-for="group in stepGroups" :key="group.label">
+                  <el-dropdown-item class="step-menu-title" disabled>{{ group.label }}</el-dropdown-item>
+                  <el-dropdown-item v-for="type in group.types" :key="type" :command="type">
+                    <span class="step-menu-label">{{ stepLabels[type] }}</span>
+                    <span class="step-menu-code">{{ type }}</span>
+                  </el-dropdown-item>
+                </template>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+          <span class="insert-hint">
+            {{ selectedId ? '将插入到选中步骤后方' : '未选中步骤时追加到末尾' }}
+          </span>
         </div>
       </div>
 
       <div class="table-wrap">
-        <el-table :data="item.steps" border height="100%">
-          <el-table-column prop="type" label="步骤类型" width="130" />
-          <el-table-column label="审查" width="170">
+        <el-table
+          :data="item.steps"
+          border
+          height="100%"
+          row-key="id"
+          :row-class-name="getRowClass"
+          @row-click="selectStep"
+        >
+          <el-table-column label="步骤类型" width="150">
+            <template #default="{ row }">
+              <div class="step-type">
+                <strong>{{ formatStepType(row.type).label }}</strong>
+                <span>{{ formatStepType(row.type).code }}</span>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="审查" width="80">
             <template #default="{ row }">
               <div v-if="getStepReviews(row).length > 0" class="review-tags">
                 <el-popover
@@ -213,22 +320,56 @@ onMounted(loadCase);
           </el-table-column>
           <el-table-column label="选择器">
             <template #default="{ row }">
-              <el-input v-model="row.selector" placeholder="例如：#username" />
+              <el-input v-if="hasSelector(row.type)" v-model="row.selector" placeholder="例如：#username" />
+              <span v-else class="field-empty">-</span>
             </template>
           </el-table-column>
           <el-table-column label="输入值/断言值">
             <template #default="{ row }">
-              <el-input v-model="row.value" placeholder="输入值或断言内容" />
+              <el-input v-if="hasValue(row.type)" v-model="row.value" placeholder="输入值或断言内容" />
+              <span v-else class="field-empty">-</span>
             </template>
           </el-table-column>
-          <el-table-column label="等待毫秒" width="150">
+          <el-table-column label="等待毫秒" width="180">
             <template #default="{ row }">
-              <el-input-number v-model="row.timeout" :min="0" :step="500" />
+              <el-input-number v-if="hasTimeout(row.type)" v-model="row.timeout" :min="0" :step="500" />
+              <span v-else class="field-empty">-</span>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="100">
-            <template #default="{ row }">
-              <el-button size="small" type="danger" @click="removeStep(row)">删除</el-button>
+          <el-table-column label="操作" width="160">
+            <template #default="{ $index }">
+              <div class="row-actions">
+                <el-tooltip content="上移" placement="top">
+                  <el-button text circle :disabled="$index === 0" @click="shiftStep($index, -1)">
+                    <el-icon><ArrowUp /></el-icon>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip content="下移" placement="top">
+                  <el-button text circle :disabled="$index === item.steps.length - 1" @click="shiftStep($index, 1)">
+                    <el-icon><ArrowDown /></el-icon>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip content="复制" placement="top">
+                  <el-button text circle @click="duplicateStep($index)">
+                    <el-icon><CopyDocument /></el-icon>
+                  </el-button>
+                </el-tooltip>
+                <el-dropdown>
+                  <el-tooltip content="更多" placement="top">
+                    <el-button text circle>
+                      <el-icon><MoreFilled /></el-icon>
+                    </el-button>
+                  </el-tooltip>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item class="danger-action" @click="deleteStep($index)">
+                        <el-icon><Delete /></el-icon>
+                        <span>删除</span>
+                      </el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
+              </div>
             </template>
           </el-table-column>
         </el-table>
@@ -246,6 +387,7 @@ onMounted(loadCase);
   padding: 28px;
   box-sizing: border-box;
   overflow: hidden;
+  background: #f4f8fc;
 }
 
 .toolbar {
@@ -289,13 +431,94 @@ onMounted(loadCase);
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  align-items: center;
   margin: 16px 0;
+}
+
+.insert-hint {
+  color: #5f7188;
+  font-size: 13px;
+}
+
+.step-menu-label {
+  display: inline-block;
+  min-width: 72px;
+  color: #1f2937;
+}
+
+.step-menu-code {
+  color: #8796aa;
+  font-size: 12px;
+}
+
+.step-menu-title {
+  margin-top: 4px;
+  color: #5f7188;
+  font-weight: 600;
+  cursor: default;
+}
+
+.step-type {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.25;
+}
+
+.step-type strong {
+  color: #1f2937;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.step-type span {
+  color: #8796aa;
+  font-size: 12px;
+}
+
+.row-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: nowrap;
+}
+
+.danger-action {
+  color: #d94747;
+}
+
+.field-empty {
+  color: #c0c4cc;
 }
 
 .table-wrap {
   min-height: 0;
   overflow: auto;
   padding-right: 4px;
+}
+
+.table-wrap :deep(.el-table__row) {
+  transition: background-color 160ms ease, transform 160ms ease;
+}
+
+.table-wrap :deep(.el-table__row.is-selected-step > td.el-table__cell) {
+  background: #eaf4ff;
+}
+
+.table-wrap :deep(.el-table__row.is-step-flash > td.el-table__cell) {
+  background: #dbeeff;
+  animation: step-slide 180ms ease;
+}
+
+@keyframes step-slide {
+  from {
+    transform: translateY(-2px);
+  }
+
+  to {
+    transform: translateY(0);
+  }
 }
 
 .review-tags {

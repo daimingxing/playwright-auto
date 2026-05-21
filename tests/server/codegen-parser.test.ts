@@ -55,6 +55,24 @@ test('test', async ({ page }) => {
     ]);
   });
 
+  it('解析 goto 和 selectOption 步骤', () => {
+    const code = `
+import { test, expect } from '@playwright/test';
+
+test('test', async ({ page }) => {
+  await page.goto('/orders/list');
+  await page.locator('#status').selectOption('done');
+});
+`;
+
+    const result = parseCodegenSpec(code);
+
+    expect(result.steps).toMatchObject([
+      { type: 'goto', value: '/orders/list', timeout: 20000 },
+      { type: 'select', selector: "locator('#status')", value: 'done', timeout: 2000 }
+    ]);
+  });
+
   it('把 codegen 页面别名选择器规范化为当前页面选择器', () => {
     const code = `
 import { test, expect } from '@playwright/test';

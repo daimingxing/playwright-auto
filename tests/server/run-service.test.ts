@@ -24,11 +24,13 @@ let root = '';
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'playwright-auto-run-'));
   process.env.DATA_ROOT = root;
+  process.env.PLAYWRIGHT_AUTO_CONFIG = join(root, 'playwright-auto.config.json');
   spawnMock.mockReset();
 });
 
 afterEach(async () => {
   delete process.env.DATA_ROOT;
+  delete process.env.PLAYWRIGHT_AUTO_CONFIG;
   delete process.env.PLAYWRIGHT_AUTO_HEADLESS_WORKERS;
   delete process.env.PLAYWRIGHT_AUTO_HEADED_WORKERS;
   delete process.env.PLAYWRIGHT_AUTO_MAX_WORKERS;

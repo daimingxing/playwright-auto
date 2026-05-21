@@ -23,7 +23,7 @@
   flex-direction: column;
   height: 100dvh;
   min-height: 100vh;
-  background: #f6f7fb;
+  background: #f4f8fc;
   color: #1f2937;
   overflow: hidden;
 }

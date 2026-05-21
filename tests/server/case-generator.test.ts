@@ -84,6 +84,25 @@ describe('用例生成器', () => {
     expect(code).toContain("await page.locator('#name').fill('测试订单', { timeout: 1000 });");
   });
 
+  it('生成 goto 和 select 步骤', () => {
+    const item: CaseMeta = {
+      name: '页面跳转和选择',
+      key: 'case-nav-select',
+      startPath: '/orders',
+      createdAt: '2026-05-20T00:00:00.000Z',
+      updatedAt: '2026-05-20T00:00:00.000Z',
+      steps: [
+        { id: 's1', type: 'goto', value: '/orders/list' },
+        { id: 's2', type: 'select', selector: '#status', value: 'done' }
+      ]
+    };
+
+    const code = generateSpec(item);
+
+    expect(code).toContain("await page.goto('/orders/list');");
+    expect(code).toContain("await page.locator('#status').selectOption('done');");
+  });
+
   it('生成悬停、双击和右键点击步骤', () => {
     const item: CaseMeta = {
       name: '鼠标操作',
