@@ -124,3 +124,4 @@ npm run test:e2e
 - `shared/types.ts`：前后端共享类型
 - `tests`：单元测试、接口测试和冒烟测试
 - `docs/agent-code-map.md`：AI 按需使用的代码定位地图
+- `data`：项目数据目录
