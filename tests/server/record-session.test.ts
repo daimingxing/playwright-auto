@@ -3,9 +3,12 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createCase, getCase } from '../../server/src/lib/case-store';
+import { readJson, writeJson } from '../../server/src/lib/fs';
+import { getProjectPath } from '../../server/src/lib/path';
 import { addProjectEnv, createProject } from '../../server/src/lib/project-store';
 import { createAuthState, getProjectAuthPath } from '../../server/src/services/auth-session';
 import { startRecordSession, stopRecordSession } from '../../server/src/services/record-session';
+import type { ProjectMeta } from '../../shared/types';
 
 const spawnMock = vi.hoisted(() => vi.fn());
 
@@ -116,4 +119,32 @@ describe('录制会话服务', () => {
       expect.objectContaining({ shell: false })
     );
   });
+
+  it('未指定环境时兼容项目配置中的默认环境', async () => {
+    await createProject({ name: 'CRM', key: 'crm', baseUrl: 'https://crm.test.local' });
+    await addProjectEnv('crm', {
+      name: '预发环境',
+      key: 'pre',
+      baseUrl: 'https://pre.crm.test.local'
+    });
+    await setProjectDefaultEnv('crm', 'pre');
+    const item = await createCase('crm', { name: '创建订单', startPath: '/orders' });
+
+    const session = await startRecordSession('crm', item.key);
+
+    expect(session.url).toBe('https://pre.crm.test.local/orders');
+  });
 });
+
+/**
+ * 模拟历史项目配置中已经存在的默认环境。
+ */
+async function setProjectDefaultEnv(projectKey: string, envKey: string) {
+  const path = join(getProjectPath(projectKey), 'project.json');
+  const project = await readJson<ProjectMeta>(path);
+
+  await writeJson(path, {
+    ...project,
+    defaultEnv: envKey
+  });
+}

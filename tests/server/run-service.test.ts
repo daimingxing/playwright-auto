@@ -5,8 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createCase } from '../../server/src/lib/case-store';
 import { createRun } from '../../server/src/lib/run-store';
 import { getRunPath } from '../../server/src/lib/path';
-import { readJson } from '../../server/src/lib/fs';
-import type { RunMeta } from '../../shared/types';
+import { getProjectPath } from '../../server/src/lib/path';
+import { readJson, writeJson } from '../../server/src/lib/fs';
+import type { ProjectMeta, RunMeta } from '../../shared/types';
 import { addProjectEnv, createProject } from '../../server/src/lib/project-store';
 import { createAuthState, getProjectAuthPath, hasProjectAuth } from '../../server/src/services/auth-session';
 import { exportRun } from '../../server/src/services/export';
@@ -102,6 +103,44 @@ describe('运行服务', () => {
       expect.objectContaining({
         env: expect.objectContaining({
           PLAYWRIGHT_STORAGE_STATE: getProjectAuthPath('crm', 'pre')
+        })
+      })
+    );
+  });
+
+  it('未指定环境时兼容项目配置中的默认环境', async () => {
+    await createProject({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    await createCase('crm', {
+      name: '创建订单',
+      startPath: '/orders/create'
+    });
+    await addProjectEnv('crm', {
+      name: '预发环境',
+      key: 'pre',
+      baseUrl: 'https://pre.crm.test.local'
+    });
+    await setProjectDefaultEnv('crm', 'pre');
+    spawnMock.mockReturnValue({
+      on(event: string, callback: (code: number) => void) {
+        if (event === 'exit') {
+          callback(0);
+        }
+      }
+    });
+
+    const run = await runProject('crm');
+
+    expect(run.envKey).toBe('pre');
+    expect(spawnMock).toHaveBeenCalledWith(
+      'npx',
+      expect.any(Array),
+      expect.objectContaining({
+        env: expect.objectContaining({
+          PLAYWRIGHT_BASE_URL: 'https://pre.crm.test.local'
         })
       })
     );
@@ -219,3 +258,16 @@ describe('运行服务', () => {
     expect(stored.status).toBe('failed');
   });
 });
+
+/**
+ * 模拟历史项目配置中已经存在的默认环境。
+ */
+async function setProjectDefaultEnv(projectKey: string, envKey: string) {
+  const path = join(getProjectPath(projectKey), 'project.json');
+  const project = await readJson<ProjectMeta>(path);
+
+  await writeJson(path, {
+    ...project,
+    defaultEnv: envKey
+  });
+}
