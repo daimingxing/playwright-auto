@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import type { CaseMeta, CaseStep, StepType } from '../../../shared/types';
@@ -13,6 +13,18 @@ const caseKey = String(route.params.caseKey);
 const item = ref<CaseMeta | null>(null);
 const recordId = ref('');
 const isRecording = ref(false);
+const reviewLabels = {
+  error: '错误',
+  danger: '高危',
+  warning: '警告',
+  info: '提示'
+} as const;
+const reviewTypes = {
+  error: 'danger',
+  danger: 'warning',
+  warning: 'warning',
+  info: 'info'
+} as const;
 const stepTypes: StepType[] = [
   'click',
   'rightClick',
@@ -26,6 +38,17 @@ const stepTypes: StepType[] = [
   'assertUrl',
   'assertTitle'
 ];
+const reviewMap = computed(() => {
+  const map = new Map<string, NonNullable<CaseMeta['review']>['items']>();
+
+  for (const review of item.value?.review?.items ?? []) {
+    const items = map.get(review.stepId) ?? [];
+    items.push(review);
+    map.set(review.stepId, items);
+  }
+
+  return map;
+});
 
 /**
  * 加载当前用例。
@@ -60,6 +83,13 @@ function removeStep(step: CaseStep) {
   }
 
   item.value.steps = item.value.steps.filter((row) => row.id !== step.id);
+}
+
+/**
+ * 获取步骤对应的审查结果。
+ */
+function getStepReviews(step: CaseStep) {
+  return reviewMap.value.get(step.id) ?? [];
 }
 
 /**
@@ -155,6 +185,28 @@ onMounted(loadCase);
 
     <el-table :data="item.steps" border>
       <el-table-column prop="type" label="步骤类型" width="130" />
+      <el-table-column label="审查" width="170">
+        <template #default="{ row }">
+          <div v-if="getStepReviews(row).length > 0" class="review-tags">
+            <el-popover
+              v-for="review in getStepReviews(row)"
+              :key="review.id"
+              placement="top"
+              width="320"
+              trigger="hover"
+            >
+              <template #reference>
+                <el-tag :type="reviewTypes[review.level]" effect="light">{{ reviewLabels[review.level] }}</el-tag>
+              </template>
+              <div class="review-popover">
+                <strong>{{ review.message }}</strong>
+                <p>{{ review.suggestion }}</p>
+              </div>
+            </el-popover>
+          </div>
+          <span v-else class="review-pass">通过</span>
+        </template>
+      </el-table-column>
       <el-table-column label="选择器">
         <template #default="{ row }">
           <el-input v-model="row.selector" placeholder="例如：#username" />
@@ -209,5 +261,22 @@ onMounted(loadCase);
   flex-wrap: wrap;
   gap: 8px;
   margin: 16px 0;
+}
+
+.review-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.review-pass {
+  color: #67c23a;
+  font-size: 13px;
+}
+
+.review-popover p {
+  margin: 8px 0 0;
+  color: #606266;
+  line-height: 1.5;
 }
 </style>

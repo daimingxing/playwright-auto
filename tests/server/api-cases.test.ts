@@ -124,6 +124,35 @@ describe('用例接口', () => {
     expect(restored.body.key).toBe('case-1');
   });
 
+  it('读取历史用例时自动补充审查结果', async () => {
+    const app = createApp();
+    await request(app).post('/api/projects').send({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    await writeJson(join(root, 'projects', 'crm', 'cases', 'case-old', 'case.json'), {
+      name: '历史用例',
+      key: 'case-old',
+      startPath: '/orders',
+      steps: [
+        {
+          id: 's1',
+          type: 'click',
+          selector: "locator('#afab153e-f49d-4716-ac77-c621ad4a2fe9')"
+        }
+      ],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+
+    const list = await request(app).get('/api/projects/crm/cases');
+    expect(list.body[0].review.summary.error).toBe(1);
+
+    const detail = await request(app).get('/api/projects/crm/cases/case-old');
+    expect(detail.body.review.items[0].ruleCode).toBe('dynamic-id');
+  });
+
   it('通过接口开始和停止录制并覆盖用例步骤', async () => {
     process.env.NODE_ENV = 'test';
     const app = createApp();
@@ -147,5 +176,48 @@ describe('用例接口', () => {
 
     expect(stopped.status).toBe(200);
     expect(stopped.body.steps.length).toBeGreaterThan(0);
+    expect(stopped.body.review.summary.level).toBe('pass');
+  });
+
+  it('保存用例时生成静态审查结果', async () => {
+    const app = createApp();
+    await request(app).post('/api/projects').send({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    const created = await request(app).post('/api/projects/crm/cases').send({
+      name: '创建订单',
+      startPath: '/orders/create'
+    });
+
+    const saved = await request(app)
+      .put(`/api/projects/crm/cases/${created.body.key}`)
+      .send({
+        ...created.body,
+        steps: [
+          {
+            id: 's1',
+            type: 'click',
+            selector: "locator('#afab153e-f49d-4716-ac77-c621ad4a2fe9')"
+          },
+          {
+            id: 's2',
+            type: 'click',
+            selector: "locator('.k-picker.k-dropdownlist > .k-input-button')"
+          }
+        ]
+      });
+
+    expect(saved.status).toBe(200);
+    expect(saved.body.review.summary).toMatchObject({
+      level: 'error',
+      error: 1,
+      danger: 1
+    });
+    expect(saved.body.review.items).toHaveLength(2);
+
+    const list = await request(app).get('/api/projects/crm/cases');
+    expect(list.body[0].review.summary.error).toBe(1);
   });
 });

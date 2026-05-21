@@ -7,6 +7,7 @@ import { ensureDir, movePath, readJson, writeJson } from './fs';
 import { getCasePath, getProjectPath, getTrashPath } from './path';
 import { createCaseSchema } from './schema';
 import { generateSpec } from '../services/case-generator';
+import { reviewCase } from '../services/case-review';
 
 interface CreateCaseInput {
   name: string;
@@ -28,6 +29,7 @@ export async function createCase(projectKey: string, input: CreateCaseInput) {
     createdAt: now,
     updatedAt: now
   };
+  item.review = reviewCase(item);
 
   await ensureDir(getCasePath(projectKey, caseKey));
   await writeJson(join(getCasePath(projectKey, caseKey), 'case.json'), item);
@@ -50,14 +52,14 @@ export async function listCases(projectKey: string) {
     names.map((name) => readJson<CaseMeta>(join(casesPath, name, 'case.json')))
   );
 
-  return items;
+  return Promise.all(items.map((item) => ensureReview(projectKey, item)));
 }
 
 /**
  * 读取单个用例。
  */
 export async function getCase(projectKey: string, caseKey: string) {
-  return readJson<CaseMeta>(join(getCasePath(projectKey, caseKey), 'case.json'));
+  return ensureReview(projectKey, await readJson<CaseMeta>(join(getCasePath(projectKey, caseKey), 'case.json')));
 }
 
 /**
@@ -115,6 +117,7 @@ export async function updateCase(projectKey: string, caseKey: string, input: Cas
     key: caseKey,
     updatedAt: new Date().toISOString()
   };
+  item.review = reviewCase(item);
 
   await writeJson(join(getCasePath(projectKey, caseKey), 'case.json'), item);
   await writeSpec(projectKey, item);
@@ -197,4 +200,22 @@ function padNumber(value: number) {
  */
 async function writeSpec(projectKey: string, item: CaseMeta) {
   await writeFile(join(getCasePath(projectKey, item.key), 'case.spec.ts'), generateSpec(item), 'utf8');
+}
+
+/**
+ * 为历史用例补充静态审查结果。
+ */
+async function ensureReview(projectKey: string, item: CaseMeta) {
+  if (item.review) {
+    return item;
+  }
+
+  const nextItem = {
+    ...item,
+    review: reviewCase(item)
+  };
+
+  await writeJson(join(getCasePath(projectKey, item.key), 'case.json'), nextItem);
+
+  return nextItem;
 }
