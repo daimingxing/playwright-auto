@@ -41,11 +41,40 @@ export interface CaseStep {
   opensPageAlias?: string;
 }
 
+export type ReviewLevel = 'error' | 'danger' | 'warning' | 'info';
+
+export interface CaseReviewItem {
+  id: string;
+  stepId: string;
+  stepIndex: number;
+  stepType: StepType;
+  selector: string;
+  level: ReviewLevel;
+  ruleCode: string;
+  message: string;
+  suggestion: string;
+}
+
+export interface CaseReviewSummary {
+  level: ReviewLevel | 'pass';
+  error: number;
+  danger: number;
+  warning: number;
+  info: number;
+}
+
+export interface CaseReview {
+  summary: CaseReviewSummary;
+  items: CaseReviewItem[];
+  updatedAt: string;
+}
+
 export interface CaseMeta {
   name: string;
   key: string;
   startPath: string;
   steps: CaseStep[];
+  review?: CaseReview;
   createdAt: string;
   updatedAt: string;
 }
@@ -59,6 +88,20 @@ export interface RunMeta {
   reportUrl?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export type RunMode = 'headless' | 'headed';
+
+export interface RunInput {
+  envKey?: string;
+  mode?: RunMode;
+  workers?: number;
+}
+
+export interface RunConfig {
+  headlessWorkers: number;
+  headedWorkers: number;
+  maxWorkers: number;
 }
 
 export interface AuthState {

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getProjectAuthPath, hasProjectAuth, saveLoginSession, startLoginSession } from '../services/auth-session';
+import { getProjectAuthPathByEnv, hasProjectAuth, saveLoginSession, startLoginSession } from '../services/auth-session';
 
 interface ProjectParams {
   projectKey: string;
@@ -25,9 +25,11 @@ authRouter.post<ProjectParams>('/save', async (req, res, next) => {
 
 authRouter.get<ProjectParams>('/state', async (req, res, next) => {
   try {
+    const envKey = typeof req.query.envKey === 'string' ? req.query.envKey : undefined;
+
     res.json({
-      exists: await hasProjectAuth(req.params.projectKey),
-      path: getProjectAuthPath(req.params.projectKey)
+      exists: await hasProjectAuth(req.params.projectKey, envKey),
+      path: await getProjectAuthPathByEnv(req.params.projectKey, envKey)
     });
   } catch (error) {
     next(error);

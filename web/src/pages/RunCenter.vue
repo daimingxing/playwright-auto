@@ -2,9 +2,10 @@
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import type { RunMeta } from '../../../shared/types';
+import type { EnvMeta, RunConfig, RunMeta, RunMode } from '../../../shared/types';
 import { getAuthState, saveLogin, startLogin } from '../api/auth';
-import { deleteRun, exportRun, listRuns, runProject } from '../api/runs';
+import { getProject } from '../api/projects';
+import { deleteRun, exportRun, getRunConfig, listRuns, runProject } from '../api/runs';
 import { getErrorMessage } from '../utils/error';
 
 const route = useRoute();
@@ -16,10 +17,31 @@ const running = ref(false);
 const authPath = ref('');
 const hasAuth = ref(false);
 const sessionId = ref('');
+const envs = ref<EnvMeta[]>([]);
+const selectedEnv = ref('default');
+const runMode = ref<RunMode>('headless');
+const runConfig = ref<RunConfig>({
+  headlessWorkers: 4,
+  headedWorkers: 1,
+  maxWorkers: 8
+});
+const workers = ref(runConfig.value.headlessWorkers);
 const reportPath = ref('');
 const reportUrl = ref('');
 const runError = ref('');
 const reports = ref<RunMeta[]>([]);
+
+/**
+ * 加载项目环境配置。
+ */
+async function loadProject() {
+  const [project, config] = await Promise.all([getProject(projectKey), getRunConfig(projectKey)]);
+
+  envs.value = project.envs;
+  selectedEnv.value = 'default';
+  runConfig.value = config;
+  workers.value = config.headlessWorkers;
+}
 
 /**
  * 加载项目下的测试报告列表。
@@ -32,9 +54,25 @@ async function loadReports() {
  * 加载项目登录态状态。
  */
 async function loadAuthState() {
-  const [state] = await Promise.all([getAuthState(projectKey), loadReports()]);
+  const [state] = await Promise.all([getAuthState(projectKey, selectedEnv.value), loadReports()]);
   hasAuth.value = state.exists;
   authPath.value = state.path;
+}
+
+/**
+ * 切换运行环境后刷新登录态状态。
+ */
+async function changeEnv() {
+  sessionId.value = '';
+  await loadAuthState();
+}
+
+/**
+ * 切换运行模式时使用推荐并发数。
+ */
+function changeRunMode(mode: RunMode) {
+  // 可视调试会打开真实窗口，并发过高容易影响人工观察和本机性能。
+  workers.value = mode === 'headless' ? runConfig.value.headlessWorkers : runConfig.value.headedWorkers;
 }
 
 /**
@@ -44,7 +82,7 @@ async function openLogin() {
   loading.value = true;
 
   try {
-    const session = await startLogin(projectKey);
+    const session = await startLogin(projectKey, { envKey: selectedEnv.value });
     sessionId.value = session.sessionId;
     ElMessage.success('已打开浏览器，请完成登录后返回本页面保存登录态');
   } catch (error) {
@@ -150,7 +188,11 @@ async function startRun() {
   runError.value = '';
 
   try {
-    const run = await runProject(projectKey);
+    const run = await runProject(projectKey, {
+      envKey: selectedEnv.value,
+      mode: runMode.value,
+      workers: workers.value
+    });
     reportPath.value = run.reportPath;
     reportUrl.value = run.reportUrl ?? '';
     await loadReports();
@@ -181,7 +223,47 @@ function getErrorInfo(error: unknown, key: 'reportPath' | 'reportUrl') {
   return '';
 }
 
-onMounted(loadAuthState);
+/**
+ * 显示报告所属环境。
+ */
+function getEnvLabel(envKey: string) {
+  const env = envs.value.find((item) => item.key === envKey);
+
+  return env ? `${env.name}（${env.key}）` : envKey;
+}
+
+/**
+ * 显示运行状态中文名称。
+ */
+function getStatusLabel(status: RunMeta['status']) {
+  const statusMap: Record<RunMeta['status'], string> = {
+    created: '已创建',
+    running: '运行中',
+    passed: '通过',
+    failed: '失败'
+  };
+
+  return statusMap[status] ?? status;
+}
+
+/**
+ * 显示运行状态标签类型。
+ */
+function getStatusType(status: RunMeta['status']) {
+  const typeMap: Record<RunMeta['status'], 'info' | 'primary' | 'success' | 'danger'> = {
+    created: 'info',
+    running: 'primary',
+    passed: 'success',
+    failed: 'danger'
+  };
+
+  return typeMap[status] ?? 'info';
+}
+
+onMounted(async () => {
+  await loadProject();
+  await loadAuthState();
+});
 </script>
 
 <template>
@@ -193,6 +275,27 @@ onMounted(loadAuthState);
       </div>
     </div>
     <el-card shadow="never">
+      <el-form label-width="90px">
+        <el-form-item label="运行环境">
+          <el-select v-model="selectedEnv" class="env-select" @change="changeEnv">
+            <el-option
+              v-for="env in envs"
+              :key="env.key"
+              :label="`${env.name}（${env.key}）`"
+              :value="env.key"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="运行模式">
+          <el-radio-group v-model="runMode" @change="changeRunMode">
+            <el-radio-button label="headless">无头运行</el-radio-button>
+            <el-radio-button label="headed">可视调试</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="并发数">
+          <el-input-number v-model="workers" :min="1" :max="runConfig.maxWorkers" :step="1" controls-position="right" />
+        </el-form-item>
+      </el-form>
       <el-alert
         class="result"
         :type="hasAuth ? 'success' : 'warning'"
@@ -234,8 +337,16 @@ onMounted(loadAuthState);
       </template>
       <el-table :data="reports" border empty-text="暂无测试报告">
         <el-table-column prop="id" label="报告编号" min-width="180" />
-        <el-table-column prop="envKey" label="环境" width="120" />
-        <el-table-column prop="status" label="状态" width="120" />
+        <el-table-column label="环境" min-width="170">
+          <template #default="{ row }">
+            {{ getEnvLabel(row.envKey) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="状态" width="120">
+          <template #default="{ row }">
+            <el-tag :type="getStatusType(row.status)">{{ getStatusLabel(row.status) }}</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="createdAt" label="创建时间" min-width="190" />
         <el-table-column label="操作" width="260">
           <template #default="{ row }">
@@ -272,6 +383,10 @@ onMounted(loadAuthState);
   display: flex;
   gap: 12px;
   margin-top: 18px;
+}
+
+.env-select {
+  width: 260px;
 }
 
 .report-row {

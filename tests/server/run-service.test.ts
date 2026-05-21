@@ -4,7 +4,11 @@ import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createCase } from '../../server/src/lib/case-store';
 import { createRun } from '../../server/src/lib/run-store';
-import { createProject } from '../../server/src/lib/project-store';
+import { getRunPath } from '../../server/src/lib/path';
+import { getProjectPath } from '../../server/src/lib/path';
+import { readJson, writeJson } from '../../server/src/lib/fs';
+import type { ProjectMeta, RunMeta } from '../../shared/types';
+import { addProjectEnv, createProject } from '../../server/src/lib/project-store';
 import { createAuthState, getProjectAuthPath, hasProjectAuth } from '../../server/src/services/auth-session';
 import { exportRun } from '../../server/src/services/export';
 import { getProjectRunFiles, RunError, runProject } from '../../server/src/services/runner';
@@ -25,6 +29,9 @@ beforeEach(async () => {
 
 afterEach(async () => {
   delete process.env.DATA_ROOT;
+  delete process.env.PLAYWRIGHT_AUTO_HEADLESS_WORKERS;
+  delete process.env.PLAYWRIGHT_AUTO_HEADED_WORKERS;
+  delete process.env.PLAYWRIGHT_AUTO_MAX_WORKERS;
   await rm(root, { recursive: true, force: true });
 });
 
@@ -62,6 +69,84 @@ describe('运行服务', () => {
 
     expect(auth.path).toBe(getProjectAuthPath('crm'));
     expect(await hasProjectAuth('crm')).toBe(true);
+  });
+
+  it('运行指定环境时复用对应环境的登录态', async () => {
+    await createProject({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    await createCase('crm', {
+      name: '创建订单',
+      startPath: '/orders/create'
+    });
+    await addProjectEnv('crm', {
+      name: '预发环境',
+      key: 'pre',
+      baseUrl: 'https://pre.crm.test.local'
+    });
+    await createAuthState('crm', {
+      cookies: [],
+      origins: []
+    }, 'pre');
+    spawnMock.mockReturnValue({
+      on(event: string, callback: (code: number) => void) {
+        if (event === 'exit') {
+          callback(0);
+        }
+      }
+    });
+
+    await runProject('crm', { envKey: 'pre' });
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      'npx',
+      expect.any(Array),
+      expect.objectContaining({
+        env: expect.objectContaining({
+          PLAYWRIGHT_STORAGE_STATE: getProjectAuthPath('crm', 'pre')
+        })
+      })
+    );
+  });
+
+  it('未指定环境时兼容项目配置中的默认环境', async () => {
+    await createProject({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    await createCase('crm', {
+      name: '创建订单',
+      startPath: '/orders/create'
+    });
+    await addProjectEnv('crm', {
+      name: '预发环境',
+      key: 'pre',
+      baseUrl: 'https://pre.crm.test.local'
+    });
+    await setProjectDefaultEnv('crm', 'pre');
+    spawnMock.mockReturnValue({
+      on(event: string, callback: (code: number) => void) {
+        if (event === 'exit') {
+          callback(0);
+        }
+      }
+    });
+
+    const run = await runProject('crm');
+
+    expect(run.envKey).toBe('pre');
+    expect(spawnMock).toHaveBeenCalledWith(
+      'npx',
+      expect.any(Array),
+      expect.objectContaining({
+        env: expect.objectContaining({
+          PLAYWRIGHT_BASE_URL: 'https://pre.crm.test.local'
+        })
+      })
+    );
   });
 
   it('生成匹配项目用例文件的 Playwright 过滤参数', async () => {
@@ -102,8 +187,97 @@ describe('运行服务', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'npx',
-      ['playwright', 'test', '--config', 'playwright.config.ts', `.*crm.*cases.*${item.key}.*case\\.spec\\.ts`],
+      [
+        'playwright',
+        'test',
+        '--config',
+        'playwright.config.ts',
+        '--workers',
+        '4',
+        `.*crm.*cases.*${item.key}.*case\\.spec\\.ts`
+      ],
       expect.objectContaining({ cwd: process.cwd() })
+    );
+  });
+
+  it('运行项目时按调试配置传入无头模式和并发数', async () => {
+    await createProject({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    const item = await createCase('crm', {
+      name: '创建订单',
+      startPath: '/orders/create'
+    });
+    spawnMock.mockReturnValue({
+      on(event: string, callback: (code: number) => void) {
+        if (event === 'exit') {
+          callback(0);
+        }
+      }
+    });
+
+    await runProject('crm', {
+      mode: 'headed',
+      workers: 2
+    });
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      'npx',
+      [
+        'playwright',
+        'test',
+        '--config',
+        'playwright.config.ts',
+        '--workers',
+        '2',
+        `.*crm.*cases.*${item.key}.*case\\.spec\\.ts`
+      ],
+      expect.objectContaining({
+        env: expect.objectContaining({
+          PLAYWRIGHT_HEADLESS: 'false'
+        })
+      })
+    );
+  });
+
+  it('运行项目时从环境变量读取默认并发数和上限', async () => {
+    process.env.PLAYWRIGHT_AUTO_HEADLESS_WORKERS = '12';
+    process.env.PLAYWRIGHT_AUTO_MAX_WORKERS = '16';
+    await createProject({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    const item = await createCase('crm', {
+      name: '创建订单',
+      startPath: '/orders/create'
+    });
+    spawnMock.mockReturnValue({
+      on(event: string, callback: (code: number) => void) {
+        if (event === 'exit') {
+          callback(0);
+        }
+      }
+    });
+
+    await runProject('crm', {
+      mode: 'headless'
+    });
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      'npx',
+      [
+        'playwright',
+        'test',
+        '--config',
+        'playwright.config.ts',
+        '--workers',
+        '12',
+        `.*crm.*cases.*${item.key}.*case\\.spec\\.ts`
+      ],
+      expect.any(Object)
     );
   });
 
@@ -126,8 +300,10 @@ describe('运行服务', () => {
     });
 
     const run = await runProject('crm');
+    const stored = await readJson<RunMeta>(join(getRunPath('crm', run.id), 'run.json'));
 
     expect(run.reportUrl).toBe(`/api/projects/crm/runs/${run.id}/report/`);
+    expect(stored.status).toBe('passed');
   });
 
   it('运行失败时返回用例和阶段摘要以及报告地址', async () => {
@@ -167,5 +343,23 @@ describe('运行服务', () => {
       message: '用例“创建订单”在断言可见阶段失败：元素在 1000ms 内没有变为可见',
       reportUrl: expect.stringMatching(/^\/api\/projects\/crm\/runs\/\d+\/report\/$/)
     } satisfies Partial<RunError>);
+
+    const runsRoot = join(root, 'projects', 'crm', 'runs');
+    const runIds = await import('node:fs/promises').then(({ readdir }) => readdir(runsRoot));
+    const stored = await readJson<RunMeta>(join(runsRoot, runIds[0], 'run.json'));
+    expect(stored.status).toBe('failed');
   });
 });
+
+/**
+ * 模拟历史项目配置中已经存在的默认环境。
+ */
+async function setProjectDefaultEnv(projectKey: string, envKey: string) {
+  const path = join(getProjectPath(projectKey), 'project.json');
+  const project = await readJson<ProjectMeta>(path);
+
+  await writeJson(path, {
+    ...project,
+    defaultEnv: envKey
+  });
+}

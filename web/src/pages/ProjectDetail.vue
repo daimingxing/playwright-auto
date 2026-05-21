@@ -24,6 +24,19 @@ const form = reactive({
   name: '',
   startPath: '/'
 });
+const reviewLabels = {
+  error: '错误',
+  danger: '高危',
+  warning: '警告',
+  info: '提示'
+} as const;
+const reviewTypes = {
+  error: 'danger',
+  danger: 'warning',
+  warning: 'warning',
+  info: 'info',
+  pass: 'success'
+} as const;
 
 /**
  * 加载项目用例和回收站。
@@ -32,6 +45,30 @@ async function loadData() {
   const [caseList, trashList] = await Promise.all([listCases(projectKey), listTrash(projectKey)]);
   cases.value = caseList;
   trash.value = trashList;
+}
+
+/**
+ * 格式化用例审查摘要。
+ */
+function formatReview(item: CaseMeta) {
+  const summary = item.review?.summary;
+
+  if (!summary) {
+    return '未审查';
+  }
+
+  const parts = (['error', 'danger', 'warning', 'info'] as const)
+    .filter((level) => summary[level] > 0)
+    .map((level) => `${reviewLabels[level]} ${summary[level]}`);
+
+  return parts.length > 0 ? parts.join(' / ') : '通过';
+}
+
+/**
+ * 获取审查摘要标签类型。
+ */
+function getReviewType(item: CaseMeta) {
+  return reviewTypes[item.review?.summary.level ?? 'info'];
 }
 
 /**
@@ -124,6 +161,11 @@ onMounted(loadData);
     <el-table :data="cases" border>
       <el-table-column prop="name" label="用例名称" />
       <el-table-column prop="startPath" label="起始路径" />
+      <el-table-column label="审查状态" width="220">
+        <template #default="{ row }">
+          <el-tag :type="getReviewType(row)" effect="light">{{ formatReview(row) }}</el-tag>
+        </template>
+      </el-table-column>
       <el-table-column label="操作" width="240">
         <template #default="{ row }">
           <el-button size="small" @click="router.push(`/projects/${projectKey}/cases/${row.key}`)">编辑</el-button>

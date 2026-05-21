@@ -58,6 +58,32 @@ npm run dev
 - 本地服务：http://localhost:3001
 - 健康检查：http://localhost:3001/health
 
+## 本地配置
+
+项目根目录的 `playwright-auto.config.json` 用于调整本地运行参数：
+
+```json
+{
+  "server": {
+    "port": 3001,
+    "dataRoot": "data"
+  },
+  "runner": {
+    "headlessWorkers": 4,
+    "headedWorkers": 1,
+    "maxWorkers": 8
+  }
+}
+```
+
+- `server.port`：后端服务端口。
+- `server.dataRoot`：项目、用例、登录态和报告数据目录。
+- `runner.headlessWorkers`：无头运行默认并发数。
+- `runner.headedWorkers`：可视调试默认并发数。
+- `runner.maxWorkers`：运行中心允许选择的最大并发数。
+
+同名环境变量仍可临时覆盖配置文件：`PORT`、`DATA_ROOT`、`PLAYWRIGHT_AUTO_HEADLESS_WORKERS`、`PLAYWRIGHT_AUTO_HEADED_WORKERS`、`PLAYWRIGHT_AUTO_MAX_WORKERS`。
+
 ## 功能
 
 - 项目管理：创建项目并维护多个环境地址
@@ -124,3 +150,4 @@ npm run test:e2e
 - `shared/types.ts`：前后端共享类型
 - `tests`：单元测试、接口测试和冒烟测试
 - `docs/agent-code-map.md`：AI 按需使用的代码定位地图
+- `data`：项目数据目录

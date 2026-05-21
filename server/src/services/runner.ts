@@ -1,14 +1,15 @@
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
-import { createRun } from '../lib/run-store';
+import { createRun, updateRun } from '../lib/run-store';
 import { getProjectPath, getRunPath } from '../lib/path';
 import { listCases } from '../lib/case-store';
 import { getProject } from '../lib/project-store';
+import type { RunConfig, RunInput } from '../../../shared/types';
 import { getProjectAuthPath, hasProjectAuth } from './auth-session';
 import { assertVendorBrowser, getVendorEnv } from './vendor-browser';
+import { getAppConfig } from '../lib/app-config';
 
-interface RunInput {
-  envKey?: string;
+interface RunProjectInput extends RunInput {
   storageState?: string;
 }
 
@@ -30,8 +31,7 @@ export class RunError extends Error {
 /**
  * 按项目运行当前可用测试用例。
  */
-export async function runProject(projectKey: string, input: RunInput = {}) {
-  const run = await createRun(projectKey, input.envKey ?? 'default');
+export async function runProject(projectKey: string, input: RunProjectInput = {}) {
   const project = await getProject(projectKey);
   const envKey = input.envKey ?? project.defaultEnv;
   const envMeta = project.envs.find((item) => item.key === envKey);
@@ -45,12 +45,15 @@ export async function runProject(projectKey: string, input: RunInput = {}) {
     throw new Error('当前项目没有可运行用例');
   }
 
+  const run = await createRun(projectKey, envKey);
+
   await assertVendorBrowser();
 
-  const storageState = input.storageState ?? ((await hasProjectAuth(projectKey)) ? getProjectAuthPath(projectKey) : '');
+  const storageState = input.storageState ?? ((await hasProjectAuth(projectKey, envKey)) ? getProjectAuthPath(projectKey, envKey) : '');
   const runPath = getRunPath(projectKey, run.id);
   const reportPath = join(runPath, 'html-report');
   const reportUrl = createReportUrl(projectKey, run.id);
+  const options = normalizeRunOptions(input);
   const env = {
     ...process.env,
     ...getVendorEnv(),
@@ -59,12 +62,21 @@ export async function runProject(projectKey: string, input: RunInput = {}) {
     PLAYWRIGHT_AUTO_OUTPUT: runPath,
     PLAYWRIGHT_BASE_URL: envMeta.baseUrl,
     PLAYWRIGHT_STORAGE_STATE: storageState,
-    PLAYWRIGHT_HEADLESS: 'false'
+    PLAYWRIGHT_HEADLESS: options.mode === 'headless' ? 'true' : 'false'
   };
 
-  await new Promise<void>((resolve, reject) => {
+  try {
+    await new Promise<void>((resolve, reject) => {
     let output = '';
-    const child = spawn('npx', ['playwright', 'test', '--config', 'playwright.config.ts', ...files], {
+    const child = spawn('npx', [
+      'playwright',
+      'test',
+      '--config',
+      'playwright.config.ts',
+      '--workers',
+      String(options.workers),
+      ...files
+    ], {
       cwd: process.cwd(),
       env,
       shell: true,
@@ -87,12 +99,48 @@ export async function runProject(projectKey: string, input: RunInput = {}) {
 
       reject(new RunError(createRunErrorMessage(code, output), reportPath, reportUrl));
     });
-  });
+    });
+  } catch (error) {
+    await updateRun(projectKey, run.id, { status: 'failed' });
+    throw error;
+  }
+
+  const nextRun = await updateRun(projectKey, run.id, { status: 'passed' });
 
   return {
-    ...run,
+    ...nextRun,
     reportPath: join(getProjectPath(projectKey), 'runs', run.id, 'html-report'),
     reportUrl
+  };
+}
+
+/**
+ * 归一化运行参数，避免前端异常输入直接影响 Playwright 并发。
+ */
+function normalizeRunOptions(input: RunProjectInput) {
+  const config = getRunConfig();
+  const mode = input.mode === 'headed' ? 'headed' : 'headless';
+  const defaultWorkers = mode === 'headless' ? config.headlessWorkers : config.headedWorkers;
+  const rawWorkers = Number(input.workers ?? defaultWorkers);
+  // 并发过高会让本地浏览器和被测系统同时承压，这里限制在运行中心约定范围内。
+  const workers = Number.isInteger(rawWorkers) && rawWorkers >= 1 && rawWorkers <= config.maxWorkers ? rawWorkers : defaultWorkers;
+
+  return {
+    mode,
+    workers
+  };
+}
+
+/**
+ * 读取运行中心并发配置。
+ */
+export function getRunConfig(): RunConfig {
+  const config = getAppConfig().runner;
+
+  return {
+    headlessWorkers: config.headlessWorkers,
+    headedWorkers: config.headedWorkers,
+    maxWorkers: config.maxWorkers
   };
 }
 

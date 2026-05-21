@@ -10,7 +10,7 @@ export const recordRouter = Router({ mergeParams: true });
 
 recordRouter.post<RecordParams>('/start', async (req, res, next) => {
   try {
-    res.status(201).json(await startRecordSession(req.params.projectKey, req.params.caseKey));
+    res.status(201).json(await startRecordSession(req.params.projectKey, req.params.caseKey, req.body));
   } catch (error) {
     next(error);
   }

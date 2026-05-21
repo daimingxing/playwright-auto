@@ -25,10 +25,29 @@ beforeEach(async () => {
 
 afterEach(async () => {
   delete process.env.DATA_ROOT;
+  delete process.env.PLAYWRIGHT_AUTO_HEADLESS_WORKERS;
+  delete process.env.PLAYWRIGHT_AUTO_HEADED_WORKERS;
+  delete process.env.PLAYWRIGHT_AUTO_MAX_WORKERS;
   await rm(root, { recursive: true, force: true });
 });
 
 describe('运行报告接口', () => {
+  it('可以读取运行中心并发配置', async () => {
+    process.env.PLAYWRIGHT_AUTO_HEADLESS_WORKERS = '10';
+    process.env.PLAYWRIGHT_AUTO_HEADED_WORKERS = '2';
+    process.env.PLAYWRIGHT_AUTO_MAX_WORKERS = '16';
+    const app = createApp();
+
+    const res = await request(app).get('/api/projects/crm/runs/config');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      headlessWorkers: 10,
+      headedWorkers: 2,
+      maxWorkers: 16
+    });
+  });
+
   it('可以列出项目下已有测试报告', async () => {
     const app = createApp();
     const first = await createRun('crm', 'default');

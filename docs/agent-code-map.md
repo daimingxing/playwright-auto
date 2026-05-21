@@ -13,6 +13,7 @@
 - 涉及业务流程：看 `server/src/services/*`
 - 涉及文件读写、路径、校验：看 `server/src/lib/*`
 - 涉及测试：按领域看 `tests/server/*`、`tests/web/*`、`tests/smoke/*`
+- 涉及存储的数据和playwright测试报告：`data/projects/*`
 
 ## 功能入口
 

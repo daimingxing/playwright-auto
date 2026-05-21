@@ -26,8 +26,10 @@ export function saveLogin(projectKey: string, sessionId: string) {
 }
 
 /**
- * 查询项目级登录态状态。
+ * 查询指定环境的登录态状态。
  */
-export function getAuthState(projectKey: string) {
-  return requestJson<{ exists: boolean; path: string }>(`/api/projects/${projectKey}/auth/state`);
+export function getAuthState(projectKey: string, envKey?: string) {
+  const query = envKey ? `?envKey=${encodeURIComponent(envKey)}` : '';
+
+  return requestJson<{ exists: boolean; path: string }>(`/api/projects/${projectKey}/auth/state${query}`);
 }
