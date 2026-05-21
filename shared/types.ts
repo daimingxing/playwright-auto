@@ -90,6 +90,20 @@ export interface RunMeta {
   updatedAt: string;
 }
 
+export type RunMode = 'headless' | 'headed';
+
+export interface RunInput {
+  envKey?: string;
+  mode?: RunMode;
+  workers?: number;
+}
+
+export interface RunConfig {
+  headlessWorkers: number;
+  headedWorkers: number;
+  maxWorkers: number;
+}
+
 export interface AuthState {
   path: string;
   createdAt: string;

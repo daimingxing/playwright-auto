@@ -29,6 +29,9 @@ beforeEach(async () => {
 
 afterEach(async () => {
   delete process.env.DATA_ROOT;
+  delete process.env.PLAYWRIGHT_AUTO_HEADLESS_WORKERS;
+  delete process.env.PLAYWRIGHT_AUTO_HEADED_WORKERS;
+  delete process.env.PLAYWRIGHT_AUTO_MAX_WORKERS;
   await rm(root, { recursive: true, force: true });
 });
 
@@ -184,8 +187,97 @@ describe('运行服务', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'npx',
-      ['playwright', 'test', '--config', 'playwright.config.ts', `.*crm.*cases.*${item.key}.*case\\.spec\\.ts`],
+      [
+        'playwright',
+        'test',
+        '--config',
+        'playwright.config.ts',
+        '--workers',
+        '4',
+        `.*crm.*cases.*${item.key}.*case\\.spec\\.ts`
+      ],
       expect.objectContaining({ cwd: process.cwd() })
+    );
+  });
+
+  it('运行项目时按调试配置传入无头模式和并发数', async () => {
+    await createProject({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    const item = await createCase('crm', {
+      name: '创建订单',
+      startPath: '/orders/create'
+    });
+    spawnMock.mockReturnValue({
+      on(event: string, callback: (code: number) => void) {
+        if (event === 'exit') {
+          callback(0);
+        }
+      }
+    });
+
+    await runProject('crm', {
+      mode: 'headed',
+      workers: 2
+    });
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      'npx',
+      [
+        'playwright',
+        'test',
+        '--config',
+        'playwright.config.ts',
+        '--workers',
+        '2',
+        `.*crm.*cases.*${item.key}.*case\\.spec\\.ts`
+      ],
+      expect.objectContaining({
+        env: expect.objectContaining({
+          PLAYWRIGHT_HEADLESS: 'false'
+        })
+      })
+    );
+  });
+
+  it('运行项目时从环境变量读取默认并发数和上限', async () => {
+    process.env.PLAYWRIGHT_AUTO_HEADLESS_WORKERS = '12';
+    process.env.PLAYWRIGHT_AUTO_MAX_WORKERS = '16';
+    await createProject({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    const item = await createCase('crm', {
+      name: '创建订单',
+      startPath: '/orders/create'
+    });
+    spawnMock.mockReturnValue({
+      on(event: string, callback: (code: number) => void) {
+        if (event === 'exit') {
+          callback(0);
+        }
+      }
+    });
+
+    await runProject('crm', {
+      mode: 'headless'
+    });
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      'npx',
+      [
+        'playwright',
+        'test',
+        '--config',
+        'playwright.config.ts',
+        '--workers',
+        '12',
+        `.*crm.*cases.*${item.key}.*case\\.spec\\.ts`
+      ],
+      expect.any(Object)
     );
   });
 

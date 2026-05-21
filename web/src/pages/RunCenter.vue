@@ -2,10 +2,10 @@
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import type { EnvMeta, RunMeta } from '../../../shared/types';
+import type { EnvMeta, RunConfig, RunMeta, RunMode } from '../../../shared/types';
 import { getAuthState, saveLogin, startLogin } from '../api/auth';
 import { getProject } from '../api/projects';
-import { deleteRun, exportRun, listRuns, runProject } from '../api/runs';
+import { deleteRun, exportRun, getRunConfig, listRuns, runProject } from '../api/runs';
 import { getErrorMessage } from '../utils/error';
 
 const route = useRoute();
@@ -19,6 +19,13 @@ const hasAuth = ref(false);
 const sessionId = ref('');
 const envs = ref<EnvMeta[]>([]);
 const selectedEnv = ref('default');
+const runMode = ref<RunMode>('headless');
+const runConfig = ref<RunConfig>({
+  headlessWorkers: 4,
+  headedWorkers: 1,
+  maxWorkers: 8
+});
+const workers = ref(runConfig.value.headlessWorkers);
 const reportPath = ref('');
 const reportUrl = ref('');
 const runError = ref('');
@@ -28,10 +35,12 @@ const reports = ref<RunMeta[]>([]);
  * 加载项目环境配置。
  */
 async function loadProject() {
-  const project = await getProject(projectKey);
+  const [project, config] = await Promise.all([getProject(projectKey), getRunConfig(projectKey)]);
 
   envs.value = project.envs;
   selectedEnv.value = 'default';
+  runConfig.value = config;
+  workers.value = config.headlessWorkers;
 }
 
 /**
@@ -56,6 +65,14 @@ async function loadAuthState() {
 async function changeEnv() {
   sessionId.value = '';
   await loadAuthState();
+}
+
+/**
+ * 切换运行模式时使用推荐并发数。
+ */
+function changeRunMode(mode: RunMode) {
+  // 可视调试会打开真实窗口，并发过高容易影响人工观察和本机性能。
+  workers.value = mode === 'headless' ? runConfig.value.headlessWorkers : runConfig.value.headedWorkers;
 }
 
 /**
@@ -171,7 +188,11 @@ async function startRun() {
   runError.value = '';
 
   try {
-    const run = await runProject(projectKey, { envKey: selectedEnv.value });
+    const run = await runProject(projectKey, {
+      envKey: selectedEnv.value,
+      mode: runMode.value,
+      workers: workers.value
+    });
     reportPath.value = run.reportPath;
     reportUrl.value = run.reportUrl ?? '';
     await loadReports();
@@ -264,6 +285,15 @@ onMounted(async () => {
               :value="env.key"
             />
           </el-select>
+        </el-form-item>
+        <el-form-item label="运行模式">
+          <el-radio-group v-model="runMode" @change="changeRunMode">
+            <el-radio-button label="headless">无头运行</el-radio-button>
+            <el-radio-button label="headed">可视调试</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="并发数">
+          <el-input-number v-model="workers" :min="1" :max="runConfig.maxWorkers" :step="1" controls-position="right" />
         </el-form-item>
       </el-form>
       <el-alert

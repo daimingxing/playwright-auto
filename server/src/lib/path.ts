@@ -1,10 +1,11 @@
 import { resolve } from 'node:path';
+import { getAppConfig } from './app-config';
 
 /**
  * 获取数据根目录。
  */
 export function getDataRoot() {
-  return resolve(process.env.DATA_ROOT ?? 'data');
+  return resolve(getAppConfig().server.dataRoot);
 }
 
 /**

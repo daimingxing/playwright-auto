@@ -4,7 +4,7 @@ import { Router } from 'express';
 import { getRunPath } from '../lib/path';
 import { deleteRun, listRuns } from '../lib/run-store';
 import { zipDir } from '../services/export';
-import { runProject } from '../services/runner';
+import { getRunConfig, runProject } from '../services/runner';
 
 interface ProjectParams {
   projectKey: string;
@@ -22,6 +22,10 @@ runsRouter.get<ProjectParams>('/', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+});
+
+runsRouter.get('/config', (_req, res) => {
+  res.json(getRunConfig());
 });
 
 runsRouter.post<ProjectParams>('/', async (req, res, next) => {

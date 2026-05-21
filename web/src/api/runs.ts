@@ -1,16 +1,19 @@
-import type { RunMeta } from '../../../shared/types';
+import type { RunConfig, RunInput, RunMeta } from '../../../shared/types';
 import { downloadFile } from './http';
 import { requestJson } from './http';
-
-export interface RunInput {
-  envKey?: string;
-}
 
 /**
  * 获取项目测试报告列表。
  */
 export function listRuns(projectKey: string) {
   return requestJson<RunMeta[]>(`/api/projects/${projectKey}/runs`);
+}
+
+/**
+ * 获取运行中心配置。
+ */
+export function getRunConfig(projectKey: string) {
+  return requestJson<RunConfig>(`/api/projects/${projectKey}/runs/config`);
 }
 
 /**
