@@ -154,7 +154,7 @@ async function getAuthEnvKey(projectKey: string, envKey?: string) {
  */
 async function getAuthEnv(projectKey: string, envKey?: string) {
   const project = await getProject(projectKey);
-  const key = envKey ?? 'default';
+  const key = envKey ?? project.defaultEnv;
   const envMeta = project.envs.find((item) => item.key === key);
 
   if (!envMeta) {

@@ -32,7 +32,7 @@ export class RunError extends Error {
  */
 export async function runProject(projectKey: string, input: RunInput = {}) {
   const project = await getProject(projectKey);
-  const envKey = input.envKey ?? 'default';
+  const envKey = input.envKey ?? project.defaultEnv;
   const envMeta = project.envs.find((item) => item.key === envKey);
   const files = await getProjectRunFiles(projectKey);
 

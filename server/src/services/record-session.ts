@@ -31,7 +31,7 @@ const resolveModule = createRequire(import.meta.url).resolve;
 export async function startRecordSession(projectKey: string, caseKey: string, input: RecordInput = {}) {
   const project = await getProject(projectKey);
   const item = await getCase(projectKey, caseKey);
-  const envKey = input.envKey ?? 'default';
+  const envKey = input.envKey ?? project.defaultEnv;
   const envMeta = project.envs.find((env) => env.key === envKey);
 
   if (!envMeta) {
