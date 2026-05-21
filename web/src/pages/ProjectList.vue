@@ -178,27 +178,29 @@ onMounted(loadProjects);
       <el-button type="primary" @click="dialogOpen = true">新建项目</el-button>
     </div>
 
-    <el-empty v-if="!loading && projects.length === 0" description="暂无测试项目" />
+    <div class="content">
+      <el-empty v-if="!loading && projects.length === 0" description="暂无测试项目" />
 
-    <div class="grid">
-      <el-card v-for="project in projects" :key="project.key" shadow="never">
-        <div class="project-head">
-          <div>
-            <h3>{{ project.name }}</h3>
-            <p>{{ project.key }}</p>
+      <div v-else class="grid">
+        <el-card v-for="project in projects" :key="project.key" shadow="never">
+          <div class="project-head">
+            <div>
+              <h3>{{ project.name }}</h3>
+              <p>{{ project.key }}</p>
+            </div>
+            <el-tag size="small">{{ project.envs.length }} 个环境</el-tag>
           </div>
-          <el-tag size="small">{{ project.envs.length }} 个环境</el-tag>
-        </div>
-        <div class="env-info">
-          <span>默认环境</span>
-          <strong>{{ getDefaultEnv(project)?.name }}（default）</strong>
-          <p>{{ getDefaultEnv(project)?.baseUrl }}</p>
-        </div>
-        <div class="card-actions">
-          <el-button @click="router.push(`/projects/${project.key}`)">进入项目</el-button>
-          <el-button @click="openEnvDialog(project)">环境配置</el-button>
-        </div>
-      </el-card>
+          <div class="env-info">
+            <span>默认环境</span>
+            <strong>{{ getDefaultEnv(project)?.name }}（default）</strong>
+            <p>{{ getDefaultEnv(project)?.baseUrl }}</p>
+          </div>
+          <div class="card-actions">
+            <el-button @click="router.push(`/projects/${project.key}`)">进入项目</el-button>
+            <el-button @click="openEnvDialog(project)">环境配置</el-button>
+          </div>
+        </el-card>
+      </div>
     </div>
 
     <el-dialog v-model="dialogOpen" title="新建测试项目" width="520px">
@@ -269,13 +271,21 @@ onMounted(loadProjects);
 
 <style scoped>
 .page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
   padding: 28px;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .toolbar {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
   margin-bottom: 20px;
 }
 
@@ -289,10 +299,18 @@ onMounted(loadProjects);
   color: #6b7280;
 }
 
+.content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 16px;
+  align-content: start;
 }
 
 .project-head {

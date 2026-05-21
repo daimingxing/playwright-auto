@@ -158,36 +158,45 @@ onMounted(loadData);
       </div>
     </div>
 
-    <el-table :data="cases" border>
-      <el-table-column prop="name" label="用例名称" />
-      <el-table-column prop="startPath" label="起始路径" />
-      <el-table-column label="审查状态" width="220">
-        <template #default="{ row }">
-          <el-tag :type="getReviewType(row)" effect="light">{{ formatReview(row) }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" width="240">
-        <template #default="{ row }">
-          <el-button size="small" @click="router.push(`/projects/${projectKey}/cases/${row.key}`)">编辑</el-button>
-          <el-button size="small" @click="exportItem(row)">导出</el-button>
-          <el-button size="small" type="danger" @click="removeCase(row)">删除</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+    <div class="content">
+      <section class="list-block">
+        <h3>用例列表</h3>
+        <div class="table-wrap">
+          <el-table :data="cases" border height="100%">
+            <el-table-column prop="name" label="用例名称" />
+            <el-table-column prop="startPath" label="起始路径" />
+            <el-table-column label="审查状态" width="220">
+              <template #default="{ row }">
+                <el-tag :type="getReviewType(row)" effect="light">{{ formatReview(row) }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="240">
+              <template #default="{ row }">
+                <el-button size="small" @click="router.push(`/projects/${projectKey}/cases/${row.key}`)">编辑</el-button>
+                <el-button size="small" @click="exportItem(row)">导出</el-button>
+                <el-button size="small" type="danger" @click="removeCase(row)">删除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </section>
 
-    <section class="trash">
-      <h3>回收站</h3>
-      <el-table :data="trash" border empty-text="回收站暂无用例">
-        <el-table-column prop="name" label="用例名称" />
-        <el-table-column prop="key" label="目录编号" width="140" />
-        <el-table-column label="操作" width="220">
-          <template #default="{ row }">
-            <el-button size="small" @click="restoreItem(row)">恢复</el-button>
-            <el-button size="small" type="danger" @click="removeTrashItem(row)">彻底删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-    </section>
+      <section class="trash list-block">
+        <h3>回收站</h3>
+        <div class="table-wrap">
+          <el-table :data="trash" border height="100%" empty-text="回收站暂无用例">
+            <el-table-column prop="name" label="用例名称" />
+            <el-table-column prop="key" label="目录编号" width="140" />
+            <el-table-column label="操作" width="220">
+              <template #default="{ row }">
+                <el-button size="small" @click="restoreItem(row)">恢复</el-button>
+                <el-button size="small" type="danger" @click="removeTrashItem(row)">彻底删除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </section>
+    </div>
 
     <el-dialog v-model="dialogOpen" title="新建测试用例" width="520px">
       <el-form label-width="90px">
@@ -208,12 +217,21 @@ onMounted(loadData);
 
 <style scoped>
 .page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
   padding: 28px;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .toolbar {
+  flex: 0 0 auto;
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
+  gap: 16px;
   margin-bottom: 20px;
 }
 
@@ -224,9 +242,33 @@ onMounted(loadData);
 .actions {
   display: flex;
   gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
-.trash {
-  margin-top: 24px;
+.content {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 20px;
+}
+
+.list-block {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.list-block h3 {
+  flex: 0 0 auto;
+  margin: 0 0 12px;
+}
+
+.table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
 }
 </style>

@@ -274,100 +274,112 @@ onMounted(async () => {
         <h2>运行中心</h2>
       </div>
     </div>
-    <el-card shadow="never">
-      <el-form label-width="90px">
-        <el-form-item label="运行环境">
-          <el-select v-model="selectedEnv" class="env-select" @change="changeEnv">
-            <el-option
-              v-for="env in envs"
-              :key="env.key"
-              :label="`${env.name}（${env.key}）`"
-              :value="env.key"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="运行模式">
-          <el-radio-group v-model="runMode" @change="changeRunMode">
-            <el-radio-button label="headless">无头运行</el-radio-button>
-            <el-radio-button label="headed">可视调试</el-radio-button>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item label="并发数">
-          <el-input-number v-model="workers" :min="1" :max="runConfig.maxWorkers" :step="1" controls-position="right" />
-        </el-form-item>
-      </el-form>
-      <el-alert
-        class="result"
-        :type="hasAuth ? 'success' : 'warning'"
-        :closable="false"
-        :title="hasAuth ? '已保存项目登录态，运行测试会自动复用' : '当前项目还没有保存登录态'"
-      />
+    <div class="content">
+      <el-card class="run-card" shadow="never">
+        <el-form label-width="90px">
+          <el-form-item label="运行环境">
+            <el-select v-model="selectedEnv" class="env-select" @change="changeEnv">
+              <el-option
+                v-for="env in envs"
+                :key="env.key"
+                :label="`${env.name}（${env.key}）`"
+                :value="env.key"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="运行模式">
+            <el-radio-group v-model="runMode" @change="changeRunMode">
+              <el-radio-button label="headless">无头运行</el-radio-button>
+              <el-radio-button label="headed">可视调试</el-radio-button>
+            </el-radio-group>
+          </el-form-item>
+          <el-form-item label="并发数">
+            <el-input-number v-model="workers" :min="1" :max="runConfig.maxWorkers" :step="1" controls-position="right" />
+          </el-form-item>
+        </el-form>
+        <el-alert
+          class="result"
+          :type="hasAuth ? 'success' : 'warning'"
+          :closable="false"
+          :title="hasAuth ? '已保存项目登录态，运行测试会自动复用' : '当前项目还没有保存登录态'"
+        />
 
-      <div class="actions">
-        <el-button type="primary" :loading="loading" @click="openLogin">打开浏览器登录</el-button>
-        <el-button :disabled="!sessionId" :loading="saving" @click="saveAuth">我已完成登录，保存登录态</el-button>
-        <el-button type="success" :disabled="!hasAuth" :loading="running" @click="startRun">运行测试</el-button>
-      </div>
+        <div class="actions">
+          <el-button type="primary" :loading="loading" @click="openLogin">打开浏览器登录</el-button>
+          <el-button :disabled="!sessionId" :loading="saving" @click="saveAuth">我已完成登录，保存登录态</el-button>
+          <el-button type="success" :disabled="!hasAuth" :loading="running" @click="startRun">运行测试</el-button>
+        </div>
 
-      <el-alert v-if="authPath" class="result" type="info" :closable="false" :title="authPath" />
-      <el-alert v-if="reportPath" class="result" type="success" :closable="false" title="测试运行完成，已打开 HTML 报告">
-        <template #default>
-          <div class="report-row">
-            <span class="report-path">{{ reportPath }}</span>
-            <el-button v-if="reportUrl" size="small" @click="openReport">打开报告</el-button>
+        <el-alert v-if="authPath" class="result" type="info" :closable="false" :title="authPath" />
+        <el-alert v-if="reportPath" class="result" type="success" :closable="false" title="测试运行完成，已打开 HTML 报告">
+          <template #default>
+            <div class="report-row">
+              <span class="report-path">{{ reportPath }}</span>
+              <el-button v-if="reportUrl" size="small" @click="openReport">打开报告</el-button>
+            </div>
+          </template>
+        </el-alert>
+        <el-alert
+          v-if="runError"
+          class="result"
+          type="error"
+          :closable="false"
+          :title="runError"
+          show-icon
+        />
+      </el-card>
+
+      <el-card class="report-card" shadow="never">
+        <template #header>
+          <div class="card-header">
+            <span>测试报告</span>
+            <el-button text @click="loadReports">刷新</el-button>
           </div>
         </template>
-      </el-alert>
-      <el-alert
-        v-if="runError"
-        class="result"
-        type="error"
-        :closable="false"
-        :title="runError"
-        show-icon
-      />
-    </el-card>
-
-    <el-card class="report-card" shadow="never">
-      <template #header>
-        <div class="card-header">
-          <span>测试报告</span>
-          <el-button text @click="loadReports">刷新</el-button>
+        <div class="table-wrap">
+          <el-table :data="reports" border height="100%" empty-text="暂无测试报告">
+            <el-table-column prop="id" label="报告编号" min-width="180" />
+            <el-table-column label="环境" min-width="170">
+              <template #default="{ row }">
+                {{ getEnvLabel(row.envKey) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="状态" width="120">
+              <template #default="{ row }">
+                <el-tag :type="getStatusType(row.status)">{{ getStatusLabel(row.status) }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="createdAt" label="创建时间" min-width="190" />
+            <el-table-column label="操作" width="260">
+              <template #default="{ row }">
+                <el-button size="small" @click="openRunReport(row)">打开</el-button>
+                <el-button size="small" @click="exportReport(row)">导出</el-button>
+                <el-button size="small" type="danger" @click="removeReport(row)">删除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
         </div>
-      </template>
-      <el-table :data="reports" border empty-text="暂无测试报告">
-        <el-table-column prop="id" label="报告编号" min-width="180" />
-        <el-table-column label="环境" min-width="170">
-          <template #default="{ row }">
-            {{ getEnvLabel(row.envKey) }}
-          </template>
-        </el-table-column>
-        <el-table-column label="状态" width="120">
-          <template #default="{ row }">
-            <el-tag :type="getStatusType(row.status)">{{ getStatusLabel(row.status) }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="createdAt" label="创建时间" min-width="190" />
-        <el-table-column label="操作" width="260">
-          <template #default="{ row }">
-            <el-button size="small" @click="openRunReport(row)">打开</el-button>
-            <el-button size="small" @click="exportReport(row)">导出</el-button>
-            <el-button size="small" type="danger" @click="removeReport(row)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-    </el-card>
+      </el-card>
+    </div>
   </section>
 </template>
 
 <style scoped>
 .page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
   padding: 28px;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .toolbar {
+  flex: 0 0 auto;
   display: flex;
   justify-content: space-between;
+  gap: 16px;
   margin-bottom: 20px;
 }
 
@@ -379,10 +391,32 @@ onMounted(async () => {
   margin-top: 16px;
 }
 
+.content {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, auto) minmax(180px, 1fr);
+  gap: 20px;
+  overflow: hidden;
+}
+
+.content :deep(.el-card__body) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .actions {
   display: flex;
   gap: 12px;
   margin-top: 18px;
+  flex-wrap: wrap;
+}
+
+.run-card {
+  min-height: 0;
+  max-height: min(320px, 42vh);
+  overflow: auto;
 }
 
 .env-select {
@@ -405,12 +439,19 @@ onMounted(async () => {
 }
 
 .report-card {
-  margin-top: 20px;
+  min-height: 0;
 }
 
 .card-header {
   align-items: center;
   display: flex;
   justify-content: space-between;
+}
+
+.table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
 }
 </style>
