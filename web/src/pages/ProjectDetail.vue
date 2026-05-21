@@ -162,15 +162,16 @@ onMounted(loadData);
       <section class="list-block">
         <h3>用例列表</h3>
         <div class="table-wrap">
-          <el-table :data="cases" border height="100%">
-            <el-table-column prop="name" label="用例名称" />
-            <el-table-column prop="startPath" label="起始路径" />
-            <el-table-column label="审查状态" width="220">
+          <!-- 主表保留更大的最小宽度，确保在窄窗口下真实产生横向溢出。 -->
+          <el-table class="case-table" :data="cases" border height="100%">
+            <el-table-column prop="name" label="用例名称" min-width="220" />
+            <el-table-column prop="startPath" label="起始路径" min-width="220" />
+            <el-table-column label="审查状态" min-width="220">
               <template #default="{ row }">
                 <el-tag :type="getReviewType(row)" effect="light">{{ formatReview(row) }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="240">
+            <el-table-column label="操作" width="260">
               <template #default="{ row }">
                 <el-button size="small" @click="router.push(`/projects/${projectKey}/cases/${row.key}`)">编辑</el-button>
                 <el-button size="small" @click="exportItem(row)">导出</el-button>
@@ -184,10 +185,11 @@ onMounted(loadData);
       <section class="trash list-block">
         <h3>回收站</h3>
         <div class="table-wrap">
-          <el-table :data="trash" border height="100%" empty-text="回收站暂无用例">
-            <el-table-column prop="name" label="用例名称" />
-            <el-table-column prop="key" label="目录编号" width="140" />
-            <el-table-column label="操作" width="220">
+          <!-- 回收站表同样要保留足够的最小宽度，避免被容器压扁后失去横向滚动。 -->
+          <el-table class="trash-table" :data="trash" border height="100%" empty-text="回收站暂无用例">
+            <el-table-column prop="name" label="用例名称" min-width="260" />
+            <el-table-column prop="key" label="目录编号" min-width="160" />
+            <el-table-column label="操作" width="260">
               <template #default="{ row }">
                 <el-button size="small" @click="restoreItem(row)">恢复</el-button>
                 <el-button size="small" type="danger" @click="removeTrashItem(row)">彻底删除</el-button>
@@ -257,6 +259,7 @@ onMounted(loadData);
 .list-block {
   display: flex;
   flex-direction: column;
+  min-width: 0;
   min-height: 0;
 }
 
@@ -267,8 +270,19 @@ onMounted(loadData);
 
 .table-wrap {
   flex: 1;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   min-height: 0;
   overflow: auto;
   padding-right: 4px;
+}
+
+.case-table {
+  min-width: 1400px;
+}
+
+.trash-table {
+  min-width: 980px;
 }
 </style>
