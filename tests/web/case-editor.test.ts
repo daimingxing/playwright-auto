@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { CaseStep } from '../../shared/types';
 import {
+  canMoveSteps,
   copyStep,
+  copySteps,
   createStep,
   formatStepType,
   getInsertIndex,
@@ -10,7 +12,9 @@ import {
   hasValue,
   insertStep,
   moveStep,
+  moveSteps,
   removeStep,
+  removeSteps,
   stepGroups,
   stepLabels,
   stepTypes
@@ -122,5 +126,62 @@ describe('用例编辑器步骤工具', () => {
 
     removeStep(steps, 2);
     expect(steps.map((row) => row.id)).toEqual(['b', 'c', 'a']);
+  });
+
+  it('可以批量删除选中的步骤并保留未选中顺序', () => {
+    const steps = [makeStep('a'), makeStep('b', 'fill'), makeStep('c', 'wait'), makeStep('d')];
+
+    const removed = removeSteps(steps, ['b', 'd']);
+
+    expect(removed.map((row) => row.id)).toEqual(['b', 'd']);
+    expect(steps.map((row) => row.id)).toEqual(['a', 'c']);
+  });
+
+  it('可以批量复制选中的步骤到选中块后方', () => {
+    const steps = [makeStep('a'), makeStep('b', 'fill'), makeStep('c', 'wait'), makeStep('d')];
+
+    const copied = copySteps(steps, ['b', 'd']);
+
+    expect(copied).toHaveLength(2);
+    expect(copied.map((row) => row.type)).toEqual(['fill', 'click']);
+    expect(copied[0].id).not.toBe('b');
+    expect(copied[1].id).not.toBe('d');
+    expect(steps.map((row) => row.id)).toEqual(['a', 'b', 'c', 'd', copied[0].id, copied[1].id]);
+  });
+
+  it('可以批量上移和下移选中的步骤并保持内部顺序', () => {
+    const steps = [makeStep('a'), makeStep('b'), makeStep('c'), makeStep('d')];
+
+    expect(canMoveSteps(steps, ['b', 'c'], -1)).toBe(true);
+    const movedUp = moveSteps(steps, ['b', 'c'], -1);
+
+    expect(movedUp.map((row) => row.id)).toEqual(['b', 'c']);
+    expect(steps.map((row) => row.id)).toEqual(['b', 'c', 'a', 'd']);
+
+    expect(canMoveSteps(steps, ['b', 'c'], 1)).toBe(true);
+    const movedDown = moveSteps(steps, ['b', 'c'], 1);
+
+    expect(movedDown.map((row) => row.id)).toEqual(['b', 'c']);
+    expect(steps.map((row) => row.id)).toEqual(['a', 'b', 'c', 'd']);
+  });
+
+  it('批量移动非连续选择时会让每个选中块各移动一格', () => {
+    const steps = [makeStep('a'), makeStep('b'), makeStep('c'), makeStep('d'), makeStep('e')];
+
+    moveSteps(steps, ['b', 'd'], -1);
+    expect(steps.map((row) => row.id)).toEqual(['b', 'a', 'd', 'c', 'e']);
+
+    moveSteps(steps, ['b', 'd'], 1);
+    expect(steps.map((row) => row.id)).toEqual(['a', 'b', 'c', 'd', 'e']);
+  });
+
+  it('批量移动会处理空选择和首尾边界', () => {
+    const steps = [makeStep('a'), makeStep('b'), makeStep('c')];
+
+    expect(canMoveSteps(steps, [], -1)).toBe(false);
+    expect(canMoveSteps(steps, ['a'], -1)).toBe(false);
+    expect(canMoveSteps(steps, ['c'], 1)).toBe(false);
+    expect(moveSteps(steps, [], 1)).toEqual([]);
+    expect(steps.map((row) => row.id)).toEqual(['a', 'b', 'c']);
   });
 });

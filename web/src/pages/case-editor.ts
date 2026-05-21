@@ -169,8 +169,98 @@ export function copyStep(steps: CaseStep[], index: number) {
 }
 
 /**
+ * 判断批量选中的步骤是否可以整体移动。
+ */
+export function canMoveSteps(steps: CaseStep[], ids: string[], offset: -1 | 1) {
+  const indexes = getStepIndexes(steps, ids);
+
+  if (indexes.length === 0) {
+    return false;
+  }
+
+  if (offset === -1) {
+    return indexes[0] > 0;
+  }
+
+  return indexes[indexes.length - 1] < steps.length - 1;
+}
+
+/**
+ * 批量移动选中的步骤。
+ */
+export function moveSteps(steps: CaseStep[], ids: string[], offset: -1 | 1) {
+  if (!canMoveSteps(steps, ids, offset)) {
+    return [];
+  }
+
+  const selected = new Set(ids);
+  const moved = steps.filter((row) => selected.has(row.id));
+  const start = offset === -1 ? 0 : steps.length - 1;
+  const end = offset === -1 ? steps.length : -1;
+
+  for (let index = start; index !== end; index -= offset) {
+    const row = steps[index];
+    const next = index + offset;
+
+    // 相邻位置也是选中项时保持选中块内部顺序，不做交换。
+    if (!row || selected.has(steps[next]?.id) || !selected.has(row.id)) {
+      continue;
+    }
+
+    [steps[index], steps[next]] = [steps[next], steps[index]];
+  }
+
+  return moved;
+}
+
+/**
+ * 批量复制选中的步骤到选中块后方。
+ */
+export function copySteps(steps: CaseStep[], ids: string[]) {
+  const indexes = getStepIndexes(steps, ids);
+
+  if (indexes.length === 0) {
+    return [];
+  }
+
+  const selected = new Set(ids);
+  const rows = steps
+    .filter((row) => selected.has(row.id))
+    .map((row) => ({
+      ...row,
+      id: crypto.randomUUID()
+    }));
+
+  steps.splice(indexes[indexes.length - 1] + 1, 0, ...rows);
+  return rows;
+}
+
+/**
  * 删除指定步骤。
  */
 export function removeStep(steps: CaseStep[], index: number) {
   steps.splice(index, 1);
+}
+
+/**
+ * 批量删除选中的步骤。
+ */
+export function removeSteps(steps: CaseStep[], ids: string[]) {
+  const selected = new Set(ids);
+  const removed = steps.filter((row) => selected.has(row.id));
+  const kept = steps.filter((row) => !selected.has(row.id));
+
+  steps.splice(0, steps.length, ...kept);
+  return removed;
+}
+
+/**
+ * 获取步骤在当前列表里的索引。
+ */
+function getStepIndexes(steps: CaseStep[], ids: string[]) {
+  const selected = new Set(ids);
+
+  return steps
+    .map((row, index) => (selected.has(row.id) ? index : -1))
+    .filter((index) => index >= 0);
 }

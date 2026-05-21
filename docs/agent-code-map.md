@@ -19,10 +19,12 @@
 
 - 项目管理：`web/src/api/projects.ts`、`server/src/routes/projects.ts`、`server/src/lib/project-store.ts`
 - 用例管理、回收站、导出：`web/src/api/cases.ts`、`server/src/routes/cases.ts`、`server/src/lib/case-store.ts`、`server/src/services/export.ts`
+- 用例步骤编辑和批量操作：`web/src/pages/CaseEditor.vue`、`web/src/pages/case-editor.ts`、`tests/web/case-editor.test.ts`
 - 用例步骤生成 Playwright spec：`server/src/services/case-generator.ts`
 - Playwright codegen 录制导入：`server/src/routes/record.ts`、`server/src/services/record-session.ts`、`server/src/services/codegen-parser.ts`
 - 运行项目与报告：`web/src/api/runs.ts`、`server/src/routes/runs.ts`、`server/src/services/runner.ts`、`server/src/lib/run-store.ts`
 - 登录态：`web/src/api/auth.ts`、`server/src/routes/auth.ts`、`server/src/services/auth-session.ts`
+- 本地应用配置和步骤默认等待时间：`playwright-auto.config.json`、`server/src/lib/app-config.ts`、`server/src/app.ts`、`web/src/api/projects.ts`
 - 离线浏览器依赖：`server/src/services/vendor-browser.ts`、`server/src/services/browser-path.ts`、`scripts/install-browsers.mjs`
 
 ## 调用关系
@@ -38,6 +40,8 @@
 
 - 改共享类型时，同步检查前端页面、前端 API、后端存储和测试
 - 改 API 路径或响应结构时，同步检查 `web/src/api/*`、`server/src/routes/*` 和对应 `tests/server/*`
-- 改用例步骤类型时，同步检查 `shared/types.ts`、`CaseEditor.vue`、`case-generator.ts`、`codegen-parser.ts` 和相关测试
+- 改用例步骤类型时，同步检查 `shared/types.ts`、`CaseEditor.vue`、`case-editor.ts`、`case-generator.ts`、`codegen-parser.ts` 和相关测试
+- 改用例步骤编辑交互或批量操作时，同步检查 `CaseEditor.vue`、`case-editor.ts` 和 `tests/web/case-editor.test.ts`
+- 改步骤默认等待时间配置时，同步检查 `playwright-auto.config.json`、`app-config.ts`、`web/src/api/projects.ts`、`CaseEditor.vue`、`codegen-parser.ts` 和相关测试
 - 改运行报告时，同步检查 `runner.ts`、`run-store.ts`、`routes/runs.ts` 和 `tests/server/api-runs.test.ts`
 - 改登录态时，同步检查 `auth-session.ts`、`routes/auth.ts`、`RunCenter.vue` 和 `tests/server/api-auth.test.ts`

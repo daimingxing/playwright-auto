@@ -69,9 +69,16 @@ npm run dev
     "dataRoot": "data"
   },
   "runner": {
-    "headlessWorkers": 4,
+    "headlessWorkers": 8,
     "headedWorkers": 1,
-    "maxWorkers": 8
+    "maxWorkers": 20
+  },
+  "steps": {
+    "timeouts": {
+      "navigation": 20000,
+      "action": 2000,
+      "wait": 1000
+    }
   }
 }
 ```
@@ -81,6 +88,9 @@ npm run dev
 - `runner.headlessWorkers`：无头运行默认并发数。
 - `runner.headedWorkers`：可视调试默认并发数。
 - `runner.maxWorkers`：运行中心允许选择的最大并发数。
+- `steps.timeouts.navigation`：手动新增打开页面步骤、录制导入打开页面步骤的默认等待毫秒数。
+- `steps.timeouts.action`：手动新增点击、输入、选择等操作步骤，和录制导入操作步骤的默认等待毫秒数。
+- `steps.timeouts.wait`：手动新增等待步骤的默认等待毫秒数。
 
 同名环境变量仍可临时覆盖配置文件：`PORT`、`DATA_ROOT`、`PLAYWRIGHT_AUTO_HEADLESS_WORKERS`、`PLAYWRIGHT_AUTO_HEADED_WORKERS`、`PLAYWRIGHT_AUTO_MAX_WORKERS`。
 
@@ -89,7 +99,7 @@ npm run dev
 - 项目管理：创建项目并维护多个环境地址
 - 用例管理：创建、编辑、删除、恢复和永久删除测试用例
 - 用例导出：导出单条用例目录，包含结构化数据和 Playwright spec
-- 步骤编辑：支持跳转、点击、右键、双击、悬停、输入、选择、等待和断言步骤
+- 步骤编辑：支持跳转、点击、右键、双击、悬停、输入、选择、等待和断言步骤；支持选中步骤后插入、单步上移下移、单步复制和批量删除、批量上移下移、批量复制、全选、取消批量
 - 录制导入：通过 Playwright codegen 录制操作，并导入为步骤数据
 - 登录态：通过有头浏览器手动登录，保存 storageState 后复用
 - 运行管理：按项目运行测试，查看运行状态、报告地址并导出报告

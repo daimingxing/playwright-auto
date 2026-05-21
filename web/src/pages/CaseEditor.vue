@@ -1,14 +1,17 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import type { TableInstance } from 'element-plus';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { ArrowDown, ArrowUp, CopyDocument, Delete, MoreFilled, Plus } from '@element-plus/icons-vue';
+import { ArrowDown, ArrowUp, CopyDocument, Delete, Finished, MoreFilled, Plus, Select } from '@element-plus/icons-vue';
 import type { CaseMeta, CaseStep, StepType } from '../../../shared/types';
 import { getCase, startRecord, stopRecord, updateCase } from '../api/cases';
 import { getAppStepConfig } from '../api/projects';
 import { getErrorMessage } from '../utils/error';
 import {
+  canMoveSteps,
   copyStep,
+  copySteps,
   formatStepType,
   getInsertIndex,
   hasSelector,
@@ -16,7 +19,9 @@ import {
   hasValue,
   insertStep,
   moveStep,
+  moveSteps,
   removeStep,
+  removeSteps,
   stepGroups,
   stepLabels,
   stepTimeouts
@@ -28,12 +33,16 @@ const projectKey = String(route.params.projectKey);
 const caseKey = String(route.params.caseKey);
 const item = ref<CaseMeta | null>(null);
 const stepConfig = ref(stepTimeouts);
+const stepTable = ref<TableInstance>();
 const recordId = ref('');
 const isRecording = ref(false);
+const isBatchMode = ref(false);
 const selectedId = ref('');
+const batchIds = ref<string[]>([]);
 const highlightId = ref('');
 const stepFlashMs = 180;
-let highlightTimer: ReturnType<typeof window.setTimeout> | undefined;
+// 浏览器环境下 `window.setTimeout` 返回数值型定时器句柄，避免与 Node 的 `Timeout` 类型混淆。
+let highlightTimer: number | undefined;
 const reviewLabels = {
   error: '错误',
   danger: '高危',
@@ -57,6 +66,9 @@ const reviewMap = computed(() => {
 
   return map;
 });
+const hasBatch = computed(() => batchIds.value.length > 0);
+const canBatchUp = computed(() => (item.value ? canMoveSteps(item.value.steps, batchIds.value, -1) : false));
+const canBatchDown = computed(() => (item.value ? canMoveSteps(item.value.steps, batchIds.value, 1) : false));
 
 /**
  * 加载当前用例。
@@ -93,6 +105,98 @@ function deleteStep(index: number) {
   if (row?.id === selectedId.value) {
     selectedId.value = '';
   }
+}
+
+/**
+ * 进入或退出批量操作模式。
+ */
+function toggleBatchMode() {
+  isBatchMode.value = !isBatchMode.value;
+
+  if (!isBatchMode.value) {
+    clearBatch();
+  }
+}
+
+/**
+ * 同步表格多选状态。
+ */
+function updateBatch(rows: CaseStep[]) {
+  batchIds.value = rows.map((row) => row.id);
+}
+
+/**
+ * 清空批量选择。
+ */
+function clearBatch() {
+  batchIds.value = [];
+  stepTable.value?.clearSelection();
+}
+
+/**
+ * 全选当前所有步骤。
+ */
+async function selectAllSteps() {
+  if (!item.value) {
+    return;
+  }
+
+  await nextTick();
+  stepTable.value?.clearSelection();
+
+  for (const row of item.value.steps) {
+    stepTable.value?.toggleRowSelection(row, true);
+  }
+
+  batchIds.value = item.value.steps.map((row) => row.id);
+}
+
+/**
+ * 批量删除选中的步骤。
+ */
+async function deleteBatch() {
+  if (!item.value || !hasBatch.value) {
+    return;
+  }
+
+  try {
+    await ElMessageBox.confirm(`确认删除选中的 ${batchIds.value.length} 个步骤吗？`, '批量删除', { type: 'warning' });
+    const removed = removeSteps(item.value.steps, batchIds.value);
+    clearBatch();
+
+    if (removed.some((row) => row.id === selectedId.value)) {
+      selectedId.value = '';
+    }
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error(getErrorMessage(error));
+    }
+  }
+}
+
+/**
+ * 批量复制选中的步骤。
+ */
+function duplicateBatch() {
+  if (!item.value || !hasBatch.value) {
+    return;
+  }
+
+  const rows = copySteps(item.value.steps, batchIds.value);
+  setActiveSteps(rows);
+  clearBatch();
+}
+
+/**
+ * 批量调整步骤顺序。
+ */
+function shiftBatch(offset: -1 | 1) {
+  if (!item.value || !hasBatch.value) {
+    return;
+  }
+
+  const rows = moveSteps(item.value.steps, batchIds.value, offset);
+  setActiveSteps(rows);
 }
 
 /**
@@ -135,6 +239,29 @@ function setActiveStep(step?: CaseStep) {
   }
 
   // 高亮时长与 CSS 动画保持一致，避免移动后视觉反馈拖沓。
+  highlightTimer = window.setTimeout(() => {
+    highlightId.value = '';
+  }, stepFlashMs);
+}
+
+/**
+ * 设置多个步骤的短暂高亮。
+ */
+function setActiveSteps(steps: CaseStep[]) {
+  const first = steps[0];
+
+  if (!first) {
+    return;
+  }
+
+  selectedId.value = first.id;
+  highlightId.value = first.id;
+
+  if (highlightTimer) {
+    window.clearTimeout(highlightTimer);
+  }
+
+  // 批量操作先高亮第一条受影响步骤，避免多个动画同时闪烁造成干扰。
   highlightTimer = window.setTimeout(() => {
     highlightId.value = '';
   }, stepFlashMs);
@@ -281,19 +408,35 @@ onMounted(loadCase);
           <span class="insert-hint">
             {{ selectedId ? '将插入到选中步骤后方' : '未选中步骤时追加到末尾' }}
           </span>
+          <el-divider direction="vertical" />
+          <template v-if="!isBatchMode">
+            <el-button :icon="Select" @click="toggleBatchMode">批量操作</el-button>
+          </template>
+          <template v-else>
+            <span class="batch-count">已选 {{ batchIds.length }} 条</span>
+            <el-button :icon="Finished" @click="selectAllSteps">全选</el-button>
+            <el-button :icon="ArrowUp" :disabled="!canBatchUp" @click="shiftBatch(-1)">上移</el-button>
+            <el-button :icon="ArrowDown" :disabled="!canBatchDown" @click="shiftBatch(1)">下移</el-button>
+            <el-button :icon="CopyDocument" :disabled="!hasBatch" @click="duplicateBatch">复制</el-button>
+            <el-button :icon="Delete" type="danger" plain :disabled="!hasBatch" @click="deleteBatch">删除</el-button>
+            <el-button @click="toggleBatchMode">取消批量</el-button>
+          </template>
         </div>
       </div>
 
       <div class="table-wrap">
         <el-table
+          ref="stepTable"
           :data="item.steps"
           border
           height="100%"
           row-key="id"
           :row-class-name="getRowClass"
           @row-click="selectStep"
+          @selection-change="updateBatch"
         >
-          <el-table-column label="步骤类型" width="150">
+          <el-table-column v-if="isBatchMode" type="selection" width="44" reserve-selection />
+          <el-table-column label="步骤类型" width="120">
             <template #default="{ row }">
               <div class="step-type">
                 <strong>{{ formatStepType(row.type).label }}</strong>
@@ -341,35 +484,36 @@ onMounted(loadCase);
               <span v-else class="field-empty">-</span>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="160">
+          <el-table-column label="操作" width="180">
             <template #default="{ $index }">
               <div class="row-actions">
-                <el-tooltip content="上移" placement="top">
+                <el-tooltip content="上移" placement="top" :show-after="500" :hide-after="0">
                   <el-button text circle :disabled="$index === 0" @click="shiftStep($index, -1)">
                     <el-icon><ArrowUp /></el-icon>
                   </el-button>
                 </el-tooltip>
-                <el-tooltip content="下移" placement="top">
+                <el-tooltip content="下移" placement="top" :show-after="500" :hide-after="0">
                   <el-button text circle :disabled="$index === item.steps.length - 1" @click="shiftStep($index, 1)">
                     <el-icon><ArrowDown /></el-icon>
                   </el-button>
                 </el-tooltip>
-                <el-tooltip content="复制" placement="top">
+                <el-tooltip content="复制" placement="top" :show-after="500" :hide-after="0">
                   <el-button text circle @click="duplicateStep($index)">
                     <el-icon><CopyDocument /></el-icon>
                   </el-button>
                 </el-tooltip>
-                <el-dropdown>
-                  <el-tooltip content="更多" placement="top">
-                    <el-button text circle>
-                      <el-icon><MoreFilled /></el-icon>
-                    </el-button>
-                  </el-tooltip>
+                <el-dropdown
+                  trigger="click"
+                  popper-class="step-more-menu"
+                  @command="(command) => command === 'delete' && deleteStep($index)"
+                >
+                  <el-button text circle title="更多" @click.stop>
+                    <el-icon><MoreFilled /></el-icon>
+                  </el-button>
                   <template #dropdown>
                     <el-dropdown-menu>
-                      <el-dropdown-item class="danger-action" @click="deleteStep($index)">
-                        <el-icon><Delete /></el-icon>
-                        <span>删除</span>
+                      <el-dropdown-item :icon="Delete" command="delete" class="danger-action">
+                        删除
                       </el-dropdown-item>
                     </el-dropdown-menu>
                   </template>
@@ -445,6 +589,13 @@ onMounted(loadCase);
   font-size: 13px;
 }
 
+.batch-count {
+  padding: 0 8px;
+  color: #315f8f;
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .step-menu-label {
   display: inline-block;
   min-width: 72px;
@@ -487,10 +638,6 @@ onMounted(loadCase);
   align-items: center;
   justify-content: center;
   flex-wrap: nowrap;
-}
-
-.danger-action {
-  color: #d94747;
 }
 
 .field-empty {
@@ -541,5 +688,28 @@ onMounted(loadCase);
   margin: 8px 0 0;
   color: #606266;
   line-height: 1.5;
+}
+</style>
+
+<style>
+.step-more-menu .danger-action {
+  --el-dropdown-menuItem-hover-color: #c93535;
+  --el-dropdown-menuItem-hover-fill: #fff1f1;
+  color: #d94747;
+}
+
+.step-more-menu .danger-action .el-icon {
+  color: #d94747;
+}
+
+.step-more-menu .danger-action:hover,
+.step-more-menu .danger-action:focus {
+  background: #fff1f1;
+  color: #c93535;
+}
+
+.step-more-menu .danger-action:hover .el-icon,
+.step-more-menu .danger-action:focus .el-icon {
+  color: #c93535;
 }
 </style>
