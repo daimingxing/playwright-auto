@@ -191,8 +191,10 @@ onMounted(loadProjects);
             <el-tag size="small">{{ project.envs.length }} 个环境</el-tag>
           </div>
           <div class="env-info">
-            <span>默认环境</span>
-            <strong>{{ getDefaultEnv(project)?.name }}（default）</strong>
+            <div class="env-header">
+              <el-tag size="small" type="info" effect="light">默认</el-tag>
+              <strong>{{ getDefaultEnv(project)?.name }}</strong>
+            </div>
             <p>{{ getDefaultEnv(project)?.baseUrl }}</p>
           </div>
           <div class="card-actions">
@@ -211,7 +213,7 @@ onMounted(loadProjects);
         <el-form-item label="项目标识">
           <el-input v-model="form.key" placeholder="例如：crm" />
         </el-form-item>
-        <el-form-item label="项目 URL">
+        <el-form-item label="默认 URL">
           <el-input v-model="form.baseUrl" placeholder="https://test.example.com" />
         </el-form-item>
       </el-form>
@@ -308,7 +310,7 @@ onMounted(loadProjects);
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 16px;
   align-content: start;
 }
@@ -330,22 +332,26 @@ onMounted(loadProjects);
   margin: 0;
 }
 
+.env-info p {
+  word-break: break-all;
+}
+
 .env-info {
   border-top: 1px solid #edf0f5;
   margin-top: 14px;
   padding-top: 14px;
 }
 
-.env-info span {
-  color: #6b7280;
-  display: block;
-  font-size: 12px;
-  margin-bottom: 4px;
+.env-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
 }
 
-.env-info strong {
-  display: block;
-  margin-bottom: 6px;
+.env-header strong {
+  font-size: 14px;
+  color: #374151;
 }
 
 .card-actions {
