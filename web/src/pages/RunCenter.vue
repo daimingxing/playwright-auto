@@ -2,11 +2,13 @@
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import type { EnvMeta, RunConfig, RunMeta, RunMode } from '../../../shared/types';
+import type { CaseMeta, EnvMeta, RunConfig, RunMeta, RunMode } from '../../../shared/types';
 import { getAuthState, saveLogin, startLogin } from '../api/auth';
+import { listCases } from '../api/cases';
 import { getProject } from '../api/projects';
 import { deleteRun, exportRun, getRunConfig, listRuns, runProject } from '../api/runs';
 import { getErrorMessage } from '../utils/error';
+import { canStartRun, getRunButtonText, mergeSelectedCaseKeys } from './run-center';
 
 const route = useRoute();
 const router = useRouter();
@@ -30,17 +32,21 @@ const reportPath = ref('');
 const reportUrl = ref('');
 const runError = ref('');
 const reports = ref<RunMeta[]>([]);
+const cases = ref<CaseMeta[]>([]);
+const selectedCaseKeys = ref<string[]>([]);
 
 /**
  * 加载项目环境配置。
  */
 async function loadProject() {
-  const [project, config] = await Promise.all([getProject(projectKey), getRunConfig(projectKey)]);
+  const [project, config, items] = await Promise.all([getProject(projectKey), getRunConfig(projectKey), listCases(projectKey)]);
 
   envs.value = project.envs;
   selectedEnv.value = 'default';
   runConfig.value = config;
   workers.value = config.headlessWorkers;
+  cases.value = items;
+  selectedCaseKeys.value = mergeSelectedCaseKeys(items, selectedCaseKeys.value);
 }
 
 /**
@@ -48,6 +54,20 @@ async function loadProject() {
  */
 async function loadReports() {
   reports.value = await listRuns(projectKey);
+}
+
+/**
+ * 全选当前项目可用测试用例。
+ */
+function selectAllCases() {
+  selectedCaseKeys.value = cases.value.map((item) => item.key);
+}
+
+/**
+ * 清空本次测试用例选择。
+ */
+function clearCases() {
+  selectedCaseKeys.value = [];
 }
 
 /**
@@ -182,6 +202,11 @@ async function startRun() {
     return;
   }
 
+  if (selectedCaseKeys.value.length === 0) {
+    ElMessage.warning('请选择至少一条测试用例');
+    return;
+  }
+
   running.value = true;
   reportPath.value = '';
   reportUrl.value = '';
@@ -191,7 +216,8 @@ async function startRun() {
     const run = await runProject(projectKey, {
       envKey: selectedEnv.value,
       mode: runMode.value,
-      workers: workers.value
+      workers: workers.value,
+      caseKeys: selectedCaseKeys.value
     });
     reportPath.value = run.reportPath;
     reportUrl.value = run.reportUrl ?? '';
@@ -260,6 +286,20 @@ function getStatusType(status: RunMeta['status']) {
   return typeMap[status] ?? 'info';
 }
 
+/**
+ * 判断运行测试按钮是否可点击。
+ */
+function canRun() {
+  return canStartRun(hasAuth.value, selectedCaseKeys.value, running.value);
+}
+
+/**
+ * 显示运行测试按钮文案。
+ */
+function getStartText() {
+  return getRunButtonText(selectedCaseKeys.value);
+}
+
 onMounted(async () => {
   await loadProject();
   await loadAuthState();
@@ -275,59 +315,89 @@ onMounted(async () => {
       </div>
     </div>
     <div class="content">
-      <el-card class="run-card" shadow="never">
-        <el-form label-width="90px">
-          <el-form-item label="运行环境">
-            <el-select v-model="selectedEnv" class="env-select" @change="changeEnv">
-              <el-option
-                v-for="env in envs"
-                :key="env.key"
-                :label="`${env.name}（${env.key}）`"
-                :value="env.key"
-              />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="运行模式">
-            <el-radio-group v-model="runMode" @change="changeRunMode">
-              <el-radio-button label="headless">无头运行</el-radio-button>
-              <el-radio-button label="headed">可视调试</el-radio-button>
-            </el-radio-group>
-          </el-form-item>
-          <el-form-item label="并发数">
-            <el-input-number v-model="workers" :min="1" :max="runConfig.maxWorkers" :step="1" controls-position="right" />
-          </el-form-item>
-        </el-form>
-        <el-alert
-          class="result"
-          :type="hasAuth ? 'success' : 'warning'"
-          :closable="false"
-          :title="hasAuth ? '已保存项目登录态，运行测试会自动复用' : '当前项目还没有保存登录态'"
-        />
+      <div class="run-area">
+        <el-card class="run-card" shadow="never">
+          <template #header>
+            <span>运行设置</span>
+          </template>
+          <el-form label-width="90px">
+            <el-form-item label="运行环境">
+              <el-select v-model="selectedEnv" class="env-select" @change="changeEnv">
+                <el-option
+                  v-for="env in envs"
+                  :key="env.key"
+                  :label="`${env.name}（${env.key}）`"
+                  :value="env.key"
+                />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="运行模式">
+              <el-radio-group v-model="runMode" @change="changeRunMode">
+                <el-radio-button label="headless">无头运行</el-radio-button>
+                <el-radio-button label="headed">可视调试</el-radio-button>
+              </el-radio-group>
+            </el-form-item>
+            <el-form-item label="并发数">
+              <el-input-number v-model="workers" :min="1" :max="runConfig.maxWorkers" :step="1" controls-position="right" />
+            </el-form-item>
+          </el-form>
+          <el-alert
+            class="result"
+            :type="hasAuth ? 'success' : 'warning'"
+            :closable="false"
+            :title="hasAuth ? '已保存项目登录态，运行测试会自动复用' : '当前项目还没有保存登录态'"
+          />
 
-        <div class="actions">
-          <el-button type="primary" :loading="loading" @click="openLogin">打开浏览器登录</el-button>
-          <el-button :disabled="!sessionId" :loading="saving" @click="saveAuth">我已完成登录，保存登录态</el-button>
-          <el-button type="success" :disabled="!hasAuth" :loading="running" @click="startRun">运行测试</el-button>
-        </div>
+          <div class="actions">
+            <el-button type="primary" :loading="loading" @click="openLogin">打开浏览器登录</el-button>
+            <el-button :disabled="!sessionId" :loading="saving" @click="saveAuth">我已完成登录，保存登录态</el-button>
+            <el-button type="success" :disabled="!canRun()" :loading="running" @click="startRun">{{ getStartText() }}</el-button>
+          </div>
 
-        <el-alert v-if="authPath" class="result" type="info" :closable="false" :title="authPath" />
-        <el-alert v-if="reportPath" class="result" type="success" :closable="false" title="测试运行完成，已打开 HTML 报告">
-          <template #default>
-            <div class="report-row">
-              <span class="report-path">{{ reportPath }}</span>
-              <el-button v-if="reportUrl" size="small" @click="openReport">打开报告</el-button>
+          <el-alert v-if="authPath" class="result" type="info" :closable="false" :title="authPath" />
+          <el-alert v-if="reportPath" class="result" type="success" :closable="false" title="测试运行完成，已打开 HTML 报告">
+            <template #default>
+              <div class="report-row">
+                <span class="report-path">{{ reportPath }}</span>
+                <el-button v-if="reportUrl" size="small" @click="openReport">打开报告</el-button>
+              </div>
+            </template>
+          </el-alert>
+          <el-alert
+            v-if="runError"
+            class="result"
+            type="error"
+            :closable="false"
+            :title="runError"
+            show-icon
+          />
+        </el-card>
+
+        <el-card class="case-card" shadow="never">
+          <template #header>
+            <div class="card-header">
+              <span>测试用例</span>
+              <span class="case-count">已选择 {{ selectedCaseKeys.length }} / {{ cases.length }} 条</span>
             </div>
           </template>
-        </el-alert>
-        <el-alert
-          v-if="runError"
-          class="result"
-          type="error"
-          :closable="false"
-          :title="runError"
-          show-icon
-        />
-      </el-card>
+          <div class="case-tools">
+            <el-button size="small" @click="selectAllCases">全选</el-button>
+            <el-button size="small" @click="clearCases">全不选</el-button>
+          </div>
+          <div class="table-wrap">
+            <el-table :data="cases" border height="100%" empty-text="暂无可运行用例" row-key="key">
+              <el-table-column width="54">
+                <template #default="{ row }">
+                  <el-checkbox v-model="selectedCaseKeys" :value="row.key" />
+                </template>
+              </el-table-column>
+              <el-table-column prop="name" label="用例名称" min-width="150" show-overflow-tooltip />
+              <el-table-column prop="startPath" label="起始路径" min-width="130" show-overflow-tooltip />
+              <el-table-column prop="updatedAt" label="更新时间" min-width="180" show-overflow-tooltip />
+            </el-table>
+          </div>
+        </el-card>
+      </div>
 
       <el-card class="report-card" shadow="never">
         <template #header>
@@ -395,7 +465,7 @@ onMounted(async () => {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-rows: minmax(0, auto) minmax(180px, 1fr);
+  grid-template-rows: minmax(260px, 42vh) minmax(180px, 1fr);
   gap: 20px;
   overflow: hidden;
 }
@@ -413,14 +483,37 @@ onMounted(async () => {
   flex-wrap: wrap;
 }
 
+.run-area {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(320px, 0.8fr) minmax(360px, 1.2fr);
+  gap: 20px;
+  overflow: hidden;
+}
+
 .run-card {
   min-height: 0;
-  max-height: min(320px, 42vh);
   overflow: auto;
+}
+
+.case-card {
+  min-height: 0;
+  overflow: hidden;
 }
 
 .env-select {
   width: 260px;
+}
+
+.case-count {
+  color: #606266;
+  font-size: 13px;
+}
+
+.case-tools {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 
 .report-row {
@@ -453,5 +546,26 @@ onMounted(async () => {
   min-height: 0;
   overflow: auto;
   padding-right: 4px;
+}
+
+@media (max-width: 820px) {
+  .content {
+    grid-template-rows: minmax(0, auto) minmax(180px, 1fr);
+    overflow: auto;
+  }
+
+  .run-area {
+    grid-template-columns: 1fr;
+    overflow: visible;
+  }
+
+  .run-card,
+  .case-card {
+    max-height: none;
+  }
+
+  .case-card {
+    min-height: 260px;
+  }
 }
 </style>

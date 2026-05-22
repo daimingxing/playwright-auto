@@ -35,7 +35,7 @@ export async function runProject(projectKey: string, input: RunProjectInput = {}
   const project = await getProject(projectKey);
   const envKey = input.envKey ?? project.defaultEnv;
   const envMeta = project.envs.find((item) => item.key === envKey);
-  const files = await getProjectRunFiles(projectKey);
+  const files = await getProjectRunFiles(projectKey, input.caseKeys);
 
   if (!envMeta) {
     throw new Error('运行环境不存在');
@@ -147,10 +147,20 @@ export function getRunConfig(): RunConfig {
 /**
  * 获取 Playwright 运行时使用的项目内用例过滤参数。
  */
-export async function getProjectRunFiles(projectKey: string) {
-  const cases = await listCases(projectKey);
+export async function getProjectRunFiles(projectKey: string, caseKeys?: string[]) {
+  if (caseKeys && caseKeys.length === 0) {
+    throw new Error('请选择至少一条测试用例');
+  }
 
-  return cases.map((item) => {
+  const cases = await listCases(projectKey);
+  const selectedKeys = caseKeys ? new Set(caseKeys) : undefined;
+  const selectedCases = selectedKeys ? cases.filter((item) => selectedKeys.has(item.key)) : cases;
+
+  if (selectedKeys && selectedCases.length !== selectedKeys.size) {
+    throw new Error('选择的测试用例不存在或已被删除');
+  }
+
+  return selectedCases.map((item) => {
     const project = escapeRegExp(projectKey);
     const key = escapeRegExp(item.key);
 
@@ -169,7 +179,7 @@ function createRunErrorMessage(code: number | null, output: string) {
  * 从 Playwright 输出中提取测试人员可读的失败摘要。
  */
 function summarizeOutput(output: string, code: number | null) {
-  const lines = output
+  const lines = stripAnsi(output)
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
@@ -265,7 +275,28 @@ function findFailedReason(lines: string[]) {
 
   const error = lines.find((line) => line.startsWith('Error:'));
 
-  return error?.replace(/^Error:\s*/, '').slice(0, 80) ?? '';
+  return error ? trimReason(error.replace(/^Error:\s*/, '')) : '';
+}
+
+/**
+ * 清理终端颜色控制码，避免接口错误信息在页面上显示乱码。
+ */
+function stripAnsi(value: string) {
+  // Playwright 失败输出会包含 ESC 开头的 ANSI SGR 颜色码，例如 \u001b[31m。
+  return value.replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, '');
+}
+
+/**
+ * 截断过长的错误原因，并避免尾部留下半截单词。
+ */
+function trimReason(value: string) {
+  const reason = value.trim();
+
+  if (reason.length <= 80) {
+    return reason;
+  }
+
+  return reason.slice(0, 80).trimEnd();
 }
 
 /**

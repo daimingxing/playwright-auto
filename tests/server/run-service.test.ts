@@ -167,6 +167,51 @@ describe('运行服务', () => {
     expect(files).toEqual([`.*crm.*cases.*${item.key}.*case\\.spec\\.ts`]);
   });
 
+  it('只生成选中用例的 Playwright 过滤参数', async () => {
+    await createProject({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    const first = await createCase('crm', {
+      name: '创建订单',
+      startPath: '/orders/create'
+    });
+    const second = await createCase('crm', {
+      name: '查询订单',
+      startPath: '/orders'
+    });
+
+    const files = await getProjectRunFiles('crm', [second.key]);
+
+    expect(files).toEqual([`.*crm.*cases.*${second.key}.*case\\.spec\\.ts`]);
+    expect(files[0]).not.toContain(first.key);
+  });
+
+  it('选择空用例列表时提示至少选择一条用例', async () => {
+    await createProject({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+
+    await expect(getProjectRunFiles('crm', [])).rejects.toThrow('请选择至少一条测试用例');
+  });
+
+  it('选择不存在用例时提示用例不存在或已删除', async () => {
+    await createProject({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    await createCase('crm', {
+      name: '创建订单',
+      startPath: '/orders/create'
+    });
+
+    await expect(getProjectRunFiles('crm', ['missing-case'])).rejects.toThrow('选择的测试用例不存在或已被删除');
+  });
+
   it('运行项目时显式传入 Playwright 配置文件', async () => {
     await createProject({
       name: 'CRM 系统',
@@ -350,6 +395,40 @@ describe('运行服务', () => {
     const runIds = await import('node:fs/promises').then(({ readdir }) => readdir(runsRoot));
     const stored = await readJson<RunMeta>(join(runsRoot, runIds[0], 'run.json'));
     expect(stored.status).toBe('failed');
+  });
+
+  it('运行失败摘要会移除 Playwright 颜色控制码', async () => {
+    await createProject({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    await createCase('crm', {
+      name: '创建订单',
+      startPath: '/orders/create'
+    });
+    spawnMock.mockReturnValue({
+      stdout: {
+        on(event: string, callback: (data: Buffer) => void) {
+          if (event === 'data') {
+            callback(Buffer.from('  1) [chromium] › data\\projects\\crm\\cases\\case-1\\case.spec.ts:3:1 › 创建订单\n'));
+            callback(Buffer.from('    Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n'));
+          }
+        }
+      },
+      stderr: {
+        on() {}
+      },
+      on(event: string, callback: (code: number) => void) {
+        if (event === 'exit') {
+          callback(1);
+        }
+      }
+    });
+
+    await expect(runProject('crm')).rejects.toMatchObject({
+      message: '用例“创建订单”在断言可见阶段失败：expect(locator).toBeVisible() failed'
+    } satisfies Partial<RunError>);
   });
 });
 

@@ -96,6 +96,7 @@ export interface RunInput {
   envKey?: string;
   mode?: RunMode;
   workers?: number;
+  caseKeys?: string[];
 }
 
 export interface RunConfig {
