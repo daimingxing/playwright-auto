@@ -246,6 +246,40 @@ describe('用例接口', () => {
     expect(detail.body.id).toBe(started.body.id);
   });
 
+  it('触发实测检查时会校验请求参数', async () => {
+    process.env.NODE_ENV = 'test';
+    const app = createApp();
+    await request(app).post('/api/projects').send({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    const created = await request(app).post('/api/projects/crm/cases').send({
+      name: '创建订单',
+      startPath: '/orders/create'
+    });
+
+    const invalidEnv = await request(app)
+      .post(`/api/projects/crm/cases/${created.body.key}/practical-reviews`)
+      .send({ envKey: '../default' });
+    const invalidFailure = await request(app)
+      .post(`/api/projects/crm/cases/${created.body.key}/practical-reviews`)
+      .send({
+        envKey: 'default',
+        testFailure: {
+          stepId: '',
+          code: 'bad-code',
+          message: '',
+          suggestion: ''
+        }
+      });
+
+    expect(invalidEnv.status).toBe(400);
+    expect(invalidFailure.status).toBe(400);
+    expect(invalidEnv.body.message).toContain('请求参数不合法');
+    expect(invalidFailure.body.message).toContain('请求参数不合法');
+  });
+
   it('可以清理用例实测检查历史', async () => {
     process.env.NODE_ENV = 'test';
     const app = createApp();

@@ -12,6 +12,7 @@ import {
 } from '../lib/case-store';
 import { listPracticalReviewRecords, readPracticalReviewRecord } from '../lib/practical-review-store';
 import { getCasePath, getPracticalReviewPath } from '../lib/path';
+import { practicalReviewInputSchema } from '../lib/schema';
 import { zipDir } from '../services/export';
 import { runPracticalReview } from '../services/practical-review';
 
@@ -57,7 +58,9 @@ casesRouter.get<CaseParams>('/:caseKey/practical-reviews', async (req, res, next
 
 casesRouter.post<CaseParams>('/:caseKey/practical-reviews', async (req, res, next) => {
   try {
-    res.status(201).json(await runPracticalReview(req.params.projectKey, req.params.caseKey, req.body));
+    const input = parsePracticalReviewInput(req.body);
+
+    res.status(201).json(await runPracticalReview(req.params.projectKey, req.params.caseKey, input));
   } catch (error) {
     next(error);
   }
@@ -134,6 +137,19 @@ casesRouter.put<CaseParams>('/:caseKey', async (req, res, next) => {
     next(error);
   }
 });
+
+/**
+ * 校验实测检查请求参数。
+ */
+function parsePracticalReviewInput(body: unknown) {
+  const result = practicalReviewInputSchema.safeParse(body);
+
+  if (!result.success) {
+    throw new Error('请求参数不合法：请检查 envKey 和 testFailure');
+  }
+
+  return result.data;
+}
 
 export const trashRouter = Router({ mergeParams: true });
 

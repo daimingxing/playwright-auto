@@ -150,11 +150,24 @@ async function runBrowserReview(projectKey: string, item: CaseMeta, envKey: stri
       throw new Error(`实测检查未生成结果文件：${output || 'Playwright 未返回输出'}`);
     }
 
-    const data = JSON.parse(await readFile(resultPath, 'utf8')) as { steps: PracticalStepReview[] };
+    const data = await readReviewResult(resultPath);
 
     return data.steps;
   } finally {
     await rm(workDir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * 读取并解析实测检查结果文件。
+ */
+async function readReviewResult(resultPath: string) {
+  try {
+    return JSON.parse(await readFile(resultPath, 'utf8')) as { steps: PracticalStepReview[] };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    throw new Error(`实测检查结果文件格式错误：${message}`);
   }
 }
 

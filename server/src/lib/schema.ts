@@ -27,3 +27,32 @@ export const createCaseSchema = z.object({
   name: z.string().min(1).max(120),
   startPath: z.string().min(1).default('/')
 });
+
+export const practicalFailureCodeSchema = z.enum([
+  'navigation-failed',
+  'auth-required',
+  'selector-invalid',
+  'no-match',
+  'multiple-match',
+  'hidden',
+  'disabled',
+  'not-editable',
+  'covered',
+  'assertion-mismatch',
+  'timeout',
+  'unknown'
+]);
+
+export const practicalReviewInputSchema = z
+  .object({
+    envKey: envKeySchema.optional(),
+    testFailure: z
+      .object({
+        stepId: z.string().min(1).max(120),
+        code: practicalFailureCodeSchema,
+        message: z.string().min(1).max(500),
+        suggestion: z.string().min(1).max(500)
+      })
+      .optional()
+  })
+  .strict();

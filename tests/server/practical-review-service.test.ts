@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { EventEmitter } from 'node:events';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -141,6 +141,28 @@ describe('实测检查服务', () => {
     expect((error as Error).message).not.toContain('ENOENT');
   });
 
+  it('浏览器执行生成损坏结果文件时返回清晰错误', async () => {
+    process.env.NODE_ENV = 'development';
+    await createProject({ name: 'CRM', key: 'crm', baseUrl: 'https://crm.test.local' });
+    const item = await createCase('crm', { name: '创建订单', startPath: '/orders/create' });
+    await updateCase('crm', item.key, {
+      ...item,
+      steps: [{ id: 's1', type: 'click', selector: "getByRole('button', { name: '保存' })" }]
+    });
+    spawnMock.mockImplementation((_command: string, _args: string[], options: { env: Record<string, string> }) => {
+      const resultPath = join(options.env.PLAYWRIGHT_TEST_DIR, '..', 'review-result.json');
+      return createSpawnResult(0, '', async () => {
+        await writeFile(resultPath, '{bad-json', 'utf8');
+      });
+    });
+
+    const error = await runPracticalReview('crm', item.key, { envKey: 'default' }).catch((value: unknown) => value);
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain('实测检查结果文件格式错误');
+    expect((error as Error).message).not.toContain('Unexpected token');
+  });
+
   it('浏览器执行时使用临时 testDir 发现实测脚本', async () => {
     process.env.NODE_ENV = 'development';
     await createProject({ name: 'CRM', key: 'crm', baseUrl: 'https://crm.test.local' });
@@ -178,7 +200,7 @@ describe('实测检查服务', () => {
   });
 });
 
-function createSpawnResult(code: number, output: string) {
+function createSpawnResult(code: number, output: string, beforeExit?: () => Promise<void>) {
   const child = new EventEmitter() as EventEmitter & {
     stdout: EventEmitter;
     stderr: EventEmitter;
@@ -186,7 +208,8 @@ function createSpawnResult(code: number, output: string) {
   child.stdout = new EventEmitter();
   child.stderr = new EventEmitter();
 
-  setTimeout(() => {
+  setTimeout(async () => {
+    await beforeExit?.();
     child.stderr.emit('data', Buffer.from(output));
     child.emit('exit', code);
   }, 0);
