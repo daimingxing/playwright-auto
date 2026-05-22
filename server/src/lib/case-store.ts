@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import type { CaseMeta } from '../../../shared/types';
 import { ensureDir, movePath, readJson, writeJson } from './fs';
 import { getCasePath, getProjectPath, getTrashPath } from './path';
+import { expirePracticalReviewIfNeeded } from './practical-review-store';
 import { createCaseSchema } from './schema';
 import { generateSpec } from '../services/case-generator';
 import { reviewCase } from '../services/case-review';
@@ -112,9 +113,11 @@ export async function removeTrashCase(projectKey: string, caseKey: string) {
  * 更新结构化用例并重新生成测试文件。
  */
 export async function updateCase(projectKey: string, caseKey: string, input: CaseMeta) {
+  const previous = await readJson<CaseMeta>(join(getCasePath(projectKey, caseKey), 'case.json'));
   const item: CaseMeta = {
     ...input,
     key: caseKey,
+    practicalReview: previous.practicalReview,
     updatedAt: new Date().toISOString()
   };
   item.review = reviewCase(item);
@@ -122,7 +125,7 @@ export async function updateCase(projectKey: string, caseKey: string, input: Cas
   await writeJson(join(getCasePath(projectKey, caseKey), 'case.json'), item);
   await writeSpec(projectKey, item);
 
-  return item;
+  return expirePracticalReviewIfNeeded(projectKey, item);
 }
 
 /**
@@ -206,16 +209,16 @@ async function writeSpec(projectKey: string, item: CaseMeta) {
  * 为历史用例补充静态审查结果。
  */
 async function ensureReview(projectKey: string, item: CaseMeta) {
-  if (item.review) {
-    return item;
+  const nextItem = item.review
+    ? item
+    : {
+        ...item,
+        review: reviewCase(item)
+      };
+
+  if (!item.review) {
+    await writeJson(join(getCasePath(projectKey, item.key), 'case.json'), nextItem);
   }
 
-  const nextItem = {
-    ...item,
-    review: reviewCase(item)
-  };
-
-  await writeJson(join(getCasePath(projectKey, item.key), 'case.json'), nextItem);
-
-  return nextItem;
+  return expirePracticalReviewIfNeeded(projectKey, nextItem);
 }

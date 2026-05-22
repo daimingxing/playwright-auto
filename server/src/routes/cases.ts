@@ -1,3 +1,4 @@
+import { rm } from 'node:fs/promises';
 import { Router } from 'express';
 import {
   createCase,
@@ -9,8 +10,10 @@ import {
   restoreTrashCase,
   updateCase
 } from '../lib/case-store';
-import { getCasePath } from '../lib/path';
+import { listPracticalReviewRecords, readPracticalReviewRecord } from '../lib/practical-review-store';
+import { getCasePath, getPracticalReviewPath } from '../lib/path';
 import { zipDir } from '../services/export';
+import { runPracticalReview } from '../services/practical-review';
 
 interface ProjectParams {
   projectKey: string;
@@ -18,6 +21,10 @@ interface ProjectParams {
 
 interface CaseParams extends ProjectParams {
   caseKey: string;
+}
+
+interface ReviewParams extends CaseParams {
+  reviewId: string;
 }
 
 export const casesRouter = Router({ mergeParams: true });
@@ -34,6 +41,52 @@ casesRouter.post<ProjectParams>('/', async (req, res, next) => {
   try {
     const item = await createCase(req.params.projectKey, req.body);
     res.status(201).json(item);
+  } catch (error) {
+    next(error);
+  }
+});
+
+casesRouter.get<CaseParams>('/:caseKey/practical-reviews', async (req, res, next) => {
+  try {
+    await getCase(req.params.projectKey, req.params.caseKey);
+    res.json(await listPracticalReviewRecords(req.params.projectKey, req.params.caseKey));
+  } catch (error) {
+    next(error);
+  }
+});
+
+casesRouter.post<CaseParams>('/:caseKey/practical-reviews', async (req, res, next) => {
+  try {
+    res.status(201).json(await runPracticalReview(req.params.projectKey, req.params.caseKey, req.body));
+  } catch (error) {
+    next(error);
+  }
+});
+
+casesRouter.get<ReviewParams>('/:caseKey/practical-reviews/:reviewId', async (req, res, next) => {
+  try {
+    await getCase(req.params.projectKey, req.params.caseKey);
+    const record = await readPracticalReviewRecord(req.params.projectKey, req.params.reviewId);
+
+    if (record.caseKey !== req.params.caseKey) {
+      throw new Error('实测检查记录不存在');
+    }
+
+    res.json(record);
+  } catch (error) {
+    next(error);
+  }
+});
+
+casesRouter.delete<CaseParams>('/:caseKey/practical-reviews', async (req, res, next) => {
+  try {
+    await getCase(req.params.projectKey, req.params.caseKey);
+    const records = await listPracticalReviewRecords(req.params.projectKey, req.params.caseKey);
+
+    await Promise.all(
+      records.map((record) => rm(getPracticalReviewPath(req.params.projectKey, record.id), { recursive: true, force: true }))
+    );
+    res.status(204).send();
   } catch (error) {
     next(error);
   }

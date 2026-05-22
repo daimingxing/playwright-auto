@@ -1,4 +1,4 @@
-import type { CaseMeta, CaseStep, EnvMeta, StepTimeoutConfig, StepType } from '../../../shared/types';
+import type { CaseMeta, CaseStep, EnvMeta, PracticalReviewSummary, StepTimeoutConfig, StepType } from '../../../shared/types';
 import { buildStartUrl } from '../../../shared/url';
 
 export const stepTypes: StepType[] = [
@@ -98,6 +98,58 @@ export function formatStepType(type: StepType) {
     label: stepLabels[type],
     code: type
   };
+}
+
+/**
+ * 显示静态定位检查通过文案。
+ */
+export function formatLocatorCheckPass() {
+  return '定位通过';
+}
+
+/**
+ * 显示实测检查摘要状态。
+ */
+export function formatPracticalReviewStatus(summary: PracticalReviewSummary | undefined) {
+  if (!summary || summary.status === 'untested') {
+    return '未审查';
+  }
+
+  const labels: Record<PracticalReviewSummary['status'], string> = {
+    untested: '未审查',
+    running: '检查中',
+    passed: '通过',
+    failed: '失败',
+    expired: '过期'
+  };
+
+  return labels[summary.status];
+}
+
+/**
+ * 显示实测检查摘要标签类型。
+ */
+export function getPracticalReviewTagType(summary: PracticalReviewSummary | undefined) {
+  if (!summary) {
+    return 'info';
+  }
+
+  const types: Record<PracticalReviewSummary['status'], 'info' | 'primary' | 'success' | 'danger' | 'warning'> = {
+    untested: 'info',
+    running: 'primary',
+    passed: 'success',
+    failed: 'danger',
+    expired: 'warning'
+  };
+
+  return types[summary.status];
+}
+
+/**
+ * 判断当前步骤是否为最近一次实测检查失败步骤。
+ */
+export function getFailedPracticalStep(summary: PracticalReviewSummary | undefined, step: CaseStep) {
+  return summary?.status === 'failed' && summary.failedStepId === step.id;
 }
 
 /**

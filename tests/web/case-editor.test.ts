@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import type { CaseStep } from '../../shared/types';
+import type { CaseStep, PracticalReviewSummary } from '../../shared/types';
 import {
   canMoveSteps,
   copyStep,
   copySteps,
   createStep,
+  formatLocatorCheckPass,
+  formatPracticalReviewStatus,
   formatStepType,
+  getFailedPracticalStep,
   getInsertIndex,
+  getPracticalReviewTagType,
   getStartPreview,
   hasSelector,
   hasTimeout,
@@ -34,6 +38,24 @@ function makeStep(id: string, type: CaseStep['type'] = 'click'): CaseStep {
   };
 }
 
+/**
+ * 创建实测检查摘要测试数据。
+ */
+function makePracticalSummary(status: PracticalReviewSummary['status']): PracticalReviewSummary {
+  return {
+    status,
+    envKey: 'default',
+    envBaseUrl: 'https://crm.test.local',
+    caseSnapshotHash: 'hash-a',
+    stepCount: 1,
+    reviewId: status === 'expired' ? undefined : 'review-1',
+    checkedAt: status === 'expired' ? undefined : '2026-05-22T00:00:00.000Z',
+    failedStepId: status === 'failed' ? 's1' : undefined,
+    failedStepIndex: status === 'failed' ? 0 : undefined,
+    failureMessage: status === 'failed' ? '未找到目标元素' : undefined
+  };
+}
+
 describe('用例编辑器步骤工具', () => {
   it('步骤类型已经包含 goto 和 select', () => {
     expect(stepTypes).toContain('goto');
@@ -46,6 +68,10 @@ describe('用例编辑器步骤工具', () => {
   it('会把步骤类型展示为中文主文案和代码副标识', () => {
     expect(formatStepType('goto')).toEqual({ label: '打开页面', code: 'goto' });
     expect(formatStepType('click')).toEqual({ label: '点击', code: 'click' });
+  });
+
+  it('静态定位检查通过文案会避免和实测检查混淆', () => {
+    expect(formatLocatorCheckPass()).toBe('定位通过');
   });
 
   it('根据项目环境和起始路径计算实际打开地址', () => {
@@ -204,5 +230,28 @@ describe('用例编辑器步骤工具', () => {
     expect(canMoveSteps(steps, ['c'], 1)).toBe(false);
     expect(moveSteps(steps, [], 1)).toEqual([]);
     expect(steps.map((row) => row.id)).toEqual(['a', 'b', 'c']);
+  });
+});
+
+describe('实测检查展示工具', () => {
+  it('会显示未审查、通过、失败和过期状态', () => {
+    expect(formatPracticalReviewStatus(undefined)).toBe('未审查');
+    expect(formatPracticalReviewStatus(makePracticalSummary('passed'))).toBe('通过');
+    expect(formatPracticalReviewStatus(makePracticalSummary('failed'))).toBe('失败');
+    expect(formatPracticalReviewStatus(makePracticalSummary('expired'))).toBe('过期');
+  });
+
+  it('会为实测检查状态选择标签类型', () => {
+    expect(getPracticalReviewTagType(undefined)).toBe('info');
+    expect(getPracticalReviewTagType(makePracticalSummary('passed'))).toBe('success');
+    expect(getPracticalReviewTagType(makePracticalSummary('failed'))).toBe('danger');
+    expect(getPracticalReviewTagType(makePracticalSummary('expired'))).toBe('warning');
+  });
+
+  it('能判断实测失败步骤', () => {
+    const step = makeStep('s1');
+
+    expect(getFailedPracticalStep(makePracticalSummary('failed'), step)).toBe(true);
+    expect(getFailedPracticalStep(makePracticalSummary('passed'), step)).toBe(false);
   });
 });

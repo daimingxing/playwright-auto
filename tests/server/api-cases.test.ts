@@ -220,4 +220,52 @@ describe('用例接口', () => {
     const list = await request(app).get('/api/projects/crm/cases');
     expect(list.body[0].review.summary.error).toBe(1);
   });
+
+  it('可以触发用例实测检查并读取历史记录和详情', async () => {
+    process.env.NODE_ENV = 'test';
+    const app = createApp();
+    await request(app).post('/api/projects').send({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    const created = await request(app).post('/api/projects/crm/cases').send({
+      name: '创建订单',
+      startPath: '/orders/create'
+    });
+
+    const started = await request(app)
+      .post(`/api/projects/crm/cases/${created.body.key}/practical-reviews`)
+      .send({ envKey: 'default' });
+    const list = await request(app).get(`/api/projects/crm/cases/${created.body.key}/practical-reviews`);
+    const detail = await request(app).get(`/api/projects/crm/cases/${created.body.key}/practical-reviews/${started.body.id}`);
+
+    expect(started.status).toBe(201);
+    expect(started.body.status).toBe('passed');
+    expect(list.body).toHaveLength(1);
+    expect(detail.body.id).toBe(started.body.id);
+  });
+
+  it('可以清理用例实测检查历史', async () => {
+    process.env.NODE_ENV = 'test';
+    const app = createApp();
+    await request(app).post('/api/projects').send({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    const created = await request(app).post('/api/projects/crm/cases').send({
+      name: '创建订单',
+      startPath: '/orders/create'
+    });
+    await request(app)
+      .post(`/api/projects/crm/cases/${created.body.key}/practical-reviews`)
+      .send({ envKey: 'default' });
+
+    const removed = await request(app).delete(`/api/projects/crm/cases/${created.body.key}/practical-reviews`);
+    const list = await request(app).get(`/api/projects/crm/cases/${created.body.key}/practical-reviews`);
+
+    expect(removed.status).toBe(204);
+    expect(list.body).toEqual([]);
+  });
 });

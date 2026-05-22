@@ -69,12 +69,90 @@ export interface CaseReview {
   updatedAt: string;
 }
 
+export type PracticalReviewStatus = 'untested' | 'running' | 'passed' | 'failed' | 'expired';
+
+export type PracticalStepReviewStatus = 'passed' | 'failed' | 'skipped';
+
+export type PracticalFailureCode =
+  | 'navigation-failed'
+  | 'auth-required'
+  | 'selector-invalid'
+  | 'no-match'
+  | 'multiple-match'
+  | 'hidden'
+  | 'disabled'
+  | 'not-editable'
+  | 'covered'
+  | 'assertion-mismatch'
+  | 'timeout'
+  | 'unknown';
+
+export interface PracticalReviewArtifact {
+  type: 'screenshot' | 'dom' | 'trace';
+  path: string;
+  url: string;
+}
+
+export interface PracticalFailureAnalysis {
+  code: PracticalFailureCode;
+  message: string;
+  suggestion: string;
+  currentUrl?: string;
+  selector?: string;
+  matchCount?: number;
+  nearbyText?: string[];
+  blockingSelector?: string;
+  artifacts?: PracticalReviewArtifact[];
+}
+
+export interface PracticalStepReview {
+  stepId: string;
+  stepIndex: number;
+  stepType: StepType;
+  status: PracticalStepReviewStatus;
+  selector?: string;
+  startedAt: string;
+  finishedAt: string;
+  durationMs: number;
+  analysis?: PracticalFailureAnalysis;
+}
+
+export interface PracticalReviewSummary {
+  status: PracticalReviewStatus;
+  envKey: string;
+  envBaseUrl: string;
+  caseSnapshotHash: string;
+  stepCount: number;
+  reviewId?: string;
+  checkedAt?: string;
+  failedStepId?: string;
+  failedStepIndex?: number;
+  failureMessage?: string;
+}
+
+export interface PracticalReviewRecord {
+  id: string;
+  projectKey: string;
+  caseKey: string;
+  envKey: string;
+  envBaseUrl: string;
+  status: Exclude<PracticalReviewStatus, 'untested' | 'expired' | 'running'>;
+  caseSnapshotHash: string;
+  startedAt: string;
+  finishedAt: string;
+  durationMs: number;
+  steps: PracticalStepReview[];
+  summary: PracticalReviewSummary;
+  artifacts: PracticalReviewArtifact[];
+}
+
 export interface CaseMeta {
   name: string;
   key: string;
   startPath: string;
   steps: CaseStep[];
   review?: CaseReview;
+  practicalReview?: PracticalReviewSummary;
   createdAt: string;
   updatedAt: string;
 }

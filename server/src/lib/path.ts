@@ -42,3 +42,24 @@ export function getTrashPath(projectKey: string, caseKey: string) {
 export function getRunPath(projectKey: string, runId: string) {
   return resolve(getProjectPath(projectKey), 'runs', runId);
 }
+
+/**
+ * 获取实测检查根目录。
+ */
+export function getPracticalReviewsPath(projectKey: string) {
+  return resolve(getProjectPath(projectKey), 'reviews');
+}
+
+/**
+ * 获取单条实测检查记录目录。
+ */
+export function getPracticalReviewPath(projectKey: string, reviewId: string) {
+  return resolve(getPracticalReviewsPath(projectKey), reviewId);
+}
+
+/**
+ * 获取实测检查临时工作目录。
+ */
+export function getPracticalReviewWorkPath(projectKey: string, workId: string) {
+  return resolve(getPracticalReviewsPath(projectKey), 'work', workId);
+}

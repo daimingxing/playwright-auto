@@ -8,7 +8,14 @@ import { listCases } from '../api/cases';
 import { getProject } from '../api/projects';
 import { deleteRun, exportRun, getRunConfig, listRuns, runProject } from '../api/runs';
 import { getErrorMessage } from '../utils/error';
-import { canStartRun, getRunButtonText, mergeSelectedCaseKeys } from './run-center';
+import {
+  canStartRun,
+  formatPracticalReviewStatus,
+  formatPracticalReviewTime,
+  getPracticalReviewTagType,
+  getRunButtonText,
+  mergeSelectedCaseKeys
+} from './run-center';
 
 const route = useRoute();
 const router = useRouter();
@@ -393,7 +400,18 @@ onMounted(async () => {
               </el-table-column>
               <el-table-column prop="name" label="用例名称" min-width="150" show-overflow-tooltip />
               <el-table-column prop="startPath" label="起始路径" min-width="130" show-overflow-tooltip />
-              <el-table-column prop="updatedAt" label="更新时间" min-width="180" show-overflow-tooltip />
+              <el-table-column label="实测检查" min-width="120">
+                <template #default="{ row }">
+                  <el-tag :type="getPracticalReviewTagType(row.practicalReview)" effect="light">
+                    {{ formatPracticalReviewStatus(row.practicalReview) }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="最后检查时间" min-width="180" show-overflow-tooltip>
+                <template #default="{ row }">
+                  {{ formatPracticalReviewTime(row.practicalReview) }}
+                </template>
+              </el-table-column>
             </el-table>
           </div>
         </el-card>

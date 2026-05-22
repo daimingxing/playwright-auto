@@ -1,9 +1,10 @@
 import { existsSync } from 'node:fs';
 import { readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { EnvMeta, ProjectMeta } from '../../../shared/types';
+import type { CaseMeta, EnvMeta, ProjectMeta } from '../../../shared/types';
 import { ensureDir, readJson, writeJson } from './fs';
 import { getProjectPath, getProjectsRoot } from './path';
+import { expirePracticalReviewIfNeeded } from './practical-review-store';
 import { createEnvSchema, createProjectSchema, updateEnvSchema } from './schema';
 
 interface CreateProjectInput {
@@ -105,10 +106,16 @@ export async function updateProjectEnv(projectKey: string, envKey: string, input
     ...value
   };
 
-  return writeProject({
+  const nextProject = await writeProject({
     ...project,
     envs
   });
+
+  if (project.envs[index].baseUrl !== value.baseUrl) {
+    await expirePracticalReviewsForEnv(projectKey, envKey, value.baseUrl);
+  }
+
+  return nextProject;
 }
 
 /**
@@ -163,4 +170,26 @@ async function writeProject(project: ProjectMeta) {
   await writeJson(join(getProjectPath(project.key), 'project.json'), nextProject);
 
   return nextProject;
+}
+
+/**
+ * 环境地址变化后，把该环境下不再匹配的实测检查摘要标记为过期。
+ */
+async function expirePracticalReviewsForEnv(projectKey: string, envKey: string, baseUrl: string) {
+  const casesPath = join(getProjectPath(projectKey), 'cases');
+  if (!existsSync(casesPath)) {
+    return;
+  }
+
+  const names = await readdir(casesPath);
+
+  await Promise.all(
+    names.map(async (name) => {
+      const item = await readJson<CaseMeta>(join(casesPath, name, 'case.json'));
+
+      if (item.practicalReview?.envKey === envKey) {
+        await expirePracticalReviewIfNeeded(projectKey, item, baseUrl);
+      }
+    })
+  );
 }

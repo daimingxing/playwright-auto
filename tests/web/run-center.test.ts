@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import type { CaseMeta } from '../../shared/types';
-import { canStartRun, getRunButtonText, getSelectedCases, mergeSelectedCaseKeys } from '../../web/src/pages/run-center';
+import type { CaseMeta, PracticalReviewSummary } from '../../shared/types';
+import {
+  canStartRun,
+  formatPracticalReviewStatus,
+  formatPracticalReviewTime,
+  getPracticalReviewTagType,
+  getRunButtonText,
+  getSelectedCases,
+  mergeSelectedCaseKeys
+} from '../../web/src/pages/run-center';
 
 describe('运行中心用例选择工具', () => {
   it('首次加载用例时默认选中全部可用用例', () => {
@@ -52,5 +60,31 @@ function makeCase(key: string): CaseMeta {
     steps: [],
     createdAt: '2026-05-22T00:00:00.000Z',
     updatedAt: '2026-05-22T00:00:00.000Z'
+  };
+}
+
+describe('运行中心实测检查展示工具', () => {
+  it('最后检查时间只显示实测检查时间', () => {
+    expect(formatPracticalReviewTime(undefined)).toBe('-');
+    expect(formatPracticalReviewTime(makeRunCenterSummary('passed'))).toBe('2026-05-22T00:00:00.000Z');
+    expect(formatPracticalReviewTime(makeRunCenterSummary('expired'))).toBe('-');
+  });
+
+  it('运行中心显示实测检查状态', () => {
+    expect(formatPracticalReviewStatus(undefined)).toBe('未审查');
+    expect(formatPracticalReviewStatus(makeRunCenterSummary('passed'))).toBe('通过');
+    expect(getPracticalReviewTagType(makeRunCenterSummary('failed'))).toBe('danger');
+  });
+});
+
+function makeRunCenterSummary(status: PracticalReviewSummary['status']): PracticalReviewSummary {
+  return {
+    status,
+    envKey: 'default',
+    envBaseUrl: 'https://crm.test.local',
+    caseSnapshotHash: 'hash-a',
+    stepCount: 1,
+    reviewId: status === 'expired' ? undefined : 'review-1',
+    checkedAt: status === 'expired' ? undefined : '2026-05-22T00:00:00.000Z'
   };
 }

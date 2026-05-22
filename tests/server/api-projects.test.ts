@@ -132,4 +132,30 @@ describe('项目接口', () => {
     expect(envs.body.defaultEnv).toBe('default');
     expect(envs.body.envs.map((item: { key: string }) => item.key)).toEqual(['default']);
   });
+
+  it('修改环境 URL 后该环境的实测检查结果变为过期', async () => {
+    process.env.NODE_ENV = 'test';
+    const app = createApp();
+    await request(app).post('/api/projects').send({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    const created = await request(app).post('/api/projects/crm/cases').send({
+      name: '创建订单',
+      startPath: '/orders/create'
+    });
+    await request(app)
+      .post(`/api/projects/crm/cases/${created.body.key}/practical-reviews`)
+      .send({ envKey: 'default' });
+
+    await request(app).put('/api/projects/crm/envs/default').send({
+      name: '默认环境',
+      baseUrl: 'https://new.crm.test.local'
+    });
+
+    const detail = await request(app).get(`/api/projects/crm/cases/${created.body.key}`);
+
+    expect(detail.body.practicalReview.status).toBe('expired');
+  });
 });

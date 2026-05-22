@@ -1,4 +1,4 @@
-import type { CaseMeta } from '../../../shared/types';
+import type { CaseMeta, PracticalReviewRecord } from '../../../shared/types';
 import { downloadFile } from './http';
 import { requestJson } from './http';
 
@@ -13,6 +13,10 @@ export interface RecordSessionResult {
 }
 
 export interface RecordInput {
+  envKey?: string;
+}
+
+export interface PracticalReviewInput {
   envKey?: string;
 }
 
@@ -88,6 +92,39 @@ export function updateCase(projectKey: string, caseKey: string, input: CaseMeta)
   return requestJson<CaseMeta>(`/api/projects/${projectKey}/cases/${caseKey}`, {
     method: 'PUT',
     body: JSON.stringify(input)
+  });
+}
+
+/**
+ * 触发当前用例的实测检查。
+ */
+export function startPracticalReview(projectKey: string, caseKey: string, input: PracticalReviewInput = {}) {
+  return requestJson<PracticalReviewRecord>(`/api/projects/${projectKey}/cases/${caseKey}/practical-reviews`, {
+    method: 'POST',
+    body: JSON.stringify(input)
+  });
+}
+
+/**
+ * 获取当前用例的实测检查历史。
+ */
+export function listPracticalReviews(projectKey: string, caseKey: string) {
+  return requestJson<PracticalReviewRecord[]>(`/api/projects/${projectKey}/cases/${caseKey}/practical-reviews`);
+}
+
+/**
+ * 获取单条实测检查记录。
+ */
+export function getPracticalReview(projectKey: string, caseKey: string, reviewId: string) {
+  return requestJson<PracticalReviewRecord>(`/api/projects/${projectKey}/cases/${caseKey}/practical-reviews/${reviewId}`);
+}
+
+/**
+ * 清理当前用例的实测检查历史。
+ */
+export function clearPracticalReviews(projectKey: string, caseKey: string) {
+  return requestJson<void>(`/api/projects/${projectKey}/cases/${caseKey}/practical-reviews`, {
+    method: 'DELETE'
   });
 }
 

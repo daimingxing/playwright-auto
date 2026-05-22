@@ -6,12 +6,14 @@ const output = process.env.PLAYWRIGHT_AUTO_OUTPUT ?? 'test-results';
 const storageState = process.env.PLAYWRIGHT_STORAGE_STATE || undefined;
 const executablePath = getBrowserPath();
 const headless = process.env.PLAYWRIGHT_HEADLESS !== 'false';
+const testDir = process.env.PLAYWRIGHT_TEST_DIR ?? 'data/projects';
+const testMatch = process.env.PLAYWRIGHT_TEST_MATCH ?? '**/cases/**/*.spec.ts';
 
 Object.assign(process.env, getVendorEnv());
 
 export default defineConfig({
-  testDir: 'data/projects',
-  testMatch: ['**/cases/**/*.spec.ts'],
+  testDir,
+  testMatch: [testMatch],
   timeout: 60_000,
   reporter: [['html', { outputFolder: `${output}/html-report`, open: 'never' }]],
   outputDir: `${output}/test-results`,

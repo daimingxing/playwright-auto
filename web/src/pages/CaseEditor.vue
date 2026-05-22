@@ -4,16 +4,21 @@ import { useRoute, useRouter } from 'vue-router';
 import type { TableInstance } from 'element-plus';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { ArrowDown, ArrowUp, CopyDocument, Delete, Finished, MoreFilled, Plus, Select } from '@element-plus/icons-vue';
-import type { CaseMeta, CaseStep, EnvMeta, StepType } from '../../../shared/types';
-import { getCase, startRecord, stopRecord, updateCase } from '../api/cases';
+import type { CaseMeta, CaseStep, EnvMeta, PracticalReviewRecord, StepType } from '../../../shared/types';
+import { clearPracticalReviews, getCase, getPracticalReview, listPracticalReviews, startPracticalReview, startRecord, stopRecord, updateCase } from '../api/cases';
+import { getAuthState, saveLogin, startLogin } from '../api/auth';
 import { getAppStepConfig, getProject } from '../api/projects';
 import { getErrorMessage } from '../utils/error';
 import {
   canMoveSteps,
   copyStep,
   copySteps,
+  formatLocatorCheckPass,
   formatStepType,
+  formatPracticalReviewStatus,
+  getFailedPracticalStep,
   getInsertIndex,
+  getPracticalReviewTagType,
   getStartPreview,
   hasSelector,
   hasTimeout,
@@ -42,6 +47,16 @@ const isBatchMode = ref(false);
 const selectedId = ref('');
 const batchIds = ref<string[]>([]);
 const highlightId = ref('');
+const practicalReviewing = ref(false);
+const practicalHistoryOpen = ref(false);
+const failureDrawerOpen = ref(false);
+const practicalHistory = ref<PracticalReviewRecord[]>([]);
+const activePracticalRecord = ref<PracticalReviewRecord | null>(null);
+const hasAuth = ref(false);
+const authPath = ref('');
+const loginId = ref('');
+const loadingLogin = ref(false);
+const savingLogin = ref(false);
 const stepFlashMs = 180;
 // 浏览器环境下 `window.setTimeout` 返回数值型定时器句柄，避免与 Node 的 `Timeout` 类型混淆。
 let highlightTimer: number | undefined;
@@ -85,6 +100,68 @@ async function loadCase() {
   item.value = caseInfo;
   stepConfig.value = config.steps.timeouts;
   activeEnv.value = project.envs.find((env) => env.key === project.defaultEnv) ?? project.envs[0] ?? null;
+  await loadAuthState();
+}
+
+/**
+ * 加载当前实测环境的登录态状态。
+ */
+async function loadAuthState() {
+  if (!activeEnv.value) {
+    hasAuth.value = false;
+    authPath.value = '';
+    return;
+  }
+
+  const state = await getAuthState(projectKey, activeEnv.value.key);
+  hasAuth.value = state.exists;
+  authPath.value = state.path;
+}
+
+/**
+ * 打开浏览器让用户保存当前实测环境登录态。
+ */
+async function openLogin() {
+  if (!activeEnv.value) {
+    ElMessage.warning('请先配置项目环境');
+    return;
+  }
+
+  loadingLogin.value = true;
+
+  try {
+    const session = await startLogin(projectKey, { envKey: activeEnv.value.key });
+    loginId.value = session.sessionId;
+    ElMessage.success('已打开浏览器，请完成登录后返回本页面保存登录态');
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error));
+  } finally {
+    loadingLogin.value = false;
+  }
+}
+
+/**
+ * 保存当前实测环境的登录态文件。
+ */
+async function saveAuth() {
+  if (!loginId.value) {
+    ElMessage.warning('请先打开浏览器完成登录');
+    return;
+  }
+
+  savingLogin.value = true;
+
+  try {
+    const auth = await saveLogin(projectKey, loginId.value);
+    authPath.value = auth.path;
+    hasAuth.value = true;
+    loginId.value = '';
+    ElMessage.success('登录态已保存，实测检查和运行测试会自动复用');
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error));
+  } finally {
+    savingLogin.value = false;
+  }
 }
 
 /**
@@ -307,6 +384,97 @@ function getStepReviews(step: CaseStep) {
 }
 
 /**
+ * 执行当前用例的实测检查。
+ */
+async function runPracticalCheck() {
+  if (!activeEnv.value) {
+    ElMessage.warning('请先配置项目环境');
+    return;
+  }
+
+  practicalReviewing.value = true;
+
+  try {
+    const record = await startPracticalReview(projectKey, caseKey, { envKey: activeEnv.value.key });
+    activePracticalRecord.value = record;
+    item.value = await getCase(projectKey, caseKey);
+
+    if (record.status === 'failed') {
+      failureDrawerOpen.value = true;
+      ElMessage.error(record.summary.failureMessage ?? '实测检查失败');
+    } else {
+      ElMessage.success('实测检查通过');
+    }
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error));
+  } finally {
+    practicalReviewing.value = false;
+  }
+}
+
+/**
+ * 打开当前用例的实测检查历史。
+ */
+async function openPracticalHistory() {
+  try {
+    practicalHistory.value = await listPracticalReviews(projectKey, caseKey);
+    practicalHistoryOpen.value = true;
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error));
+  }
+}
+
+/**
+ * 清理当前用例的实测检查历史。
+ */
+async function clearPracticalHistory() {
+  const confirmed = await ElMessageBox.confirm('确认清理当前用例的实测检查历史吗？', '清理历史', {
+    confirmButtonText: '清理',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).catch(() => false);
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    await clearPracticalReviews(projectKey, caseKey);
+    practicalHistory.value = [];
+    ElMessage.success('实测检查历史已清理');
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error));
+  }
+}
+
+/**
+ * 打开指定实测检查记录的失败分析。
+ */
+function openFailureAnalysis(record: PracticalReviewRecord) {
+  activePracticalRecord.value = record;
+  failureDrawerOpen.value = true;
+}
+
+/**
+ * 打开最近一次失败实测检查的分析。
+ */
+async function openLatestFailureAnalysis() {
+  if (!item.value?.practicalReview?.reviewId) {
+    return;
+  }
+
+  try {
+    if (!activePracticalRecord.value || activePracticalRecord.value.id !== item.value.practicalReview.reviewId) {
+      activePracticalRecord.value = await getPracticalReview(projectKey, caseKey, item.value.practicalReview.reviewId);
+    }
+
+    failureDrawerOpen.value = true;
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error));
+  }
+}
+
+/**
  * 保存用例并重新生成测试文件。
  */
 async function saveCase() {
@@ -386,17 +554,49 @@ onMounted(loadCase);
           :closable="false"
         />
 
-        <el-form label-width="90px">
-          <el-form-item label="用例名称">
-            <el-input v-model="item.name" />
-          </el-form-item>
-          <el-form-item label="起始路径">
-            <el-input v-model="item.startPath" />
-          </el-form-item>
-          <el-form-item label="实际地址">
-            <div class="start-preview">{{ startPreview }}</div>
-          </el-form-item>
-        </el-form>
+        <div class="meta-grid">
+          <el-form label-width="90px">
+            <el-form-item label="用例名称">
+              <el-input v-model="item.name" />
+            </el-form-item>
+            <el-form-item label="起始路径">
+              <el-input v-model="item.startPath" />
+            </el-form-item>
+            <el-form-item label="实际地址">
+              <div class="start-preview">{{ startPreview }}</div>
+            </el-form-item>
+          </el-form>
+
+          <section class="practical-panel">
+            <div class="panel-head">
+              <strong>实测检查</strong>
+              <el-tag :type="getPracticalReviewTagType(item.practicalReview)" effect="light">
+                {{ formatPracticalReviewStatus(item.practicalReview) }}
+              </el-tag>
+            </div>
+            <div class="panel-row">
+              <span>登录态</span>
+              <strong>{{ hasAuth ? '已保存' : '未保存' }}</strong>
+            </div>
+            <div class="panel-row">
+              <span>最后检查时间</span>
+              <strong>{{ item.practicalReview?.checkedAt ?? '-' }}</strong>
+            </div>
+            <p v-if="item.practicalReview?.status === 'failed'" class="failure-summary">
+              第 {{ (item.practicalReview.failedStepIndex ?? 0) + 1 }} 步：{{ item.practicalReview.failureMessage }}
+            </p>
+            <div class="panel-actions">
+              <el-button :loading="loadingLogin" @click="openLogin">打开浏览器登录</el-button>
+              <el-button :disabled="!loginId" :loading="savingLogin" @click="saveAuth">我已完成登录，保存登录态</el-button>
+              <el-button type="primary" :loading="practicalReviewing" @click="runPracticalCheck">开始实测检查</el-button>
+              <el-button @click="openPracticalHistory">查看历史</el-button>
+              <el-button @click="clearPracticalHistory">清理历史</el-button>
+            </div>
+            <el-tooltip v-if="authPath" :content="authPath" placement="top">
+              <span class="auth-path">登录态路径</span>
+            </el-tooltip>
+          </section>
+        </div>
 
         <div class="step-actions">
           <el-dropdown trigger="click" @command="(type) => addStep(type as StepType)">
@@ -455,26 +655,39 @@ onMounted(loadCase);
               </div>
             </template>
           </el-table-column>
-          <el-table-column label="审查" width="80">
+          <el-table-column label="定位检查" width="150">
             <template #default="{ row }">
-              <div v-if="getStepReviews(row).length > 0" class="review-tags">
-                <el-popover
-                  v-for="review in getStepReviews(row)"
-                  :key="review.id"
-                  placement="top"
-                  width="320"
-                  trigger="hover"
+              <div class="review-tags">
+                <template v-if="getStepReviews(row).length > 0">
+                  <el-popover
+                    v-for="review in getStepReviews(row)"
+                    :key="review.id"
+                    placement="top"
+                    width="320"
+                    trigger="hover"
+                  >
+                    <template #reference>
+                      <el-tag :type="reviewTypes[review.level]" effect="light">{{ reviewLabels[review.level] }}</el-tag>
+                    </template>
+                    <div class="review-popover">
+                      <strong>{{ review.message }}</strong>
+                      <p>{{ review.suggestion }}</p>
+                    </div>
+                  </el-popover>
+                </template>
+                <el-tag
+                  v-if="item.practicalReview && getFailedPracticalStep(item.practicalReview, row)"
+                  type="danger"
+                  effect="light"
+                  class="clickable-tag"
+                  @click.stop="openLatestFailureAnalysis"
                 >
-                  <template #reference>
-                    <el-tag :type="reviewTypes[review.level]" effect="light">{{ reviewLabels[review.level] }}</el-tag>
-                  </template>
-                  <div class="review-popover">
-                    <strong>{{ review.message }}</strong>
-                    <p>{{ review.suggestion }}</p>
-                  </div>
-                </el-popover>
+                  实测失败
+                </el-tag>
+                <span v-if="getStepReviews(row).length === 0 && !getFailedPracticalStep(item.practicalReview, row)" class="review-pass">
+                  {{ formatLocatorCheckPass() }}
+                </span>
               </div>
-              <span v-else class="review-pass">通过</span>
             </template>
           </el-table-column>
           <el-table-column label="选择器">
@@ -534,6 +747,48 @@ onMounted(loadCase);
           </el-table-column>
         </el-table>
       </div>
+
+      <el-drawer v-model="failureDrawerOpen" title="失败分析" size="420px">
+        <template v-if="activePracticalRecord">
+          <div
+            v-for="step in activePracticalRecord.steps.filter((row) => row.status === 'failed')"
+            :key="step.stepId"
+            class="analysis-block"
+          >
+            <h3>第 {{ step.stepIndex + 1 }} 步：{{ step.stepType }}</h3>
+            <p class="analysis-message">{{ step.analysis?.message }}</p>
+            <dl>
+              <dt>目标定位</dt>
+              <dd>{{ step.selector || '-' }}</dd>
+              <dt>当前 URL</dt>
+              <dd>{{ step.analysis?.currentUrl || '-' }}</dd>
+              <dt>匹配数量</dt>
+              <dd>{{ step.analysis?.matchCount ?? '-' }}</dd>
+              <dt>建议</dt>
+              <dd>{{ step.analysis?.suggestion || '-' }}</dd>
+            </dl>
+          </div>
+        </template>
+      </el-drawer>
+
+      <el-drawer v-model="practicalHistoryOpen" title="实测检查历史" size="520px">
+        <el-table :data="practicalHistory" border empty-text="暂无实测检查历史">
+          <el-table-column prop="startedAt" label="开始时间" min-width="180" />
+          <el-table-column prop="envKey" label="环境" width="100" />
+          <el-table-column label="结果" width="90">
+            <template #default="{ row }">
+              <el-tag :type="getPracticalReviewTagType(row.summary)" effect="light">
+                {{ formatPracticalReviewStatus(row.summary) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="120">
+            <template #default="{ row }">
+              <el-button size="small" :disabled="row.status !== 'failed'" @click="openFailureAnalysis(row)">失败分析</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-drawer>
     </div>
   </section>
 </template>
@@ -582,9 +837,60 @@ onMounted(loadCase);
 
 .meta {
   min-height: 0;
-  max-height: min(260px, 36vh);
+  max-height: min(320px, 42vh);
   overflow: auto;
   padding-right: 4px;
+}
+
+.meta-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 18px;
+}
+
+.practical-panel {
+  border: 1px solid #d8e2ed;
+  border-radius: 8px;
+  background: #fff;
+  padding: 14px;
+}
+
+.panel-head,
+.panel-row,
+.panel-actions {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.panel-row {
+  color: #5f7188;
+  font-size: 13px;
+  margin-top: 10px;
+}
+
+.panel-row strong {
+  color: #1f2937;
+}
+
+.panel-actions {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.failure-summary {
+  color: #d94747;
+  margin: 12px 0 0;
+}
+
+.auth-path {
+  color: #5f7188;
+  cursor: help;
+  display: inline-block;
+  font-size: 12px;
+  margin-top: 10px;
 }
 
 .step-actions {
@@ -705,6 +1011,10 @@ onMounted(loadCase);
   gap: 6px;
 }
 
+.clickable-tag {
+  cursor: pointer;
+}
+
 .review-pass {
   color: #67c23a;
   font-size: 13px;
@@ -714,6 +1024,32 @@ onMounted(loadCase);
   margin: 8px 0 0;
   color: #606266;
   line-height: 1.5;
+}
+
+.analysis-block h3 {
+  margin: 0 0 10px;
+}
+
+.analysis-message {
+  color: #d94747;
+  font-weight: 600;
+}
+
+.analysis-block dt {
+  color: #5f7188;
+  font-size: 12px;
+  margin-top: 12px;
+}
+
+.analysis-block dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 960px) {
+  .meta-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
 
