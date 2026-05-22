@@ -1,4 +1,5 @@
-import type { CaseStep, StepTimeoutConfig, StepType } from '../../../shared/types';
+import type { CaseMeta, CaseStep, EnvMeta, StepTimeoutConfig, StepType } from '../../../shared/types';
+import { buildStartUrl } from '../../../shared/url';
 
 export const stepTypes: StepType[] = [
   'goto',
@@ -45,8 +46,16 @@ export const stepTimeouts: StepTimeoutConfig = {
 };
 
 /**
- * 创建一条新的步骤数据。
+ * 计算当前用例的实际打开地址。
  */
+export function getStartPreview(item: CaseMeta | null, env: EnvMeta | null) {
+  if (!item || !env) {
+    return '';
+  }
+
+  return buildStartUrl(env.baseUrl, item.startPath);
+}
+
 /**
  * 创建一条新的步骤数据。
  */

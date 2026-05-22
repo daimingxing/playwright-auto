@@ -7,6 +7,7 @@ import {
   createStep,
   formatStepType,
   getInsertIndex,
+  getStartPreview,
   hasSelector,
   hasTimeout,
   hasValue,
@@ -45,6 +46,26 @@ describe('用例编辑器步骤工具', () => {
   it('会把步骤类型展示为中文主文案和代码副标识', () => {
     expect(formatStepType('goto')).toEqual({ label: '打开页面', code: 'goto' });
     expect(formatStepType('click')).toEqual({ label: '点击', code: 'click' });
+  });
+
+  it('根据项目环境和起始路径计算实际打开地址', () => {
+    const preview = getStartPreview(
+      {
+        name: '下拉框选择',
+        key: 'case-1',
+        startPath: '/web/NGBS03',
+        steps: [],
+        createdAt: '2026-05-22T00:00:00.000Z',
+        updatedAt: '2026-05-22T00:00:00.000Z'
+      },
+      {
+        name: '默认环境',
+        key: 'default',
+        baseUrl: 'http://xcmpmstest.baowuresources.info/xcmpms-imms-f'
+      }
+    );
+
+    expect(preview).toBe('http://xcmpmstest.baowuresources.info/xcmpms-imms-f/web/NGBS03');
   });
 
   it('会根据步骤类型决定哪些字段可见', () => {

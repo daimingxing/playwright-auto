@@ -38,6 +38,19 @@ afterEach(async () => {
 });
 
 describe('录制会话服务', () => {
+  it('录制启动时保留项目地址中的应用路径', async () => {
+    await createProject({
+      name: '西昌测试',
+      key: 'xcmp',
+      baseUrl: 'http://xcmpmstest.baowuresources.info/xcmpms-imms-f'
+    });
+    const item = await createCase('xcmp', { name: '下拉框选择', startPath: '/web/NGBS03' });
+
+    const session = await startRecordSession('xcmp', item.key);
+
+    expect(session.url).toBe('http://xcmpmstest.baowuresources.info/xcmpms-imms-f/web/NGBS03');
+  });
+
   it('停止录制后覆盖当前用例步骤', async () => {
     await createProject({ name: 'CRM', key: 'crm', baseUrl: 'https://crm.test.local' });
     const item = await createCase('crm', { name: '创建订单', startPath: '/orders' });

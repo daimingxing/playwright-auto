@@ -4,9 +4,9 @@ import { useRoute, useRouter } from 'vue-router';
 import type { TableInstance } from 'element-plus';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { ArrowDown, ArrowUp, CopyDocument, Delete, Finished, MoreFilled, Plus, Select } from '@element-plus/icons-vue';
-import type { CaseMeta, CaseStep, StepType } from '../../../shared/types';
+import type { CaseMeta, CaseStep, EnvMeta, StepType } from '../../../shared/types';
 import { getCase, startRecord, stopRecord, updateCase } from '../api/cases';
-import { getAppStepConfig } from '../api/projects';
+import { getAppStepConfig, getProject } from '../api/projects';
 import { getErrorMessage } from '../utils/error';
 import {
   canMoveSteps,
@@ -14,6 +14,7 @@ import {
   copySteps,
   formatStepType,
   getInsertIndex,
+  getStartPreview,
   hasSelector,
   hasTimeout,
   hasValue,
@@ -32,6 +33,7 @@ const router = useRouter();
 const projectKey = String(route.params.projectKey);
 const caseKey = String(route.params.caseKey);
 const item = ref<CaseMeta | null>(null);
+const activeEnv = ref<EnvMeta | null>(null);
 const stepConfig = ref(stepTimeouts);
 const stepTable = ref<TableInstance>();
 const recordId = ref('');
@@ -69,14 +71,20 @@ const reviewMap = computed(() => {
 const hasBatch = computed(() => batchIds.value.length > 0);
 const canBatchUp = computed(() => (item.value ? canMoveSteps(item.value.steps, batchIds.value, -1) : false));
 const canBatchDown = computed(() => (item.value ? canMoveSteps(item.value.steps, batchIds.value, 1) : false));
+const startPreview = computed(() => getStartPreview(item.value, activeEnv.value));
 
 /**
  * 加载当前用例。
  */
 async function loadCase() {
-  const [caseInfo, config] = await Promise.all([getCase(projectKey, caseKey), getAppStepConfig()]);
+  const [caseInfo, config, project] = await Promise.all([
+    getCase(projectKey, caseKey),
+    getAppStepConfig(),
+    getProject(projectKey)
+  ]);
   item.value = caseInfo;
   stepConfig.value = config.steps.timeouts;
+  activeEnv.value = project.envs.find((env) => env.key === project.defaultEnv) ?? project.envs[0] ?? null;
 }
 
 /**
@@ -385,6 +393,9 @@ onMounted(loadCase);
           <el-form-item label="起始路径">
             <el-input v-model="item.startPath" />
           </el-form-item>
+          <el-form-item label="实际地址">
+            <div class="start-preview">{{ startPreview }}</div>
+          </el-form-item>
         </el-form>
 
         <div class="step-actions">
@@ -587,6 +598,21 @@ onMounted(loadCase);
 .insert-hint {
   color: #5f7188;
   font-size: 13px;
+}
+
+.start-preview {
+  width: 100%;
+  min-height: 32px;
+  padding: 6px 11px;
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+  border: 1px solid #d8e2ed;
+  border-radius: 6px;
+  background: #eef5fb;
+  color: #315f8f;
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .batch-count {

@@ -4,6 +4,7 @@ import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { CaseMeta } from '../../../shared/types';
+import { buildStartUrl } from '../../../shared/url';
 import { getCase, updateCase } from '../lib/case-store';
 import { getProject } from '../lib/project-store';
 import { getProjectAuthPath, hasProjectAuth } from './auth-session';
@@ -41,7 +42,7 @@ export async function startRecordSession(projectKey: string, caseKey: string, in
   const sessionId = crypto.randomUUID();
   const dir = await mkdtemp(join(tmpdir(), 'playwright-auto-codegen-'));
   const outputPath = join(dir, 'record.spec.ts');
-  const startUrl = new URL(item.startPath, envMeta.baseUrl).toString();
+  const startUrl = buildStartUrl(envMeta.baseUrl, item.startPath);
 
   if (process.env.NODE_ENV === 'test') {
     await writeFile(outputPath, createTestSpec(startUrl), 'utf8');
