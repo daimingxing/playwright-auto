@@ -912,7 +912,7 @@ onMounted(loadCase);
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 20px;
-  align-items: flex-start;
+  align-items: flex-end;
 }
 
 .toolbar h2 {

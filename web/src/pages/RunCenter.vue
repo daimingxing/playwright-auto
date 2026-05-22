@@ -321,6 +321,17 @@ onMounted(async () => {
         <el-button text :icon="Back" class="back-btn" @click="router.push(`/projects/${projectKey}`)">返回用例管理</el-button>
         <h2>运行中心</h2>
       </div>
+      <div class="toolbar-actions">
+        <el-button
+          size="large"
+          type="success"
+          :disabled="!canRun()"
+          :loading="running"
+          @click="startRun"
+        >
+          {{ getStartText() }}
+        </el-button>
+      </div>
     </div>
     <div class="content">
       <div class="run-area">
@@ -359,7 +370,6 @@ onMounted(async () => {
           <div class="actions">
             <el-button type="primary" :loading="loading" @click="openLogin">打开浏览器登录</el-button>
             <el-button :disabled="!sessionId" :loading="saving" @click="saveAuth">我已完成登录，保存登录态</el-button>
-            <el-button type="success" :disabled="!canRun()" :loading="running" @click="startRun">{{ getStartText() }}</el-button>
           </div>
 
           <el-alert v-if="authPath" class="result" type="info" :closable="false" :title="authPath" />
@@ -470,6 +480,15 @@ onMounted(async () => {
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 20px;
+  align-items: flex-end;
+}
+
+.toolbar-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .toolbar h2 {
