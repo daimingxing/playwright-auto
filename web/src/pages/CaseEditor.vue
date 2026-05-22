@@ -1,14 +1,40 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-import type { TableInstance } from 'element-plus';
-import { ElMessage, ElMessageBox } from 'element-plus';
-import { ArrowDown, ArrowUp, CopyDocument, Delete, Finished, MoreFilled, Plus, Select } from '@element-plus/icons-vue';
-import type { CaseMeta, CaseStep, EnvMeta, PracticalReviewRecord, StepType } from '../../../shared/types';
-import { clearPracticalReviews, getCase, getPracticalReview, listPracticalReviews, startPracticalReview, startRecord, stopRecord, updateCase } from '../api/cases';
-import { getAuthState, saveLogin, startLogin } from '../api/auth';
-import { getAppStepConfig, getProject } from '../api/projects';
-import { getErrorMessage } from '../utils/error';
+import { computed, nextTick, onMounted, ref } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import type { TableInstance } from "element-plus";
+import { ElMessage, ElMessageBox } from "element-plus";
+import {
+  ArrowDown,
+  ArrowUp,
+  Back,
+  CopyDocument,
+  Delete,
+  Finished,
+  InfoFilled,
+  MoreFilled,
+  Plus,
+  Select,
+} from "@element-plus/icons-vue";
+import type {
+  CaseMeta,
+  CaseStep,
+  EnvMeta,
+  PracticalReviewRecord,
+  StepType,
+} from "../../../shared/types";
+import {
+  clearPracticalReviews,
+  getCase,
+  getPracticalReview,
+  listPracticalReviews,
+  startPracticalReview,
+  startRecord,
+  stopRecord,
+  updateCase,
+} from "../api/cases";
+import { getAuthState, saveLogin, startLogin } from "../api/auth";
+import { getAppStepConfig, getProject } from "../api/projects";
+import { getErrorMessage } from "../utils/error";
 import {
   canMoveSteps,
   copyStep,
@@ -30,8 +56,8 @@ import {
   removeSteps,
   stepGroups,
   stepLabels,
-  stepTimeouts
-} from './case-editor';
+  stepTimeouts,
+} from "./case-editor";
 
 const route = useRoute();
 const router = useRouter();
@@ -41,39 +67,39 @@ const item = ref<CaseMeta | null>(null);
 const activeEnv = ref<EnvMeta | null>(null);
 const stepConfig = ref(stepTimeouts);
 const stepTable = ref<TableInstance>();
-const recordId = ref('');
+const recordId = ref("");
 const isRecording = ref(false);
 const isBatchMode = ref(false);
-const selectedId = ref('');
+const selectedId = ref("");
 const batchIds = ref<string[]>([]);
-const highlightId = ref('');
+const highlightId = ref("");
 const practicalReviewing = ref(false);
 const practicalHistoryOpen = ref(false);
 const failureDrawerOpen = ref(false);
 const practicalHistory = ref<PracticalReviewRecord[]>([]);
 const activePracticalRecord = ref<PracticalReviewRecord | null>(null);
 const hasAuth = ref(false);
-const authPath = ref('');
-const loginId = ref('');
+const authPath = ref("");
+const loginId = ref("");
 const loadingLogin = ref(false);
 const savingLogin = ref(false);
 const stepFlashMs = 180;
 // 浏览器环境下 `window.setTimeout` 返回数值型定时器句柄，避免与 Node 的 `Timeout` 类型混淆。
 let highlightTimer: number | undefined;
 const reviewLabels = {
-  error: '错误',
-  danger: '高危',
-  warning: '警告',
-  info: '提示'
+  error: "错误",
+  danger: "高危",
+  warning: "警告",
+  info: "提示",
 } as const;
 const reviewTypes = {
-  error: 'danger',
-  danger: 'warning',
-  warning: 'warning',
-  info: 'info'
+  error: "danger",
+  danger: "warning",
+  warning: "warning",
+  info: "info",
 } as const;
 const reviewMap = computed(() => {
-  const map = new Map<string, NonNullable<CaseMeta['review']>['items']>();
+  const map = new Map<string, NonNullable<CaseMeta["review"]>["items"]>();
 
   for (const review of item.value?.review?.items ?? []) {
     const items = map.get(review.stepId) ?? [];
@@ -84,8 +110,12 @@ const reviewMap = computed(() => {
   return map;
 });
 const hasBatch = computed(() => batchIds.value.length > 0);
-const canBatchUp = computed(() => (item.value ? canMoveSteps(item.value.steps, batchIds.value, -1) : false));
-const canBatchDown = computed(() => (item.value ? canMoveSteps(item.value.steps, batchIds.value, 1) : false));
+const canBatchUp = computed(() =>
+  item.value ? canMoveSteps(item.value.steps, batchIds.value, -1) : false,
+);
+const canBatchDown = computed(() =>
+  item.value ? canMoveSteps(item.value.steps, batchIds.value, 1) : false,
+);
 const startPreview = computed(() => getStartPreview(item.value, activeEnv.value));
 
 /**
@@ -95,11 +125,12 @@ async function loadCase() {
   const [caseInfo, config, project] = await Promise.all([
     getCase(projectKey, caseKey),
     getAppStepConfig(),
-    getProject(projectKey)
+    getProject(projectKey),
   ]);
   item.value = caseInfo;
   stepConfig.value = config.steps.timeouts;
-  activeEnv.value = project.envs.find((env) => env.key === project.defaultEnv) ?? project.envs[0] ?? null;
+  activeEnv.value =
+    project.envs.find((env) => env.key === project.defaultEnv) ?? project.envs[0] ?? null;
   await loadAuthState();
 }
 
@@ -109,7 +140,7 @@ async function loadCase() {
 async function loadAuthState() {
   if (!activeEnv.value) {
     hasAuth.value = false;
-    authPath.value = '';
+    authPath.value = "";
     return;
   }
 
@@ -123,7 +154,7 @@ async function loadAuthState() {
  */
 async function openLogin() {
   if (!activeEnv.value) {
-    ElMessage.warning('请先配置项目环境');
+    ElMessage.warning("请先配置项目环境");
     return;
   }
 
@@ -132,7 +163,7 @@ async function openLogin() {
   try {
     const session = await startLogin(projectKey, { envKey: activeEnv.value.key });
     loginId.value = session.sessionId;
-    ElMessage.success('已打开浏览器，请完成登录后返回本页面保存登录态');
+    ElMessage.success("已打开浏览器，请完成登录后返回本页面保存登录态");
   } catch (error) {
     ElMessage.error(getErrorMessage(error));
   } finally {
@@ -145,7 +176,7 @@ async function openLogin() {
  */
 async function saveAuth() {
   if (!loginId.value) {
-    ElMessage.warning('请先打开浏览器完成登录');
+    ElMessage.warning("请先打开浏览器完成登录");
     return;
   }
 
@@ -155,8 +186,8 @@ async function saveAuth() {
     const auth = await saveLogin(projectKey, loginId.value);
     authPath.value = auth.path;
     hasAuth.value = true;
-    loginId.value = '';
-    ElMessage.success('登录态已保存，实测检查和运行测试会自动复用');
+    loginId.value = "";
+    ElMessage.success("登录态已保存，实测检查和运行测试会自动复用");
   } catch (error) {
     ElMessage.error(getErrorMessage(error));
   } finally {
@@ -172,7 +203,12 @@ function addStep(type: StepType) {
     return;
   }
 
-  const row = insertStep(item.value.steps, getInsertIndex(item.value.steps, selectedId.value), type, stepConfig.value);
+  const row = insertStep(
+    item.value.steps,
+    getInsertIndex(item.value.steps, selectedId.value),
+    type,
+    stepConfig.value,
+  );
   setActiveStep(row);
 }
 
@@ -188,7 +224,7 @@ function deleteStep(index: number) {
   removeStep(item.value.steps, index);
 
   if (row?.id === selectedId.value) {
-    selectedId.value = '';
+    selectedId.value = "";
   }
 }
 
@@ -245,15 +281,17 @@ async function deleteBatch() {
   }
 
   try {
-    await ElMessageBox.confirm(`确认删除选中的 ${batchIds.value.length} 个步骤吗？`, '批量删除', { type: 'warning' });
+    await ElMessageBox.confirm(`确认删除选中的 ${batchIds.value.length} 个步骤吗？`, "批量删除", {
+      type: "warning",
+    });
     const removed = removeSteps(item.value.steps, batchIds.value);
     clearBatch();
 
     if (removed.some((row) => row.id === selectedId.value)) {
-      selectedId.value = '';
+      selectedId.value = "";
     }
   } catch (error) {
-    if (error !== 'cancel') {
+    if (error !== "cancel") {
       ElMessage.error(getErrorMessage(error));
     }
   }
@@ -325,7 +363,7 @@ function setActiveStep(step?: CaseStep) {
 
   // 高亮时长与 CSS 动画保持一致，避免移动后视觉反馈拖沓。
   highlightTimer = window.setTimeout(() => {
-    highlightId.value = '';
+    highlightId.value = "";
   }, stepFlashMs);
 }
 
@@ -348,7 +386,7 @@ function setActiveSteps(steps: CaseStep[]) {
 
   // 批量操作先高亮第一条受影响步骤，避免多个动画同时闪烁造成干扰。
   highlightTimer = window.setTimeout(() => {
-    highlightId.value = '';
+    highlightId.value = "";
   }, stepFlashMs);
 }
 
@@ -366,14 +404,14 @@ function getRowClass({ row }: { row: CaseStep }) {
   const classes: string[] = [];
 
   if (row.id === selectedId.value) {
-    classes.push('is-selected-step');
+    classes.push("is-selected-step");
   }
 
   if (row.id === highlightId.value) {
-    classes.push('is-step-flash');
+    classes.push("is-step-flash");
   }
 
-  return classes.join(' ');
+  return classes.join(" ");
 }
 
 /**
@@ -388,7 +426,7 @@ function getStepReviews(step: CaseStep) {
  */
 async function runPracticalCheck() {
   if (!activeEnv.value) {
-    ElMessage.warning('请先配置项目环境');
+    ElMessage.warning("请先配置项目环境");
     return;
   }
 
@@ -399,11 +437,11 @@ async function runPracticalCheck() {
     activePracticalRecord.value = record;
     item.value = await getCase(projectKey, caseKey);
 
-    if (record.status === 'failed') {
+    if (record.status === "failed") {
       failureDrawerOpen.value = true;
-      ElMessage.error(record.summary.failureMessage ?? '实测检查失败');
+      ElMessage.error(record.summary.failureMessage ?? "实测检查失败");
     } else {
-      ElMessage.success('实测检查通过');
+      ElMessage.success("实测检查通过");
     }
   } catch (error) {
     ElMessage.error(getErrorMessage(error));
@@ -428,10 +466,10 @@ async function openPracticalHistory() {
  * 清理当前用例的实测检查历史。
  */
 async function clearPracticalHistory() {
-  const confirmed = await ElMessageBox.confirm('确认清理当前用例的实测检查历史吗？', '清理历史', {
-    confirmButtonText: '清理',
-    cancelButtonText: '取消',
-    type: 'warning'
+  const confirmed = await ElMessageBox.confirm("确认清理当前用例的实测检查历史吗？", "清理历史", {
+    confirmButtonText: "清理",
+    cancelButtonText: "取消",
+    type: "warning",
   }).catch(() => false);
 
   if (!confirmed) {
@@ -441,7 +479,7 @@ async function clearPracticalHistory() {
   try {
     await clearPracticalReviews(projectKey, caseKey);
     practicalHistory.value = [];
-    ElMessage.success('实测检查历史已清理');
+    ElMessage.success("实测检查历史已清理");
   } catch (error) {
     ElMessage.error(getErrorMessage(error));
   }
@@ -464,8 +502,15 @@ async function openLatestFailureAnalysis() {
   }
 
   try {
-    if (!activePracticalRecord.value || activePracticalRecord.value.id !== item.value.practicalReview.reviewId) {
-      activePracticalRecord.value = await getPracticalReview(projectKey, caseKey, item.value.practicalReview.reviewId);
+    if (
+      !activePracticalRecord.value ||
+      activePracticalRecord.value.id !== item.value.practicalReview.reviewId
+    ) {
+      activePracticalRecord.value = await getPracticalReview(
+        projectKey,
+        caseKey,
+        item.value.practicalReview.reviewId,
+      );
     }
 
     failureDrawerOpen.value = true;
@@ -492,17 +537,17 @@ async function saveCase() {
 async function startRecordCase() {
   try {
     await ElMessageBox.confirm(
-      '录制完成后会用录制结果覆盖当前步骤，请确认当前改动已保存。',
-      '开始录制',
-      { type: 'warning' }
+      "录制完成后会用录制结果覆盖当前步骤，请确认当前改动已保存。",
+      "开始录制",
+      { type: "warning" },
     );
 
     const result = await startRecord(projectKey, caseKey);
     recordId.value = result.sessionId;
     isRecording.value = true;
-    ElMessage.success('录制窗口已打开，请在浏览器中完成操作和断言');
+    ElMessage.success("录制窗口已打开，请在浏览器中完成操作和断言");
   } catch (error) {
-    if (error !== 'cancel') {
+    if (error !== "cancel") {
       ElMessage.error(getErrorMessage(error));
     }
   }
@@ -518,9 +563,9 @@ async function stopRecordCase() {
 
   try {
     item.value = await stopRecord(projectKey, caseKey, recordId.value);
-    recordId.value = '';
+    recordId.value = "";
     isRecording.value = false;
-    ElMessage.success('录制结果已导入当前用例');
+    ElMessage.success("录制结果已导入当前用例");
   } catch (error) {
     ElMessage.error(getErrorMessage(error));
   }
@@ -533,13 +578,15 @@ onMounted(loadCase);
   <section class="page" v-if="item">
     <div class="toolbar">
       <div>
-        <el-button text @click="router.push(`/projects/${projectKey}`)">返回用例管理</el-button>
+        <el-button text :icon="Back" class="back-btn" @click="router.push(`/projects/${projectKey}`)">返回用例管理</el-button>
         <h2>{{ item.name }}</h2>
       </div>
       <div class="toolbar-actions">
         <el-button v-if="!isRecording" @click="startRecordCase">开始录制</el-button>
         <el-button v-else type="warning" @click="stopRecordCase">停止录制</el-button>
-        <el-button type="primary" :disabled="isRecording" @click="saveCase">保存并生成测试文件</el-button>
+        <el-button type="primary" :disabled="isRecording" @click="saveCase"
+          >保存并生成测试文件</el-button
+        >
       </div>
     </div>
 
@@ -565,6 +612,26 @@ onMounted(loadCase);
             <el-form-item label="实际地址">
               <div class="start-preview">{{ startPreview }}</div>
             </el-form-item>
+            <el-form-item label="登录态">
+              <div class="auth-status-wrap">
+                <el-tag :type="hasAuth ? 'success' : 'info'" effect="light" class="auth-tag">
+                  {{ hasAuth ? "已保存" : "未保存" }}
+                </el-tag>
+                <el-tooltip v-if="authPath" :content="authPath" placement="top">
+                  <el-icon class="auth-help"><InfoFilled /></el-icon>
+                </el-tooltip>
+                <el-button :loading="loadingLogin" @click="openLogin">打开浏览器登录</el-button>
+                <el-button
+                  :disabled="!loginId"
+                  :loading="savingLogin"
+                  type="primary"
+                  plain
+                  @click="saveAuth"
+                >
+                  我已完成登录，保存登录态
+                </el-button>
+              </div>
+            </el-form-item>
           </el-form>
 
           <section class="practical-panel">
@@ -575,66 +642,69 @@ onMounted(loadCase);
               </el-tag>
             </div>
             <div class="panel-row">
-              <span>登录态</span>
-              <strong>{{ hasAuth ? '已保存' : '未保存' }}</strong>
-            </div>
-            <div class="panel-row">
               <span>最后检查时间</span>
-              <strong>{{ item.practicalReview?.checkedAt ?? '-' }}</strong>
+              <strong>{{ item.practicalReview?.checkedAt ?? "-" }}</strong>
             </div>
             <p v-if="item.practicalReview?.status === 'failed'" class="failure-summary">
-              第 {{ (item.practicalReview.failedStepIndex ?? 0) + 1 }} 步：{{ item.practicalReview.failureMessage }}
+              第 {{ (item.practicalReview.failedStepIndex ?? 0) + 1 }} 步：{{
+                item.practicalReview.failureMessage
+              }}
             </p>
             <div class="panel-actions">
-              <el-button :loading="loadingLogin" @click="openLogin">打开浏览器登录</el-button>
-              <el-button :disabled="!loginId" :loading="savingLogin" @click="saveAuth">我已完成登录，保存登录态</el-button>
-              <el-button type="primary" :loading="practicalReviewing" @click="runPracticalCheck">开始实测检查</el-button>
+              <el-button type="primary" :loading="practicalReviewing" @click="runPracticalCheck"
+                >开始实测检查</el-button
+              >
               <el-button @click="openPracticalHistory">查看历史</el-button>
               <el-button @click="clearPracticalHistory">清理历史</el-button>
             </div>
-            <el-tooltip v-if="authPath" :content="authPath" placement="top">
-              <span class="auth-path">登录态路径</span>
-            </el-tooltip>
           </section>
         </div>
-
-        <div class="step-actions">
-          <el-dropdown trigger="click" @command="(type) => addStep(type as StepType)">
-            <el-button type="primary">
-              <el-icon><Plus /></el-icon>
-              <span>添加步骤</span>
-            </el-button>
-            <template #dropdown>
-              <el-dropdown-menu class="step-menu">
-                <template v-for="group in stepGroups" :key="group.label">
-                  <el-dropdown-item class="step-menu-title" disabled>{{ group.label }}</el-dropdown-item>
-                  <el-dropdown-item v-for="type in group.types" :key="type" :command="type">
-                    <span class="step-menu-label">{{ stepLabels[type] }}</span>
-                    <span class="step-menu-code">{{ type }}</span>
-                  </el-dropdown-item>
-                </template>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
-          <span class="insert-hint">
-            {{ selectedId ? '将插入到选中步骤后方' : '未选中步骤时追加到末尾' }}
-          </span>
-          <el-divider direction="vertical" />
-          <template v-if="!isBatchMode">
-            <el-button :icon="Select" @click="toggleBatchMode">批量操作</el-button>
-          </template>
-          <template v-else>
-            <span class="batch-count">已选 {{ batchIds.length }} 条</span>
-            <el-button :icon="Finished" @click="selectAllSteps">全选</el-button>
-            <el-button :icon="ArrowUp" :disabled="!canBatchUp" @click="shiftBatch(-1)">上移</el-button>
-            <el-button :icon="ArrowDown" :disabled="!canBatchDown" @click="shiftBatch(1)">下移</el-button>
-            <el-button :icon="CopyDocument" :disabled="!hasBatch" @click="duplicateBatch">复制</el-button>
-            <el-button :icon="Delete" type="danger" plain :disabled="!hasBatch" @click="deleteBatch">删除</el-button>
-            <el-button @click="toggleBatchMode">取消批量</el-button>
-          </template>
-        </div>
       </div>
-
+      <div class="step-actions">
+        <el-dropdown trigger="click" @command="(type) => addStep(type as StepType)">
+          <el-button type="primary">
+            <el-icon><Plus /></el-icon>
+            <span>添加步骤</span>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu class="step-menu">
+              <template v-for="group in stepGroups" :key="group.label">
+                <el-dropdown-item class="step-menu-title" disabled>{{
+                  group.label
+                }}</el-dropdown-item>
+                <el-dropdown-item v-for="type in group.types" :key="type" :command="type">
+                  <span class="step-menu-label">{{ stepLabels[type] }}</span>
+                  <span class="step-menu-code">{{ type }}</span>
+                </el-dropdown-item>
+              </template>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+        <span class="insert-hint">
+          {{ selectedId ? "将插入到选中步骤后方" : "未选中步骤时追加到末尾" }}
+        </span>
+        <el-divider direction="vertical" />
+        <template v-if="!isBatchMode">
+          <el-button :icon="Select" @click="toggleBatchMode">批量操作</el-button>
+        </template>
+        <template v-else>
+          <span class="batch-count">已选 {{ batchIds.length }} 条</span>
+          <el-button :icon="Finished" @click="selectAllSteps">全选</el-button>
+          <el-button :icon="ArrowUp" :disabled="!canBatchUp" @click="shiftBatch(-1)"
+            >上移</el-button
+          >
+          <el-button :icon="ArrowDown" :disabled="!canBatchDown" @click="shiftBatch(1)"
+            >下移</el-button
+          >
+          <el-button :icon="CopyDocument" :disabled="!hasBatch" @click="duplicateBatch"
+            >复制</el-button
+          >
+          <el-button :icon="Delete" type="danger" plain :disabled="!hasBatch" @click="deleteBatch"
+            >删除</el-button
+          >
+          <el-button @click="toggleBatchMode">取消批量</el-button>
+        </template>
+      </div>
       <div class="table-wrap">
         <el-table
           ref="stepTable"
@@ -667,7 +737,9 @@ onMounted(loadCase);
                     trigger="hover"
                   >
                     <template #reference>
-                      <el-tag :type="reviewTypes[review.level]" effect="light">{{ reviewLabels[review.level] }}</el-tag>
+                      <el-tag :type="reviewTypes[review.level]" effect="light">{{
+                        reviewLabels[review.level]
+                      }}</el-tag>
                     </template>
                     <div class="review-popover">
                       <strong>{{ review.message }}</strong>
@@ -684,7 +756,13 @@ onMounted(loadCase);
                 >
                   实测失败
                 </el-tag>
-                <span v-if="getStepReviews(row).length === 0 && !getFailedPracticalStep(item.practicalReview, row)" class="review-pass">
+                <span
+                  v-if="
+                    getStepReviews(row).length === 0 &&
+                    !getFailedPracticalStep(item.practicalReview, row)
+                  "
+                  class="review-pass"
+                >
                   {{ formatLocatorCheckPass() }}
                 </span>
               </div>
@@ -692,19 +770,32 @@ onMounted(loadCase);
           </el-table-column>
           <el-table-column label="选择器">
             <template #default="{ row }">
-              <el-input v-if="hasSelector(row.type)" v-model="row.selector" placeholder="例如：#username" />
+              <el-input
+                v-if="hasSelector(row.type)"
+                v-model="row.selector"
+                placeholder="例如：#username"
+              />
               <span v-else class="field-empty">-</span>
             </template>
           </el-table-column>
           <el-table-column label="输入值/断言值">
             <template #default="{ row }">
-              <el-input v-if="hasValue(row.type)" v-model="row.value" placeholder="输入值或断言内容" />
+              <el-input
+                v-if="hasValue(row.type)"
+                v-model="row.value"
+                placeholder="输入值或断言内容"
+              />
               <span v-else class="field-empty">-</span>
             </template>
           </el-table-column>
           <el-table-column label="等待毫秒" width="180">
             <template #default="{ row }">
-              <el-input-number v-if="hasTimeout(row.type)" v-model="row.timeout" :min="0" :step="500" />
+              <el-input-number
+                v-if="hasTimeout(row.type)"
+                v-model="row.timeout"
+                :min="0"
+                :step="500"
+              />
               <span v-else class="field-empty">-</span>
             </template>
           </el-table-column>
@@ -717,7 +808,12 @@ onMounted(loadCase);
                   </el-button>
                 </el-tooltip>
                 <el-tooltip content="下移" placement="top" :show-after="500" :hide-after="0">
-                  <el-button text circle :disabled="$index === item.steps.length - 1" @click="shiftStep($index, 1)">
+                  <el-button
+                    text
+                    circle
+                    :disabled="$index === item.steps.length - 1"
+                    @click="shiftStep($index, 1)"
+                  >
                     <el-icon><ArrowDown /></el-icon>
                   </el-button>
                 </el-tooltip>
@@ -759,13 +855,13 @@ onMounted(loadCase);
             <p class="analysis-message">{{ step.analysis?.message }}</p>
             <dl>
               <dt>目标定位</dt>
-              <dd>{{ step.selector || '-' }}</dd>
+              <dd>{{ step.selector || "-" }}</dd>
               <dt>当前 URL</dt>
-              <dd>{{ step.analysis?.currentUrl || '-' }}</dd>
+              <dd>{{ step.analysis?.currentUrl || "-" }}</dd>
               <dt>匹配数量</dt>
-              <dd>{{ step.analysis?.matchCount ?? '-' }}</dd>
+              <dd>{{ step.analysis?.matchCount ?? "-" }}</dd>
               <dt>建议</dt>
-              <dd>{{ step.analysis?.suggestion || '-' }}</dd>
+              <dd>{{ step.analysis?.suggestion || "-" }}</dd>
             </dl>
           </div>
         </template>
@@ -784,7 +880,12 @@ onMounted(loadCase);
           </el-table-column>
           <el-table-column label="操作" width="120">
             <template #default="{ row }">
-              <el-button size="small" :disabled="row.status !== 'failed'" @click="openFailureAnalysis(row)">失败分析</el-button>
+              <el-button
+                size="small"
+                :disabled="row.status !== 'failed'"
+                @click="openFailureAnalysis(row)"
+                >失败分析</el-button
+              >
             </template>
           </el-table-column>
         </el-table>
@@ -826,11 +927,23 @@ onMounted(loadCase);
   justify-content: flex-end;
 }
 
+.back-btn {
+  color: #315f8f;
+  font-weight: 600;
+  margin-left: -8px; /* 抵消 el-button 的左内边距，使其与下方标题对齐 */
+}
+
+.back-btn:hover,
+.back-btn:focus {
+  color: #24466b;
+  background-color: #eef5fb;
+}
+
 .content {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-rows: minmax(0, auto) minmax(180px, 1fr);
+  grid-template-rows: minmax(0, auto) auto minmax(180px, 1fr);
   gap: 16px;
   overflow: hidden;
 }
@@ -844,7 +957,7 @@ onMounted(loadCase);
 
 .meta-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-columns: minmax(0, 1fr) 500px;
   gap: 18px;
 }
 
@@ -885,12 +998,22 @@ onMounted(loadCase);
   margin: 12px 0 0;
 }
 
-.auth-path {
-  color: #5f7188;
+.auth-status-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.auth-tag {
+  min-width: 54px;
+  text-align: center;
+}
+
+.auth-help {
+  color: #8796aa;
   cursor: help;
-  display: inline-block;
-  font-size: 12px;
-  margin-top: 10px;
+  font-size: 14px;
 }
 
 .step-actions {
@@ -916,7 +1039,7 @@ onMounted(loadCase);
   border-radius: 6px;
   background: #eef5fb;
   color: #315f8f;
-  font-family: Consolas, 'Courier New', monospace;
+  font-family: Consolas, "Courier New", monospace;
   font-size: 13px;
   line-height: 1.45;
 }
@@ -983,7 +1106,9 @@ onMounted(loadCase);
 }
 
 .table-wrap :deep(.el-table__row) {
-  transition: background-color 160ms ease, transform 160ms ease;
+  transition:
+    background-color 160ms ease,
+    transform 160ms ease;
 }
 
 .table-wrap :deep(.el-table__row.is-selected-step > td.el-table__cell) {

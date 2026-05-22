@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { Back } from '@element-plus/icons-vue';
 import { onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { CaseMeta } from '../../../shared/types';
@@ -113,7 +114,7 @@ onMounted(loadData);
   <section class="page">
     <div class="toolbar">
       <div>
-        <el-button text @click="router.push('/')">返回项目列表</el-button>
+        <el-button text :icon="Back" class="back-btn" @click="router.push('/')">返回项目列表</el-button>
         <h2>{{ projectKey }} 用例管理</h2>
       </div>
       <div class="actions">
@@ -202,14 +203,26 @@ onMounted(loadData);
 .toolbar {
   flex: 0 0 auto;
   display: flex;
-  align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 20px;
+  align-items: flex-start;
 }
 
 .toolbar h2 {
   margin: 8px 0 0;
+}
+
+.back-btn {
+  color: #315f8f;
+  font-weight: 600;
+  margin-left: -8px;
+}
+
+.back-btn:hover,
+.back-btn:focus {
+  color: #24466b;
+  background-color: #eef5fb;
 }
 
 .actions {

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ArrowRight, Delete, InfoFilled, Back } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -317,7 +318,7 @@ onMounted(async () => {
   <section class="page">
     <div class="toolbar">
       <div>
-        <el-button text @click="router.push(`/projects/${projectKey}`)">返回用例管理</el-button>
+        <el-button text :icon="Back" class="back-btn" @click="router.push(`/projects/${projectKey}`)">返回用例管理</el-button>
         <h2>运行中心</h2>
       </div>
     </div>
@@ -473,6 +474,18 @@ onMounted(async () => {
 
 .toolbar h2 {
   margin: 8px 0 0;
+}
+
+.back-btn {
+  color: #315f8f;
+  font-weight: 600;
+  margin-left: -8px;
+}
+
+.back-btn:hover,
+.back-btn:focus {
+  color: #24466b;
+  background-color: #eef5fb;
 }
 
 .result {
