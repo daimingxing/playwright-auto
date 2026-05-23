@@ -15,6 +15,7 @@ import {
   formatPracticalReviewStatus,
   formatPracticalReviewTime,
   getPracticalReviewTagType,
+  getReportUrl,
   getRunButtonText,
   mergeSelectedCaseKeys
 } from './run-center';
@@ -154,7 +155,7 @@ function openReport() {
     return;
   }
 
-  window.open(reportUrl.value, '_blank', 'noopener,noreferrer');
+  window.open(getReportUrl(reportUrl.value), '_blank', 'noopener,noreferrer');
 }
 
 /**
@@ -165,7 +166,7 @@ function openRunReport(item: RunMeta) {
     return;
   }
 
-  window.open(item.reportUrl, '_blank', 'noopener,noreferrer');
+  window.open(getReportUrl(item.reportUrl), '_blank', 'noopener,noreferrer');
 }
 
 /**

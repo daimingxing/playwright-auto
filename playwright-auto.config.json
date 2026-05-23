@@ -1,7 +1,15 @@
 {
   "server": {
     "port": 3001,
-    "dataRoot": "data"
+    "dataRoot": "data",
+    "corsOrigins": [
+      "http://localhost:5173",
+      "http://127.0.0.1:5173"
+    ]
+  },
+  "web": {
+    "origin": "http://localhost:5173",
+    "apiBase": ""
   },
   "runner": {
     "headlessWorkers": 8,

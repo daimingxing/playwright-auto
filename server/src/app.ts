@@ -8,6 +8,7 @@ import { recordRouter } from './routes/record';
 import { RunError } from './services/runner';
 import { getAppConfig } from './lib/app-config';
 import { ZodError, type ZodIssue } from 'zod';
+import { HttpError } from './lib/http-error';
 
 /**
  * 创建本地 API 服务。
@@ -15,7 +16,18 @@ import { ZodError, type ZodIssue } from 'zod';
 export function createApp() {
   const app = express();
 
-  app.use(cors({ origin: true }));
+  app.use(
+    cors({
+      origin(origin, callback) {
+        if (!origin || getAppConfig().server.corsOrigins.includes(origin)) {
+          callback(null, true);
+          return;
+        }
+
+        callback(new HttpError(403, '请求来源不允许访问本地服务'));
+      }
+    })
+  );
   app.use(express.json());
 
   app.get('/health', (_req, res) => {
@@ -46,7 +58,17 @@ export function createApp() {
       return;
     }
 
-    res.status(400).json({ message });
+    if (error instanceof HttpError) {
+      res.status(error.status).json({ message });
+      return;
+    }
+
+    if (isMissingFile(error)) {
+      res.status(404).json({ message: '资源不存在' });
+      return;
+    }
+
+    res.status(500).json({ message: '服务内部错误' });
   });
 
   return app;
@@ -99,4 +121,11 @@ function getFieldLabel(path: (string | number)[]) {
   }
 
   return '请求参数';
+}
+
+/**
+ * 判断是否为文件不存在错误。
+ */
+function isMissingFile(error: unknown) {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT';
 }

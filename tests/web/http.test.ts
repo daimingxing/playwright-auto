@@ -6,8 +6,20 @@ afterEach(() => {
 });
 
 describe('前端 API 地址', () => {
-  it('开发环境下把 API 请求指向本地 Node 服务', () => {
+  it('默认使用相对 API 地址', () => {
     const url = resolveApiUrl('/api/projects');
+
+    expect(url).toBe('/api/projects');
+  });
+
+  it('配置 API base 后拼接本地 Node 服务地址', () => {
+    const url = resolveApiUrl('/api/projects', 'http://localhost:3001');
+
+    expect(url).toBe('http://localhost:3001/api/projects');
+  });
+
+  it('配置 API base 时会兼容结尾斜杠', () => {
+    const url = resolveApiUrl('/api/projects', 'http://localhost:3001/');
 
     expect(url).toBe('http://localhost:3001/api/projects');
   });

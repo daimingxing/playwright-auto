@@ -1,4 +1,5 @@
 import type { CaseMeta, CaseStep } from '../../../shared/types';
+import { quoteText } from './code-literal';
 
 /**
  * 生成 Playwright TypeScript 测试文件。
@@ -146,7 +147,7 @@ function renderLocator(selector: string | undefined, name: string, pageName = 'p
  * 生成安全字符串字面量。
  */
 function quote(value: string) {
-  return JSON.stringify(value);
+  return quoteText(value);
 }
 
 /**

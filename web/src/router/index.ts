@@ -1,15 +1,11 @@
 import { createRouter, createWebHistory } from 'vue-router';
-import ProjectList from '../pages/ProjectList.vue';
-import ProjectDetail from '../pages/ProjectDetail.vue';
-import CaseEditor from '../pages/CaseEditor.vue';
-import RunCenter from '../pages/RunCenter.vue';
 
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', component: ProjectList },
-    { path: '/projects/:projectKey', component: ProjectDetail },
-    { path: '/projects/:projectKey/cases/:caseKey', component: CaseEditor },
-    { path: '/projects/:projectKey/runs', component: RunCenter }
+    { path: '/', component: () => import('../pages/ProjectList.vue') },
+    { path: '/projects/:projectKey', component: () => import('../pages/ProjectDetail.vue') },
+    { path: '/projects/:projectKey/cases/:caseKey', component: () => import('../pages/CaseEditor.vue') },
+    { path: '/projects/:projectKey/runs', component: () => import('../pages/RunCenter.vue') }
   ]
 });

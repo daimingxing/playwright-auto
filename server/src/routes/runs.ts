@@ -5,6 +5,7 @@ import { getRunPath } from '../lib/path';
 import { deleteRun, listRuns } from '../lib/run-store';
 import { zipDir } from '../services/export';
 import { getRunConfig, runProject } from '../services/runner';
+import { badRequest, notFound } from '../lib/http-error';
 
 interface ProjectParams {
   projectKey: string;
@@ -98,7 +99,7 @@ async function assertRunRoot(runPath: string) {
   try {
     await stat(runPath);
   } catch {
-    throw new Error('测试报告尚未生成');
+    throw notFound('测试报告尚未生成');
   }
 }
 
@@ -109,7 +110,7 @@ async function assertReportExists(reportPath: string) {
   try {
     await stat(join(reportPath, 'index.html'));
   } catch {
-    throw new Error('测试报告尚未生成');
+    throw notFound('测试报告尚未生成');
   }
 }
 
@@ -120,7 +121,7 @@ async function assertReportRoot(reportPath: string) {
   try {
     await stat(reportPath);
   } catch {
-    throw new Error('测试报告尚未生成');
+    throw notFound('测试报告尚未生成');
   }
 }
 
@@ -135,7 +136,7 @@ function resolveReportFile(reportPath: string, url: string) {
 
   const inside = relative(reportPath, targetPath);
   if (inside.startsWith('..') || inside === '') {
-    throw new Error('报告路径不合法');
+    throw badRequest('报告路径不合法');
   }
 
   return targetPath;

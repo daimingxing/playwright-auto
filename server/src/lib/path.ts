@@ -1,5 +1,6 @@
 import { resolve } from 'node:path';
 import { getAppConfig } from './app-config';
+import { assertCaseKey, assertProjectKey, assertReviewId, assertRunId, assertWorkId } from './guard';
 
 /**
  * 获取数据根目录。
@@ -19,6 +20,7 @@ export function getProjectsRoot() {
  * 获取单个项目的根目录。
  */
 export function getProjectPath(projectKey: string) {
+  assertProjectKey(projectKey);
   return resolve(getProjectsRoot(), projectKey);
 }
 
@@ -26,6 +28,7 @@ export function getProjectPath(projectKey: string) {
  * 获取单个用例的目录。
  */
 export function getCasePath(projectKey: string, caseKey: string) {
+  assertCaseKey(caseKey);
   return resolve(getProjectPath(projectKey), 'cases', caseKey);
 }
 
@@ -33,6 +36,7 @@ export function getCasePath(projectKey: string, caseKey: string) {
  * 获取回收站中单个用例的目录。
  */
 export function getTrashPath(projectKey: string, caseKey: string) {
+  assertCaseKey(caseKey);
   return resolve(getProjectPath(projectKey), 'trash', caseKey);
 }
 
@@ -40,6 +44,7 @@ export function getTrashPath(projectKey: string, caseKey: string) {
  * 获取单次运行的目录。
  */
 export function getRunPath(projectKey: string, runId: string) {
+  assertRunId(runId);
   return resolve(getProjectPath(projectKey), 'runs', runId);
 }
 
@@ -54,6 +59,7 @@ export function getPracticalReviewsPath(projectKey: string) {
  * 获取单条实测检查记录目录。
  */
 export function getPracticalReviewPath(projectKey: string, reviewId: string) {
+  assertReviewId(reviewId);
   return resolve(getPracticalReviewsPath(projectKey), reviewId);
 }
 
@@ -61,5 +67,6 @@ export function getPracticalReviewPath(projectKey: string, reviewId: string) {
  * 获取实测检查临时工作目录。
  */
 export function getPracticalReviewWorkPath(projectKey: string, workId: string) {
+  assertWorkId(workId);
   return resolve(getPracticalReviewsPath(projectKey), 'work', workId);
 }

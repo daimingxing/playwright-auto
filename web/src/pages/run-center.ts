@@ -1,4 +1,5 @@
 import type { CaseMeta, PracticalReviewSummary } from '../../../shared/types';
+import { resolveApiUrl } from '../api/http';
 
 /**
  * 合并用例列表和当前选择，首次加载时默认选中全部用例。
@@ -79,4 +80,11 @@ export function getPracticalReviewTagType(summary: PracticalReviewSummary | unde
  */
 export function formatPracticalReviewTime(summary: PracticalReviewSummary | undefined) {
   return summary?.checkedAt ?? '-';
+}
+
+/**
+ * 解析测试报告打开地址。
+ */
+export function getReportUrl(url: string, apiBase?: string) {
+  return url ? resolveApiUrl(url, apiBase) : '';
 }

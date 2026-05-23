@@ -15,6 +15,7 @@ import { getCasePath, getPracticalReviewPath } from '../lib/path';
 import { practicalReviewInputSchema } from '../lib/schema';
 import { zipDir } from '../services/export';
 import { runPracticalReview } from '../services/practical-review';
+import { badRequest, notFound } from '../lib/http-error';
 
 interface ProjectParams {
   projectKey: string;
@@ -72,7 +73,7 @@ casesRouter.get<ReviewParams>('/:caseKey/practical-reviews/:reviewId', async (re
     const record = await readPracticalReviewRecord(req.params.projectKey, req.params.reviewId);
 
     if (record.caseKey !== req.params.caseKey) {
-      throw new Error('实测检查记录不存在');
+      throw notFound('实测检查记录不存在');
     }
 
     res.json(record);
@@ -145,7 +146,7 @@ function parsePracticalReviewInput(body: unknown) {
   const result = practicalReviewInputSchema.safeParse(body);
 
   if (!result.success) {
-    throw new Error('请求参数不合法：请检查 envKey 和 testFailure');
+    throw badRequest('请求参数不合法：请检查 envKey 和 testFailure');
   }
 
   return result.data;

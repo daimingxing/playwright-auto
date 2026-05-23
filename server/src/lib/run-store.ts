@@ -3,10 +3,10 @@ import { join } from 'node:path';
 import type { RunMeta } from '../../../shared/types';
 import { ensureDir, readJson, writeJson } from './fs';
 import { getProjectPath, getRunPath } from './path';
+import { assertRunId } from './guard';
 
 let lastRunTime = 0;
 let runSeed = 0;
-const runIdPattern = /^(\d{14}|\d{17})$/;
 
 /**
  * 创建一次测试运行记录。
@@ -101,15 +101,6 @@ function createRunId() {
 
   // 同一毫秒内连续运行时追加序号，避免报告目录互相覆盖。
   return `${now}${String(runSeed).padStart(4, '0')}`;
-}
-
-/**
- * 校验运行编号，避免异常路径进入文件系统操作。
- */
-function assertRunId(runId: string) {
-  if (!runIdPattern.test(runId)) {
-    throw new Error('运行编号不合法');
-  }
 }
 
 /**

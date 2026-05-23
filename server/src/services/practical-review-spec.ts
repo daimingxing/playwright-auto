@@ -1,4 +1,5 @@
 import type { CaseStep } from '../../../shared/types';
+import { quoteText } from './code-literal';
 import { renderPracticalLocator } from './practical-review-locator';
 
 interface GenerateInput {
@@ -120,5 +121,5 @@ function renderTimeoutOption(step: CaseStep) {
 }
 
 function quote(value: string) {
-  return JSON.stringify(value);
+  return quoteText(value);
 }

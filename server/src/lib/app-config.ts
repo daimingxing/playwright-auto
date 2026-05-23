@@ -6,6 +6,11 @@ interface FileConfig {
   server?: {
     port?: unknown;
     dataRoot?: unknown;
+    corsOrigins?: unknown;
+  };
+  web?: {
+    origin?: unknown;
+    apiBase?: unknown;
   };
   runner?: {
     headlessWorkers?: unknown;
@@ -24,7 +29,12 @@ interface FileConfig {
 const DEFAULT_CONFIG = {
   server: {
     port: 3001,
-    dataRoot: 'data'
+    dataRoot: 'data',
+    corsOrigins: ['http://localhost:5173', 'http://127.0.0.1:5173']
+  },
+  web: {
+    origin: 'http://localhost:5173',
+    apiBase: ''
   },
   runner: {
     headlessWorkers: 4,
@@ -45,6 +55,10 @@ const DEFAULT_CONFIG = {
  */
 export function getAppConfig() {
   const fileConfig = readFileConfig();
+  const web = {
+    origin: readText(undefined, fileConfig.web?.origin, DEFAULT_CONFIG.web.origin),
+    apiBase: readText(process.env.VITE_API_BASE, fileConfig.web?.apiBase, DEFAULT_CONFIG.web.apiBase)
+  };
   const maxWorkers = readInt(process.env.PLAYWRIGHT_AUTO_MAX_WORKERS, fileConfig.runner?.maxWorkers, DEFAULT_CONFIG.runner.maxWorkers, 1, 64);
   const headlessWorkers = readInt(
     process.env.PLAYWRIGHT_AUTO_HEADLESS_WORKERS,
@@ -65,8 +79,14 @@ export function getAppConfig() {
   return {
     server: {
       port: readInt(process.env.PORT, fileConfig.server?.port, DEFAULT_CONFIG.server.port, 1, 65535),
-      dataRoot: readText(process.env.DATA_ROOT, fileConfig.server?.dataRoot, DEFAULT_CONFIG.server.dataRoot)
+      dataRoot: readText(process.env.DATA_ROOT, fileConfig.server?.dataRoot, DEFAULT_CONFIG.server.dataRoot),
+      corsOrigins: readList(
+        process.env.PLAYWRIGHT_AUTO_CORS_ORIGINS,
+        fileConfig.server?.corsOrigins,
+        [...DEFAULT_CONFIG.server.corsOrigins, web.origin]
+      )
     },
+    web,
     runner: {
       headlessWorkers,
       headedWorkers,
@@ -76,6 +96,47 @@ export function getAppConfig() {
       timeouts
     }
   };
+}
+
+/**
+ * 读取逗号分隔或数组形式的字符串列表。
+ */
+function readList(envValue: unknown, fileValue: unknown, defaultValue: string[]) {
+  const envList = parseListValue(envValue);
+
+  if (envList.length > 0) {
+    return uniqueList([...defaultValue, ...envList]);
+  }
+
+  const fileList = parseListValue(fileValue);
+
+  if (fileList.length > 0) {
+    return uniqueList([...defaultValue, ...fileList]);
+  }
+
+  return uniqueList(defaultValue);
+}
+
+/**
+ * 解析字符串列表配置值。
+ */
+function parseListValue(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === 'string' && Boolean(item.trim()));
+  }
+
+  if (typeof value === 'string') {
+    return value.split(',').map((item) => item.trim()).filter(Boolean);
+  }
+
+  return [];
+}
+
+/**
+ * 按首次出现顺序去重字符串列表。
+ */
+function uniqueList(values: string[]) {
+  return Array.from(new Set(values));
 }
 
 /**

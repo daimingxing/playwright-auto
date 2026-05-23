@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -23,6 +22,8 @@ import { getPracticalReviewWorkPath } from '../lib/path';
 import { getProjectAuthPath, hasProjectAuth } from './auth-session';
 import { generatePracticalReviewSpec } from './practical-review-spec';
 import { assertVendorBrowser, getVendorEnv } from './vendor-browser';
+import { spawnPlaywrightCli } from './playwright-cli';
+import { notFound } from '../lib/http-error';
 
 interface PracticalReviewInput {
   envKey?: string;
@@ -44,7 +45,7 @@ export async function runPracticalReview(projectKey: string, caseKey: string, in
   const env = project.envs.find((row) => row.key === envKey);
 
   if (!env) {
-    throw new Error('实测检查环境不存在');
+    throw notFound('实测检查环境不存在');
   }
 
   const startedAt = new Date().toISOString();
@@ -183,9 +184,8 @@ async function runReviewProcess(testDir: string, outputDir: string, storageState
       PLAYWRIGHT_HEADLESS: 'true',
       ...(storageState ? { PLAYWRIGHT_STORAGE_STATE: storageState } : {})
     };
-    const child = spawn('npx', ['playwright', 'test', '--config', 'playwright.config.ts'], {
+    const child = spawnPlaywrightCli(['test', '--config', 'playwright.config.ts'], {
       cwd: process.cwd(),
-      shell: true,
       stdio: ['ignore', 'pipe', 'pipe'],
       env: reviewEnv
     });

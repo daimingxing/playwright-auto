@@ -1,5 +1,4 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { createRequire } from 'node:module';
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -10,6 +9,8 @@ import { getProject } from '../lib/project-store';
 import { getProjectAuthPath, hasProjectAuth } from './auth-session';
 import { parseCodegenSpec } from './codegen-parser';
 import { assertVendorBrowser, getVendorEnv } from './vendor-browser';
+import { getPlaywrightCliPath } from './playwright-cli';
+import { badRequest, notFound } from '../lib/http-error';
 
 interface RecordSession {
   projectKey: string;
@@ -24,7 +25,6 @@ interface RecordInput {
 }
 
 const sessions = new Map<string, RecordSession>();
-const resolveModule = createRequire(import.meta.url).resolve;
 
 /**
  * 启动 Playwright codegen 录制会话。
@@ -36,7 +36,7 @@ export async function startRecordSession(projectKey: string, caseKey: string, in
   const envMeta = project.envs.find((env) => env.key === envKey);
 
   if (!envMeta) {
-    throw new Error('录制环境不存在');
+    throw notFound('录制环境不存在');
   }
 
   const sessionId = crypto.randomUUID();
@@ -97,7 +97,7 @@ export async function stopRecordSession(projectKey: string, caseKey: string, ses
   const session = sessions.get(sessionId);
 
   if (!session || session.projectKey !== projectKey || session.caseKey !== caseKey) {
-    throw new Error('录制会话不存在或已结束');
+    throw badRequest('录制会话不存在或已结束');
   }
 
   await stopChild(session.child);
@@ -138,16 +138,6 @@ async function stopChild(child: ChildProcess | undefined) {
       resolve();
     });
   });
-}
-
-/**
- * 获取当前系统可直接执行的 npx 命令。
- */
-/**
- * 获取当前项目安装的 Playwright CLI 入口。
- */
-function getPlaywrightCliPath() {
-  return resolveModule('@playwright/test/cli');
 }
 
 /**

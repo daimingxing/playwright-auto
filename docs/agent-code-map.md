@@ -11,7 +11,7 @@
 - 涉及后端 API 挂载：看 `server/src/app.ts`
 - 涉及具体后端接口：看 `server/src/routes/*`
 - 涉及业务流程：看 `server/src/services/*`
-- 涉及文件读写、路径、校验：看 `server/src/lib/*`
+- 涉及文件读写、路径、参数校验、HTTP 错误：看 `server/src/lib/*`
 - 涉及测试：按领域看 `tests/server/*`、`tests/web/*`、`tests/smoke/*`
 - 涉及存储的数据和playwright测试报告：`data/projects/*`
 
@@ -24,15 +24,20 @@
 - Playwright codegen 录制导入：`server/src/routes/record.ts`、`server/src/services/record-session.ts`、`server/src/services/codegen-parser.ts`
 - 运行项目与报告：`web/src/api/runs.ts`、`server/src/routes/runs.ts`、`server/src/services/runner.ts`、`server/src/lib/run-store.ts`
 - 登录态：`web/src/api/auth.ts`、`server/src/routes/auth.ts`、`server/src/services/auth-session.ts`
-- 本地应用配置和步骤默认等待时间：`playwright-auto.config.json`、`server/src/lib/app-config.ts`、`server/src/app.ts`、`web/src/api/projects.ts`
+- 本地应用配置、CORS 来源和步骤默认等待时间：`playwright-auto.config.json`、`server/src/lib/app-config.ts`、`server/src/app.ts`、`web/src/api/projects.ts`
 - 离线浏览器依赖：`server/src/services/vendor-browser.ts`、`server/src/services/browser-path.ts`、`scripts/install-browsers.mjs`
+- 路径参数校验和 HTTP 错误：`server/src/lib/guard.ts`、`server/src/lib/http-error.ts`、`server/src/lib/path.ts`、`server/src/app.ts`
+- Playwright CLI 子进程启动：`server/src/services/playwright-cli.ts`、`server/src/services/runner.ts`、`server/src/services/practical-review.ts`、`server/src/services/record-session.ts`
 
 ## 调用关系
 
 - 前端页面通过 `web/src/api/*` 调用 `/api/*`
 - Vite 开发代理在 `web/vite.config.ts` 中把 `/api` 转发到本地服务
 - 后端路由由 `server/src/app.ts` 统一挂载到 Express
+- `server/src/app.ts` 统一处理 CORS、Zod 参数错误、HTTP 错误状态码和兜底异常
 - 路由层只处理 HTTP 入参和响应，主要业务逻辑放在 `server/src/services/*` 或 `server/src/lib/*`
+- 路径函数在拼接文件系统路径前会调用 `guard.ts` 做最后校验
+- 运行、录制和实测检查都使用当前 Node 进程执行本地 Playwright CLI，避免经过 shell 解析
 - 持久化数据写入 `data/projects/<projectKey>/`
 - 生成的用例文件包含 `case.json` 和 `case.spec.ts`
 
@@ -43,5 +48,9 @@
 - 改用例步骤类型时，同步检查 `shared/types.ts`、`CaseEditor.vue`、`case-editor.ts`、`case-generator.ts`、`codegen-parser.ts` 和相关测试
 - 改用例步骤编辑交互或批量操作时，同步检查 `CaseEditor.vue`、`case-editor.ts` 和 `tests/web/case-editor.test.ts`
 - 改步骤默认等待时间配置时，同步检查 `playwright-auto.config.json`、`app-config.ts`、`web/src/api/projects.ts`、`CaseEditor.vue`、`codegen-parser.ts` 和相关测试
+- 改 `server.corsOrigins` 或本地服务来源限制时，同步检查 `playwright-auto.config.json`、`app-config.ts`、`app.ts`、`README.md` 和 `tests/server/api-projects.test.ts`
+- 改路径参数规则时，同步检查 `guard.ts`、`path.ts`、相关路由和 API 测试
+- 改错误状态码时，同步检查 `http-error.ts`、`app.ts`、前端错误提示和相关 API 测试
+- 改 Playwright 子进程启动策略时，同步检查 `playwright-cli.ts`、`runner.ts`、`practical-review.ts`、`record-session.ts` 和相关服务测试
 - 改运行报告时，同步检查 `runner.ts`、`run-store.ts`、`routes/runs.ts` 和 `tests/server/api-runs.test.ts`
 - 改登录态时，同步检查 `auth-session.ts`、`routes/auth.ts`、`RunCenter.vue` 和 `tests/server/api-auth.test.ts`

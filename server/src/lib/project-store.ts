@@ -6,6 +6,7 @@ import { ensureDir, readJson, writeJson } from './fs';
 import { getProjectPath, getProjectsRoot } from './path';
 import { expirePracticalReviewIfNeeded } from './practical-review-store';
 import { createEnvSchema, createProjectSchema, updateEnvSchema } from './schema';
+import { badRequest, conflict, notFound } from './http-error';
 
 interface CreateProjectInput {
   name: string;
@@ -25,7 +26,7 @@ export async function createProject(input: CreateProjectInput) {
   const basePath = getProjectPath(value.key);
 
   if (existsSync(basePath)) {
-    throw new Error('项目标识已存在');
+    throw conflict('项目标识已存在');
   }
 
   const now = new Date().toISOString();
@@ -58,7 +59,15 @@ export async function createProject(input: CreateProjectInput) {
  * 读取项目配置。
  */
 export async function getProject(projectKey: string) {
-  return readJson<ProjectMeta>(join(getProjectPath(projectKey), 'project.json'));
+  try {
+    return await readJson<ProjectMeta>(join(getProjectPath(projectKey), 'project.json'));
+  } catch (error) {
+    if (isMissingFile(error)) {
+      throw notFound('项目不存在');
+    }
+
+    throw error;
+  }
 }
 
 /**
@@ -81,7 +90,7 @@ export async function addProjectEnv(projectKey: string, input: CreateEnvInput) {
   const project = await getProject(projectKey);
 
   if (project.envs.some((env) => env.key === value.key)) {
-    throw new Error('环境标识已存在');
+    throw conflict('环境标识已存在');
   }
 
   return writeProject({
@@ -99,7 +108,7 @@ export async function updateProjectEnv(projectKey: string, envKey: string, input
   const index = project.envs.findIndex((env) => env.key === envKey);
 
   if (index < 0) {
-    throw new Error('环境不存在');
+    throw notFound('环境不存在');
   }
 
   const envs = [...project.envs];
@@ -127,11 +136,11 @@ export async function deleteProjectEnv(projectKey: string, envKey: string) {
   const project = await getProject(projectKey);
 
   if (envKey === 'default') {
-    throw new Error('默认环境不允许删除');
+    throw badRequest('默认环境不允许删除');
   }
 
   if (!project.envs.some((env) => env.key === envKey)) {
-    throw new Error('环境不存在');
+    throw notFound('环境不存在');
   }
 
   await writeProject({
@@ -202,4 +211,11 @@ async function expirePracticalReviewsForEnv(projectKey: string, envKey: string, 
       }
     })
   );
+}
+
+/**
+ * 判断是否为文件不存在错误。
+ */
+function isMissingFile(error: unknown) {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT';
 }

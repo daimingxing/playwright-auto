@@ -1,3 +1,5 @@
+import { quoteText } from './code-literal';
+
 /**
  * 规范化实测检查用的定位表达式。
  */
@@ -23,5 +25,5 @@ export function renderPracticalLocator(selector: string | undefined, pageName = 
 }
 
 function quote(value: string) {
-  return JSON.stringify(value);
+  return quoteText(value);
 }

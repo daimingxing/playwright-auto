@@ -20,6 +20,14 @@ npm run test:e2e
 - 本地服务：http://localhost:3001
 - 健康检查：http://localhost:3001/health
 
+## 本地配置
+
+- 配置文件：`playwright-auto.config.json`
+- `server.corsOrigins` 是配置文件中 `server` 对象下的字段，不是单独文件
+- 默认允许来源：`http://localhost:5173`、`http://127.0.0.1:5173`
+- 临时追加允许来源：`$env:PLAYWRIGHT_AUTO_CORS_ORIGINS='https://tool.example,http://localhost:5174'`
+- 改服务端配置后需要重启已有 Node 服务
+
 ## 命令约定
 
 - 默认不启动开发服务；只有用户明确要求时才运行 `npm run dev`

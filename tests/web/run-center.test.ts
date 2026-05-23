@@ -5,6 +5,7 @@ import {
   formatPracticalReviewStatus,
   formatPracticalReviewTime,
   getPracticalReviewTagType,
+  getReportUrl,
   getRunButtonText,
   getSelectedCases,
   mergeSelectedCaseKeys
@@ -74,6 +75,18 @@ describe('运行中心实测检查展示工具', () => {
     expect(formatPracticalReviewStatus(undefined)).toBe('未审查');
     expect(formatPracticalReviewStatus(makeRunCenterSummary('passed'))).toBe('通过');
     expect(getPracticalReviewTagType(makeRunCenterSummary('failed'))).toBe('danger');
+  });
+});
+
+describe('运行中心报告地址', () => {
+  it('报告地址使用统一 API 地址解析', () => {
+    const url = getReportUrl('/api/projects/crm/runs/run-1/report/', 'http://localhost:3001');
+
+    expect(url).toBe('http://localhost:3001/api/projects/crm/runs/run-1/report/');
+  });
+
+  it('空报告地址保持为空', () => {
+    expect(getReportUrl('', 'http://localhost:3001')).toBe('');
   });
 });
 

@@ -5,6 +5,7 @@ import type { AuthState } from '../../../shared/types';
 import { writeJson } from '../lib/fs';
 import { getProjectPath } from '../lib/path';
 import { getProject } from '../lib/project-store';
+import { badRequest, notFound } from '../lib/http-error';
 import { getBrowserPath } from './browser-path';
 import { assertVendorBrowser } from './vendor-browser';
 
@@ -122,7 +123,7 @@ export async function saveLoginSession(projectKey: string, sessionId: string) {
   const session = sessions.get(sessionId);
 
   if (!session || session.projectKey !== projectKey) {
-    throw new Error('登录会话不存在或已过期');
+    throw badRequest('登录会话不存在或已过期');
   }
 
   const statePath = getProjectAuthPath(projectKey, session.envKey);
@@ -158,7 +159,7 @@ async function getAuthEnv(projectKey: string, envKey?: string) {
   const envMeta = project.envs.find((item) => item.key === key);
 
   if (!envMeta) {
-    throw new Error('登录环境不存在');
+    throw notFound('登录环境不存在');
   }
 
   return {

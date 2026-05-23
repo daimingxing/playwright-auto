@@ -103,9 +103,10 @@ describe('运行服务', () => {
     await runProject('crm', { envKey: 'pre' });
 
     expect(spawnMock).toHaveBeenCalledWith(
-      'npx',
-      expect.any(Array),
+      process.execPath,
+      expect.arrayContaining(['test', '--config', 'playwright.config.ts']),
       expect.objectContaining({
+        shell: false,
         env: expect.objectContaining({
           PLAYWRIGHT_STORAGE_STATE: getProjectAuthPath('crm', 'pre')
         })
@@ -141,9 +142,10 @@ describe('运行服务', () => {
 
     expect(run.envKey).toBe('pre');
     expect(spawnMock).toHaveBeenCalledWith(
-      'npx',
-      expect.any(Array),
+      process.execPath,
+      expect.arrayContaining(['test', '--config', 'playwright.config.ts']),
       expect.objectContaining({
+        shell: false,
         env: expect.objectContaining({
           PLAYWRIGHT_BASE_URL: 'https://pre.crm.test.local'
         })
@@ -233,17 +235,16 @@ describe('运行服务', () => {
     await runProject('crm');
 
     expect(spawnMock).toHaveBeenCalledWith(
-      'npx',
-      [
-        'playwright',
+      process.execPath,
+      expect.arrayContaining([
         'test',
         '--config',
         'playwright.config.ts',
         '--workers',
         '4',
         `.*crm.*cases.*${item.key}.*case\\.spec\\.ts`
-      ],
-      expect.objectContaining({ cwd: process.cwd() })
+      ]),
+      expect.objectContaining({ cwd: process.cwd(), shell: false })
     );
   });
 
@@ -271,17 +272,17 @@ describe('运行服务', () => {
     });
 
     expect(spawnMock).toHaveBeenCalledWith(
-      'npx',
-      [
-        'playwright',
+      process.execPath,
+      expect.arrayContaining([
         'test',
         '--config',
         'playwright.config.ts',
         '--workers',
         '2',
         `.*crm.*cases.*${item.key}.*case\\.spec\\.ts`
-      ],
+      ]),
       expect.objectContaining({
+        shell: false,
         env: expect.objectContaining({
           PLAYWRIGHT_HEADLESS: 'false'
         })
@@ -314,17 +315,16 @@ describe('运行服务', () => {
     });
 
     expect(spawnMock).toHaveBeenCalledWith(
-      'npx',
-      [
-        'playwright',
+      process.execPath,
+      expect.arrayContaining([
         'test',
         '--config',
         'playwright.config.ts',
         '--workers',
         '12',
         `.*crm.*cases.*${item.key}.*case\\.spec\\.ts`
-      ],
-      expect.any(Object)
+      ]),
+      expect.objectContaining({ shell: false })
     );
   });
 

@@ -17,6 +17,8 @@ afterEach(async () => {
   delete process.env.PLAYWRIGHT_AUTO_HEADLESS_WORKERS;
   delete process.env.PLAYWRIGHT_AUTO_HEADED_WORKERS;
   delete process.env.PLAYWRIGHT_AUTO_MAX_WORKERS;
+  delete process.env.PLAYWRIGHT_AUTO_CORS_ORIGINS;
+  delete process.env.VITE_API_BASE;
   await rm(root, { recursive: true, force: true });
 });
 
@@ -27,7 +29,12 @@ describe('应用配置', () => {
     expect(getAppConfig()).toEqual({
       server: {
         port: 3001,
-        dataRoot: 'data'
+        dataRoot: 'data',
+        corsOrigins: ['http://localhost:5173', 'http://127.0.0.1:5173']
+      },
+      web: {
+        origin: 'http://localhost:5173',
+        apiBase: ''
       },
       runner: {
         headlessWorkers: 4,
@@ -48,7 +55,12 @@ describe('应用配置', () => {
     await writeConfig({
       server: {
         port: 3100,
-        dataRoot: 'custom-data'
+        dataRoot: 'custom-data',
+        corsOrigins: ['https://tool.example']
+      },
+      web: {
+        origin: 'https://ui.example',
+        apiBase: 'https://api.example'
       },
       runner: {
         headlessWorkers: 12,
@@ -68,7 +80,12 @@ describe('应用配置', () => {
     expect(getAppConfig()).toEqual({
       server: {
         port: 3100,
-        dataRoot: 'custom-data'
+        dataRoot: 'custom-data',
+        corsOrigins: ['http://localhost:5173', 'http://127.0.0.1:5173', 'https://ui.example', 'https://tool.example']
+      },
+      web: {
+        origin: 'https://ui.example',
+        apiBase: 'https://api.example'
       },
       runner: {
         headlessWorkers: 12,
@@ -109,12 +126,19 @@ describe('应用配置', () => {
     process.env.PLAYWRIGHT_AUTO_HEADLESS_WORKERS = '20';
     process.env.PLAYWRIGHT_AUTO_HEADED_WORKERS = '3';
     process.env.PLAYWRIGHT_AUTO_MAX_WORKERS = '24';
+    process.env.PLAYWRIGHT_AUTO_CORS_ORIGINS = 'https://env.example';
+    process.env.VITE_API_BASE = 'https://env-api.example';
     const { getAppConfig } = await importFreshConfig();
 
     expect(getAppConfig()).toEqual({
       server: {
         port: 3200,
-        dataRoot: 'env-data'
+        dataRoot: 'env-data',
+        corsOrigins: ['http://localhost:5173', 'http://127.0.0.1:5173', 'https://env.example']
+      },
+      web: {
+        origin: 'http://localhost:5173',
+        apiBase: 'https://env-api.example'
       },
       runner: {
         headlessWorkers: 20,

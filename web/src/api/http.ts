@@ -48,13 +48,13 @@ export async function downloadFile(url: string, fileName: string) {
 /**
  * 解析本地 API 地址。
  */
-export function resolveApiUrl(url: string) {
+export function resolveApiUrl(url: string, apiBase = import.meta.env.VITE_API_BASE ?? '') {
   if (/^https?:\/\//.test(url)) {
     return url;
   }
 
   if (url.startsWith('/api') || url === '/health') {
-    return `http://localhost:3001${url}`;
+    return apiBase ? `${apiBase.replace(/\/$/, '')}${url}` : url;
   }
 
   return url;

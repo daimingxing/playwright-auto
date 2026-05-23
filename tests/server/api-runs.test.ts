@@ -73,6 +73,15 @@ describe('运行报告接口', () => {
     expect(res.text).toContain('报告');
   });
 
+  it('拒绝非法运行报告路径参数', async () => {
+    const app = createApp();
+
+    const res = await request(app).get('/api/projects/crm/runs/bad-run/report');
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toContain('运行标识不合法');
+  });
+
   it('可以通过接口打开 Playwright HTML 报告静态资源', async () => {
     const app = createApp();
     const run = await createRun('crm', 'default');

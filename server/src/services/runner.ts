@@ -1,4 +1,3 @@
-import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { createRun, updateRun } from '../lib/run-store';
 import { getProjectPath, getRunPath } from '../lib/path';
@@ -8,6 +7,8 @@ import type { RunConfig, RunInput } from '../../../shared/types';
 import { getProjectAuthPath, hasProjectAuth } from './auth-session';
 import { assertVendorBrowser, getVendorEnv } from './vendor-browser';
 import { getAppConfig } from '../lib/app-config';
+import { spawnPlaywrightCli } from './playwright-cli';
+import { badRequest, notFound } from '../lib/http-error';
 
 interface RunProjectInput extends RunInput {
   storageState?: string;
@@ -38,11 +39,11 @@ export async function runProject(projectKey: string, input: RunProjectInput = {}
   const files = await getProjectRunFiles(projectKey, input.caseKeys);
 
   if (!envMeta) {
-    throw new Error('运行环境不存在');
+    throw notFound('运行环境不存在');
   }
 
   if (files.length === 0) {
-    throw new Error('当前项目没有可运行用例');
+    throw badRequest('当前项目没有可运行用例');
   }
 
   const run = await createRun(projectKey, envKey);
@@ -68,8 +69,7 @@ export async function runProject(projectKey: string, input: RunProjectInput = {}
   try {
     await new Promise<void>((resolve, reject) => {
     let output = '';
-    const child = spawn('npx', [
-      'playwright',
+    const child = spawnPlaywrightCli([
       'test',
       '--config',
       'playwright.config.ts',
@@ -79,7 +79,6 @@ export async function runProject(projectKey: string, input: RunProjectInput = {}
     ], {
       cwd: process.cwd(),
       env,
-      shell: true,
       stdio: ['ignore', 'pipe', 'pipe']
     });
 
@@ -149,7 +148,7 @@ export function getRunConfig(): RunConfig {
  */
 export async function getProjectRunFiles(projectKey: string, caseKeys?: string[]) {
   if (caseKeys && caseKeys.length === 0) {
-    throw new Error('请选择至少一条测试用例');
+    throw badRequest('请选择至少一条测试用例');
   }
 
   const cases = await listCases(projectKey);
@@ -157,7 +156,7 @@ export async function getProjectRunFiles(projectKey: string, caseKeys?: string[]
   const selectedCases = selectedKeys ? cases.filter((item) => selectedKeys.has(item.key)) : cases;
 
   if (selectedKeys && selectedCases.length !== selectedKeys.size) {
-    throw new Error('选择的测试用例不存在或已被删除');
+    throw badRequest('选择的测试用例不存在或已被删除');
   }
 
   return selectedCases.map((item) => {

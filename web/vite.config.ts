@@ -1,6 +1,9 @@
 import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import { resolve } from 'node:path';
+import { getAppConfig } from '../server/src/lib/app-config';
+
+const appConfig = getAppConfig();
 
 export default defineConfig({
   plugins: [vue()],
@@ -18,8 +21,33 @@ export default defineConfig({
       '@': resolve(process.cwd(), 'web/src')
     }
   },
+  define: {
+    'import.meta.env.VITE_API_BASE': JSON.stringify(process.env.VITE_API_BASE ?? appConfig.web.apiBase)
+  },
   build: {
     outDir: resolve(process.cwd(), 'dist/web'),
-    emptyOutDir: true
+    emptyOutDir: true,
+    chunkSizeWarningLimit: 900,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          const name = id.replace(/\\/g, '/');
+
+          if (name.includes('node_modules/element-plus') || name.includes('node_modules/@element-plus')) {
+            return 'element-vendor';
+          }
+
+          if (name.includes('node_modules/vue') || name.includes('node_modules/vue-router') || name.includes('node_modules/pinia')) {
+            return 'vue-vendor';
+          }
+
+          if (name.includes('node_modules')) {
+            return 'vendor';
+          }
+
+          return undefined;
+        }
+      }
+    }
   }
 });

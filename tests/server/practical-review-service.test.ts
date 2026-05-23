@@ -177,7 +177,10 @@ describe('实测检查服务', () => {
 
     const args = spawnMock.mock.calls[0][1] as string[];
     const options = spawnMock.mock.calls[0][2] as { env: Record<string, string> };
-    expect(args).toEqual(['playwright', 'test', '--config', 'playwright.config.ts']);
+    expect(spawnMock.mock.calls[0][0]).toBe(process.execPath);
+    expect(args[0]).toContain('@playwright');
+    expect(args).toEqual(expect.arrayContaining(['test', '--config', 'playwright.config.ts']));
+    expect(spawnMock.mock.calls[0][2]).toEqual(expect.objectContaining({ shell: false }));
     expect(options.env.PLAYWRIGHT_TEST_DIR).toContain('reviews\\work\\');
     expect(options.env.PLAYWRIGHT_TEST_MATCH).toBe('practical-review.spec.ts');
     expect(options.env.PLAYWRIGHT_AUTO_OUTPUT).toContain('playwright-output');

@@ -49,6 +49,20 @@ describe('用例接口', () => {
     expect(trash.body).toHaveLength(1);
   });
 
+  it('拒绝非法用例路径参数', async () => {
+    const app = createApp();
+    await request(app).post('/api/projects').send({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+
+    const res = await request(app).get('/api/projects/crm/cases/CASE');
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toContain('用例标识不合法');
+  });
+
   it('可以下载单条测试用例压缩包', async () => {
     const app = createApp();
     await request(app).post('/api/projects').send({

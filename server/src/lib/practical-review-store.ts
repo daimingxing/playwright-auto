@@ -5,8 +5,7 @@ import { join } from 'node:path';
 import type { CaseMeta, PracticalReviewRecord, PracticalReviewSummary } from '../../../shared/types';
 import { ensureDir, readJson, writeJson } from './fs';
 import { getCasePath, getPracticalReviewPath, getPracticalReviewsPath } from './path';
-
-const reviewIdPattern = /^[a-z0-9-]{1,80}$/;
+import { assertReviewId } from './guard';
 
 /**
  * 创建实测检查记录编号。
@@ -149,12 +148,6 @@ export async function cleanupPracticalReviews(
       }
     })
   );
-}
-
-function assertReviewId(reviewId: string) {
-  if (!reviewIdPattern.test(reviewId)) {
-    throw new Error('实测检查编号不合法');
-  }
 }
 
 function pad(value: number) {
