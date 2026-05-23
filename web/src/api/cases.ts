@@ -52,6 +52,15 @@ export function createCase(projectKey: string, input: CreateCaseInput) {
 }
 
 /**
+ * 复制测试用例。
+ */
+export function copyCase(projectKey: string, caseKey: string) {
+  return requestJson<CaseMeta>(`/api/projects/${projectKey}/cases/${caseKey}/copy`, {
+    method: 'POST'
+  });
+}
+
+/**
  * 删除测试用例到回收站。
  */
 export function deleteCase(projectKey: string, caseKey: string) {

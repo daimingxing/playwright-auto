@@ -651,17 +651,21 @@ onMounted(async () => {
 
 .report-actions :deep(.delete-report-btn) {
   margin-left: auto;
-  width: 24px;
-  min-width: 24px;
-  height: 24px;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
   padding: 0;
-  border-radius: 6px;
+  border-radius: 7px;
   box-shadow: 0 1px 6px rgba(220, 38, 38, 0.22);
+}
+
+.report-actions :deep(.delete-report-btn .el-icon) {
+  font-size: 16px;
 }
 
 .report-actions :deep(.delete-report-btn:not(.is-disabled):hover),
 .report-actions :deep(.delete-report-btn:not(.is-disabled):focus-visible) {
-  box-shadow: 0 1px 6px rgba(220, 38, 38, 0.22);
+  box-shadow: 0 3px 10px rgba(220, 38, 38, 0.28);
   transform: none;
 }
 

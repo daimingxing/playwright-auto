@@ -1,10 +1,17 @@
 <script setup lang="ts">
 import { ElMessage, ElMessageBox } from "element-plus";
-import { Back, Delete, Download, EditPen } from "@element-plus/icons-vue";
+import {
+  Back,
+  CopyDocument,
+  Delete,
+  Download,
+  EditPen,
+} from "@element-plus/icons-vue";
 import { onMounted, reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import type { CaseMeta } from "../../../shared/types";
 import {
+  copyCase,
   createCase,
   deleteCase,
   exportCase,
@@ -73,6 +80,19 @@ async function exportItem(item: CaseMeta) {
   try {
     await exportCase(projectKey, item.key);
     ElMessage.success("已开始下载测试用例");
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error));
+  }
+}
+
+/**
+ * 复制单条测试用例。
+ */
+async function copyItem(item: CaseMeta) {
+  try {
+    await copyCase(projectKey, item.key);
+    await loadData();
+    ElMessage.success("已复制用例");
   } catch (error) {
     ElMessage.error(getErrorMessage(error));
   }
@@ -149,7 +169,19 @@ onMounted(loadData);
         <div class="table-wrap">
           <!-- 主表保留更大的最小宽度，确保在窄窗口下真实产生横向溢出。 -->
           <el-table class="case-table" :data="cases" border height="100%">
-            <el-table-column prop="name" label="用例名称" min-width="220" />
+            <el-table-column prop="name" label="用例名称" min-width="220">
+              <template #default="{ row }">
+                <span
+                  class="case-name-link"
+                  title="双击编辑用例"
+                  @dblclick="
+                    router.push(`/projects/${projectKey}/cases/${row.key}`)
+                  "
+                >
+                  {{ row.name }}
+                </span>
+              </template>
+            </el-table-column>
             <el-table-column
               prop="startPath"
               label="起始路径"
@@ -174,28 +206,37 @@ onMounted(loadData);
                 {{ formatPracticalReviewTime(row.practicalReview) }}
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="260">
+            <el-table-column label="操作" width="180">
               <template #default="{ row }">
                 <div class="row-actions btn-shadow-sm">
                   <el-button
-                    class="edit-btn"
+                    class="icon-btn edit-btn"
                     size="small"
                     :icon="EditPen"
+                    title="编辑用例"
+                    aria-label="编辑用例"
                     @click="
                       router.push(`/projects/${projectKey}/cases/${row.key}`)
                     "
-                  >
-                    编辑
-                  </el-button>
+                  />
                   <el-button
-                    class="export-btn"
+                    class="icon-btn copy-btn"
+                    size="small"
+                    :icon="CopyDocument"
+                    title="复制用例"
+                    aria-label="复制用例"
+                    @click="copyItem(row)"
+                  />
+                  <el-button
+                    class="icon-btn export-btn"
                     size="small"
                     :icon="Download"
+                    title="导出用例"
+                    aria-label="导出用例"
                     @click="exportItem(row)"
-                    >导出</el-button
-                  >
+                  />
                   <el-button
-                    class="delete-btn"
+                    class="icon-btn delete-btn"
                     size="small"
                     type="danger"
                     :icon="Delete"
@@ -225,15 +266,18 @@ onMounted(loadData);
             <el-table-column prop="key" label="目录编号" min-width="160" />
             <el-table-column label="操作" width="260">
               <template #default="{ row }">
-                <el-button size="small" @click="restoreItem(row)"
-                  >恢复</el-button
-                >
-                <el-button
-                  size="small"
-                  type="danger"
-                  @click="removeTrashItem(row)"
-                  >彻底删除</el-button
-                >
+                <div class="trash-actions btn-shadow-sm">
+                  <el-button size="small" @click="restoreItem(row)"
+                    >恢复</el-button
+                  >
+                  <el-button
+                    class="hard-delete-btn"
+                    size="small"
+                    type="danger"
+                    @click="removeTrashItem(row)"
+                    >彻底删除</el-button
+                  >
+                </div>
               </template>
             </el-table-column>
           </el-table>
@@ -335,16 +379,32 @@ onMounted(loadData);
   display: flex;
   align-items: center;
   width: 100%;
-  gap: 12px;
+  gap: 8px;
 }
 
 .row-actions :deep(.el-button) {
   margin-left: 0;
-  border: none;
-  color: #ffffff;
+}
+
+.row-actions :deep(.icon-btn) {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 7px;
+}
+
+.row-actions :deep(.icon-btn:not(.is-disabled):hover),
+.row-actions :deep(.icon-btn:not(.is-disabled):focus-visible) {
+  transform: none;
+}
+
+.row-actions :deep(.icon-btn .el-icon) {
+  font-size: 16px;
 }
 
 .row-actions :deep(.edit-btn) {
+  color: #ffffff;
   border: 1px solid #409eff;
   background: #409eff;
 }
@@ -356,32 +416,64 @@ onMounted(loadData);
   background: #66b1ff;
 }
 
+.row-actions :deep(.copy-btn) {
+  color: #6b7a90;
+  border: 1px solid #c9d2dc;
+  background: #f7f9fc;
+}
+
+.row-actions :deep(.copy-btn:hover),
+.row-actions :deep(.copy-btn:focus-visible) {
+  color: #5c6a80;
+  border-color: #b8c4d1;
+  background: #eef3f8;
+}
+
 .row-actions :deep(.export-btn) {
-  color: #606266;
-  border: 1px solid #dcdfe6;
-  background: #ffffff;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
 }
 
 .row-actions :deep(.export-btn:hover),
 .row-actions :deep(.export-btn:focus-visible) {
-  color: #409eff;
-  border-color: #c6e2ff;
-  background: #ecf5ff;
+  color: #1f4f7a;
+  border-color: #93c5fd;
+  background: #eff6ff;
 }
 
 .row-actions :deep(.delete-btn) {
   margin-left: auto;
-  width: 24px;
-  min-width: 24px;
-  height: 24px;
-  padding: 0;
-  border-radius: 6px;
+  color: #ffffff;
   box-shadow: 0 1px 6px rgba(220, 38, 38, 0.22);
 }
 
 .row-actions :deep(.delete-btn:hover),
 .row-actions :deep(.delete-btn:focus-visible) {
   box-shadow: 0 3px 10px rgba(220, 38, 38, 0.28);
+}
+
+.case-name-link {
+  cursor: pointer;
+}
+
+.case-name-link:hover {
+  color: #315f8f;
+}
+
+.trash-actions {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 8px;
+}
+
+.trash-actions :deep(.el-button) {
+  margin-left: 0;
+}
+
+.trash-actions :deep(.hard-delete-btn) {
+  margin-left: auto;
 }
 
 .case-table {

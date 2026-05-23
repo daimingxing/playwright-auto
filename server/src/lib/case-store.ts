@@ -40,6 +40,30 @@ export async function createCase(projectKey: string, input: CreateCaseInput) {
 }
 
 /**
+ * 复制已有用例为新的独立用例。
+ */
+export async function copyCase(projectKey: string, caseKey: string) {
+  const source = await getCase(projectKey, caseKey);
+  const nextKey = await getNextCaseKey(projectKey);
+  const now = new Date().toISOString();
+  const item: CaseMeta = {
+    name: await getCopyName(projectKey, source.name),
+    key: nextKey,
+    startPath: source.startPath,
+    steps: source.steps,
+    createdAt: now,
+    updatedAt: now
+  };
+  item.review = reviewCase(item);
+
+  await ensureDir(getCasePath(projectKey, nextKey));
+  await writeJson(join(getCasePath(projectKey, nextKey), 'case.json'), item);
+  await writeSpec(projectKey, item);
+
+  return item;
+}
+
+/**
  * 读取项目下的可用用例。
  */
 export async function listCases(projectKey: string) {
@@ -195,6 +219,29 @@ async function getAllCaseKeys(projectKey: string, source?: { group: 'cases' | 't
   }
 
   return keys;
+}
+
+/**
+ * 生成不会和当前用例列表重名的副本名称。
+ */
+async function getCopyName(projectKey: string, name: string) {
+  const names = new Set((await listCases(projectKey)).map((item) => item.name));
+  const baseName = `${name} 副本`;
+
+  if (!names.has(baseName)) {
+    return baseName;
+  }
+
+  // 基础副本名已占用时，从 2 开始保持常见副本命名习惯。
+  let index = 2;
+  let nextName = `${baseName} ${index}`;
+
+  while (names.has(nextName)) {
+    index += 1;
+    nextName = `${baseName} ${index}`;
+  }
+
+  return nextName;
 }
 
 /**
