@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowRight, Delete, InfoFilled, Back } from '@element-plus/icons-vue';
+import { ArrowRight, Delete, InfoFilled, Back, RefreshRight } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -44,6 +44,7 @@ const runError = ref('');
 const reports = ref<RunMeta[]>([]);
 const cases = ref<CaseMeta[]>([]);
 const selectedCaseKeys = ref<string[]>([]);
+const refreshingReports = ref(false);
 
 /**
  * 加载项目环境配置。
@@ -64,6 +65,25 @@ async function loadProject() {
  */
 async function loadReports() {
   reports.value = await listRuns(projectKey);
+}
+
+/**
+ * 刷新测试报告列表，并触发刷新图标旋转动画。
+ */
+async function refreshReports() {
+  if (refreshingReports.value) {
+    return;
+  }
+
+  refreshingReports.value = true;
+
+  try {
+    await loadReports();
+  } finally {
+    window.setTimeout(() => {
+      refreshingReports.value = false;
+    }, 480);
+  }
 }
 
 /**
@@ -455,7 +475,10 @@ onMounted(async () => {
         <template #header>
           <div class="card-header">
             <span>测试报告</span>
-            <el-button text @click="loadReports">刷新</el-button>
+            <el-button text class="refresh-btn" @click="refreshReports">
+              <el-icon :class="{ 'is-spinning': refreshingReports }"><RefreshRight /></el-icon>
+              <span>刷新</span>
+            </el-button>
           </div>
         </template>
         <div class="table-wrap">
@@ -474,9 +497,19 @@ onMounted(async () => {
             <el-table-column prop="createdAt" label="创建时间" min-width="190" />
             <el-table-column label="操作" width="260">
               <template #default="{ row }">
-                <el-button size="small" @click="openRunReport(row)">打开</el-button>
-                <el-button size="small" @click="exportReport(row)">导出</el-button>
-                <el-button size="small" type="danger" @click="removeReport(row)">删除</el-button>
+                <div class="report-actions btn-shadow-sm">
+                  <el-button class="open-btn" size="small" type="primary" @click="openRunReport(row)">打开</el-button>
+                  <el-button size="small" @click="exportReport(row)">导出</el-button>
+                  <el-button
+                    class="delete-report-btn"
+                    size="small"
+                    type="danger"
+                    :icon="Delete"
+                    title="删除测试报告"
+                    aria-label="删除测试报告"
+                    @click="removeReport(row)"
+                  />
+                </div>
               </template>
             </el-table-column>
           </el-table>
@@ -596,6 +629,42 @@ onMounted(async () => {
   justify-content: space-between;
 }
 
+.report-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.report-actions :deep(.el-button) {
+  margin-left: 0;
+}
+
+.report-actions :deep(.el-button:not(.is-disabled):hover),
+.report-actions :deep(.el-button:not(.is-disabled):focus-visible) {
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+  transform: none;
+}
+
+.report-actions :deep(.open-btn) {
+  border-color: #409eff;
+}
+
+.report-actions :deep(.delete-report-btn) {
+  margin-left: auto;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 6px;
+  box-shadow: 0 1px 6px rgba(220, 38, 38, 0.22);
+}
+
+.report-actions :deep(.delete-report-btn:not(.is-disabled):hover),
+.report-actions :deep(.delete-report-btn:not(.is-disabled):focus-visible) {
+  box-shadow: 0 1px 6px rgba(220, 38, 38, 0.22);
+  transform: none;
+}
+
 .report-path {
   color: #606266;
   min-width: 0;
@@ -614,11 +683,47 @@ onMounted(async () => {
   justify-content: space-between;
 }
 
+.refresh-btn {
+  --el-button-hover-bg-color: transparent;
+  --el-button-active-bg-color: transparent;
+  --el-button-focus-bg-color: transparent;
+  gap: 6px;
+}
+
+.refresh-btn.el-button.is-text:not(.is-disabled):hover,
+.refresh-btn.el-button.is-text:not(.is-disabled):focus-visible,
+.refresh-btn.el-button.is-text:not(.is-disabled):active {
+  background-color: transparent;
+}
+
+.refresh-btn :deep(.el-icon) {
+  transition: transform 0.22s ease;
+}
+
+.refresh-btn:not(.is-disabled):hover :deep(.el-icon),
+.refresh-btn:not(.is-disabled):focus-visible :deep(.el-icon) {
+  transform: rotate(-36deg);
+}
+
+.refresh-btn :deep(.is-spinning) {
+  animation: refresh-spin 0.48s ease;
+}
+
 .table-wrap {
   flex: 1;
   min-height: 0;
   overflow: auto;
   padding-right: 4px;
+}
+
+@keyframes refresh-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (max-width: 820px) {
