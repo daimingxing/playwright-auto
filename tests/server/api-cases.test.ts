@@ -263,6 +263,78 @@ describe('用例接口', () => {
     expect(list.body[0].review.summary.error).toBe(1);
   });
 
+  it('通过接口复制用例并生成新的用例编号和副本名称', async () => {
+    process.env.NODE_ENV = 'test';
+    const app = createApp();
+    await request(app).post('/api/projects').send({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    const created = await request(app).post('/api/projects/crm/cases').send({
+      name: '创建订单',
+      startPath: '/orders/create'
+    });
+    const saved = await request(app)
+      .put(`/api/projects/crm/cases/${created.body.key}`)
+      .send({
+        ...created.body,
+        steps: [
+          {
+            id: 's1',
+            type: 'click',
+            selector: "getByRole('button', { name: '保存' })"
+          }
+        ],
+      });
+    const checked = await request(app)
+      .post(`/api/projects/crm/cases/${created.body.key}/practical-reviews`)
+      .send({ envKey: 'default' });
+
+    const copied = await request(app).post(`/api/projects/crm/cases/${created.body.key}/copy`);
+
+    expect(saved.status).toBe(200);
+    expect(checked.status).toBe(201);
+    expect(copied.status).toBe(201);
+    expect(copied.body.key).toMatch(caseKeyPattern);
+    expect(copied.body.key).not.toBe(created.body.key);
+    expect(copied.body.name).toBe('创建订单 副本');
+    expect(copied.body.startPath).toBe('/orders/create');
+    expect(copied.body.steps).toEqual([
+      {
+        id: 's1',
+        type: 'click',
+        selector: "getByRole('button', { name: '保存' })"
+      }
+    ]);
+    expect(copied.body.practicalReview).toBeUndefined();
+
+    const list = await request(app).get('/api/projects/crm/cases');
+    expect(list.body.map((item: { name: string }) => item.name).sort()).toEqual(['创建订单', '创建订单 副本']);
+  });
+
+  it('复制用例时会避开已有副本名称', async () => {
+    const app = createApp();
+    await request(app).post('/api/projects').send({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    const source = await request(app).post('/api/projects/crm/cases').send({
+      name: '创建订单',
+      startPath: '/orders/create'
+    });
+    await request(app).post('/api/projects/crm/cases').send({
+      name: '创建订单 副本',
+      startPath: '/orders/copy'
+    });
+
+    const copied = await request(app).post(`/api/projects/crm/cases/${source.body.key}/copy`);
+
+    expect(copied.status).toBe(201);
+    expect(copied.body.name).toBe('创建订单 副本 2');
+  });
+
   it('可以触发用例实测检查并读取历史记录和详情', async () => {
     process.env.NODE_ENV = 'test';
     const app = createApp();

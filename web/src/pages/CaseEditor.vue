@@ -1127,10 +1127,38 @@ onMounted(loadCase);
 
 .row-actions {
   display: flex;
-  gap: 4px;
+  gap: 6px;
   align-items: center;
   justify-content: center;
   flex-wrap: nowrap;
+}
+
+.row-actions :deep(.el-button.is-circle) {
+  width: 30px;
+  height: 30px;
+  border: 1px solid transparent;
+  color: #64748b;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    color 160ms ease;
+}
+
+.row-actions :deep(.el-button.is-circle .el-icon) {
+  font-size: 17px;
+}
+
+.row-actions :deep(.el-button.is-circle:not(.is-disabled):hover),
+.row-actions :deep(.el-button.is-circle:not(.is-disabled):focus-visible) {
+  color: #2563eb;
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.08);
+}
+
+.row-actions :deep(.el-button.is-circle.is-disabled) {
+  color: #cbd5e1;
 }
 
 .field-empty {

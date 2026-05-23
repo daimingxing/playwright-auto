@@ -605,17 +605,22 @@ onMounted(loadProjects);
 .card-actions :deep(.delete-project) {
   flex: 0 0 auto;
   margin-left: auto;
-  width: 28px;
-  height: 28px;
-  min-width: 28px;
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
   padding: 0;
-  border-radius: 6px;
+  border-radius: 7px;
   box-shadow: 0 1px 6px rgba(220, 38, 38, 0.22);
+}
+
+.card-actions :deep(.delete-project .el-icon) {
+  font-size: 16px;
 }
 
 .card-actions :deep(.delete-project:not(.is-disabled):hover),
 .card-actions :deep(.delete-project:not(.is-disabled):focus-visible) {
   box-shadow: 0 3px 10px rgba(220, 38, 38, 0.28);
+  transform: none;
 }
 
 .env-layout {

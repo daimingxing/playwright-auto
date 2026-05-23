@@ -1,6 +1,7 @@
 import { rm } from 'node:fs/promises';
 import { Router } from 'express';
 import {
+  copyCase,
   createCase,
   deleteCase,
   getCase,
@@ -43,6 +44,14 @@ casesRouter.post<ProjectParams>('/', async (req, res, next) => {
   try {
     const item = await createCase(req.params.projectKey, req.body);
     res.status(201).json(item);
+  } catch (error) {
+    next(error);
+  }
+});
+
+casesRouter.post<CaseParams>('/:caseKey/copy', async (req, res, next) => {
+  try {
+    res.status(201).json(await copyCase(req.params.projectKey, req.params.caseKey));
   } catch (error) {
     next(error);
   }
