@@ -340,10 +340,10 @@ onMounted(loadProjects);
     <el-dialog v-model="dialogOpen" title="新建测试项目" width="520px">
       <el-form label-width="90px">
         <el-form-item label="项目名称">
-          <el-input v-model="form.name" placeholder="例如：CRM 系统" />
+          <el-input v-model="form.name" placeholder="管理系统" />
         </el-form-item>
         <el-form-item label="项目标识">
-          <el-input v-model="form.key" placeholder="例如：crm" />
+          <el-input v-model="form.key" placeholder="例如：imms" />
         </el-form-item>
         <el-form-item label="环境名称">
           <el-input v-model="form.envName" placeholder="不填则使用：默认环境" />

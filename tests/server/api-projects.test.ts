@@ -42,6 +42,15 @@ describe('项目接口', () => {
     expect(res.headers['access-control-allow-origin']).toBe('https://tool.example');
   });
 
+  it('允许尾随斜杠形式的已配置前端来源访问本地 API', async () => {
+    const app = createApp();
+
+    const res = await request(app).get('/api/projects').set('Origin', 'http://localhost:5173/');
+
+    expect(res.status).toBe(200);
+    expect(res.headers['access-control-allow-origin']).toBe('http://localhost:5173/');
+  });
+
   it('可以读取全局步骤配置', async () => {
     const app = createApp();
 

@@ -19,7 +19,7 @@ export function createApp() {
   app.use(
     cors({
       origin(origin, callback) {
-        if (!origin || getAppConfig().server.corsOrigins.includes(origin)) {
+        if (!origin || isAllowedOrigin(origin)) {
           callback(null, true);
           return;
         }
@@ -72,6 +72,23 @@ export function createApp() {
   });
 
   return app;
+}
+
+/**
+ * 判断请求来源是否在允许列表中。
+ */
+function isAllowedOrigin(origin: string) {
+  const value = normalizeOrigin(origin);
+  const origins = getAppConfig().server.corsOrigins.map(normalizeOrigin);
+
+  return origins.includes(value);
+}
+
+/**
+ * 标准化来源字符串用于匹配。
+ */
+function normalizeOrigin(origin: string) {
+  return origin.trim().replace(/\/+$/, '');
 }
 
 /**
