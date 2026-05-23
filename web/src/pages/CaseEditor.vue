@@ -957,6 +957,19 @@ onMounted(loadCase);
   justify-content: flex-end;
 }
 
+.toolbar-actions :deep(.el-button) {
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.14);
+  transition:
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.toolbar-actions :deep(.el-button:not(.is-disabled):hover),
+.toolbar-actions :deep(.el-button:not(.is-disabled):focus-visible) {
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
+  transform: translateY(-1px);
+}
+
 .back-btn {
   color: #315f8f;
   font-weight: 600;
@@ -1031,6 +1044,19 @@ onMounted(loadCase);
   margin-top: 14px;
 }
 
+.panel-actions :deep(.el-button) {
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.14);
+  transition:
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.panel-actions :deep(.el-button:not(.is-disabled):hover),
+.panel-actions :deep(.el-button:not(.is-disabled):focus-visible) {
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
+  transform: translateY(-1px);
+}
+
 .failure-summary {
   color: #d94747;
   margin: 12px 0 0;
@@ -1041,6 +1067,19 @@ onMounted(loadCase);
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.auth-status-wrap :deep(.el-button) {
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.14);
+  transition:
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.auth-status-wrap :deep(.el-button:not(.is-disabled):hover),
+.auth-status-wrap :deep(.el-button:not(.is-disabled):focus-visible) {
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
+  transform: translateY(-1px);
 }
 
 .auth-tag {
@@ -1075,6 +1114,19 @@ onMounted(loadCase);
   gap: 8px;
   align-items: center;
   margin: 16px 0;
+}
+
+.step-actions :deep(.el-button) {
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.14);
+  transition:
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.step-actions :deep(.el-button:not(.is-disabled):hover),
+.step-actions :deep(.el-button:not(.is-disabled):focus-visible) {
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
+  transform: translateY(-1px);
 }
 
 .insert-hint {

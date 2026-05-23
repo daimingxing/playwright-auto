@@ -265,7 +265,7 @@ onMounted(loadProjects);
         <h2>测试项目</h2>
         <p>创建项目后，URL、用例、回收站和运行产物都会按项目分目录保存。</p>
       </div>
-      <el-button type="primary" @click="dialogOpen = true">新建项目</el-button>
+      <el-button type="primary" size="large" @click="dialogOpen = true">新建项目</el-button>
     </div>
 
     <div class="content">
@@ -436,6 +436,19 @@ onMounted(loadProjects);
   color: #6b7280;
 }
 
+.toolbar :deep(.el-button) {
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.14);
+  transition:
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.toolbar :deep(.el-button:not(.is-disabled):hover),
+.toolbar :deep(.el-button:not(.is-disabled):focus-visible) {
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
+  transform: translateY(-1px);
+}
+
 .content {
   flex: 1;
   min-height: 0;
@@ -595,6 +608,16 @@ onMounted(loadProjects);
 
 .card-actions :deep(.el-button) {
   margin-left: 0;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+  transition:
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.card-actions :deep(.el-button:not(.is-disabled):hover),
+.card-actions :deep(.el-button:not(.is-disabled):focus-visible) {
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
+  transform: translateY(-1px);
 }
 
 .card-actions :deep(.el-button:not(.delete-project)) {
@@ -610,6 +633,12 @@ onMounted(loadProjects);
   min-width: 28px;
   padding: 0;
   border-radius: 6px;
+  box-shadow: 0 1px 6px rgba(220, 38, 38, 0.22);
+}
+
+.card-actions :deep(.delete-project:not(.is-disabled):hover),
+.card-actions :deep(.delete-project:not(.is-disabled):focus-visible) {
+  box-shadow: 0 3px 10px rgba(220, 38, 38, 0.28);
 }
 
 .env-layout {

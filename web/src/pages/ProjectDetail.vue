@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { ElMessage, ElMessageBox } from 'element-plus';
-import { Back } from '@element-plus/icons-vue';
-import { onMounted, reactive, ref } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-import type { CaseMeta } from '../../../shared/types';
+import { ElMessage, ElMessageBox } from "element-plus";
+import { Back, Delete, Download, EditPen } from "@element-plus/icons-vue";
+import { onMounted, reactive, ref } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import type { CaseMeta } from "../../../shared/types";
 import {
   createCase,
   deleteCase,
@@ -11,10 +11,14 @@ import {
   listCases,
   listTrash,
   removeTrashCase,
-  restoreCase
-} from '../api/cases';
-import { getErrorMessage } from '../utils/error';
-import { formatPracticalReviewStatus, formatPracticalReviewTime, getPracticalReviewTagType } from './run-center';
+  restoreCase,
+} from "../api/cases";
+import { getErrorMessage } from "../utils/error";
+import {
+  formatPracticalReviewStatus,
+  formatPracticalReviewTime,
+  getPracticalReviewTagType,
+} from "./run-center";
 
 const route = useRoute();
 const router = useRouter();
@@ -23,15 +27,18 @@ const dialogOpen = ref(false);
 const cases = ref<CaseMeta[]>([]);
 const trash = ref<CaseMeta[]>([]);
 const form = reactive({
-  name: '',
-  startPath: '/'
+  name: "",
+  startPath: "/",
 });
 
 /**
  * 加载项目用例和回收站。
  */
 async function loadData() {
-  const [caseList, trashList] = await Promise.all([listCases(projectKey), listTrash(projectKey)]);
+  const [caseList, trashList] = await Promise.all([
+    listCases(projectKey),
+    listTrash(projectKey),
+  ]);
   cases.value = caseList;
   trash.value = trashList;
 }
@@ -53,7 +60,7 @@ async function removeCase(item: CaseMeta) {
   try {
     await deleteCase(projectKey, item.key);
     await loadData();
-    ElMessage.success('已移入回收站');
+    ElMessage.success("已移入回收站");
   } catch (error) {
     ElMessage.error(getErrorMessage(error));
   }
@@ -65,7 +72,7 @@ async function removeCase(item: CaseMeta) {
 async function exportItem(item: CaseMeta) {
   try {
     await exportCase(projectKey, item.key);
-    ElMessage.success('已开始下载测试用例');
+    ElMessage.success("已开始下载测试用例");
   } catch (error) {
     ElMessage.error(getErrorMessage(error));
   }
@@ -78,7 +85,7 @@ async function restoreItem(item: CaseMeta) {
   try {
     await restoreCase(projectKey, item.key);
     await loadData();
-    ElMessage.success('已恢复用例');
+    ElMessage.success("已恢复用例");
   } catch (error) {
     ElMessage.error(getErrorMessage(error));
   }
@@ -88,11 +95,15 @@ async function restoreItem(item: CaseMeta) {
  * 彻底删除回收站中的用例。
  */
 async function removeTrashItem(item: CaseMeta) {
-  const confirmed = await ElMessageBox.confirm(`确认彻底删除「${item.name}」吗？删除后不可恢复。`, '彻底删除用例', {
-    confirmButtonText: '彻底删除',
-    cancelButtonText: '取消',
-    type: 'warning'
-  }).catch(() => false);
+  const confirmed = await ElMessageBox.confirm(
+    `确认彻底删除「${item.name}」吗？删除后不可恢复。`,
+    "彻底删除用例",
+    {
+      confirmButtonText: "彻底删除",
+      cancelButtonText: "取消",
+      type: "warning",
+    },
+  ).catch(() => false);
 
   if (!confirmed) {
     return;
@@ -101,7 +112,7 @@ async function removeTrashItem(item: CaseMeta) {
   try {
     await removeTrashCase(projectKey, item.key);
     await loadData();
-    ElMessage.success('已彻底删除用例');
+    ElMessage.success("已彻底删除用例");
   } catch (error) {
     ElMessage.error(getErrorMessage(error));
   }
@@ -114,12 +125,21 @@ onMounted(loadData);
   <section class="page">
     <div class="toolbar">
       <div>
-        <el-button text :icon="Back" class="back-btn" @click="router.push('/')">返回项目列表</el-button>
+        <el-button text :icon="Back" class="back-btn" @click="router.push('/')"
+          >返回项目列表</el-button
+        >
         <h2>{{ projectKey }} 用例管理</h2>
       </div>
       <div class="actions">
-        <el-button @click="router.push(`/projects/${projectKey}/runs`)">运行测试</el-button>
-        <el-button type="primary" @click="dialogOpen = true">新建用例</el-button>
+        <el-button type="primary" size="large" @click="dialogOpen = true"
+          >新建用例</el-button
+        >
+        <el-button
+          type="success"
+          size="large"
+          @click="router.push(`/projects/${projectKey}/runs`)"
+          >运行测试</el-button
+        >
       </div>
     </div>
 
@@ -130,24 +150,60 @@ onMounted(loadData);
           <!-- 主表保留更大的最小宽度，确保在窄窗口下真实产生横向溢出。 -->
           <el-table class="case-table" :data="cases" border height="100%">
             <el-table-column prop="name" label="用例名称" min-width="220" />
-            <el-table-column prop="startPath" label="起始路径" min-width="220" />
+            <el-table-column
+              prop="startPath"
+              label="起始路径"
+              min-width="220"
+            />
             <el-table-column label="实测检查" min-width="140">
               <template #default="{ row }">
-                <el-tag :type="getPracticalReviewTagType(row.practicalReview)" effect="light">
+                <el-tag
+                  :type="getPracticalReviewTagType(row.practicalReview)"
+                  effect="light"
+                >
                   {{ formatPracticalReviewStatus(row.practicalReview) }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="最后检查时间" min-width="190" show-overflow-tooltip>
+            <el-table-column
+              label="最后检查时间"
+              min-width="190"
+              show-overflow-tooltip
+            >
               <template #default="{ row }">
                 {{ formatPracticalReviewTime(row.practicalReview) }}
               </template>
             </el-table-column>
             <el-table-column label="操作" width="260">
               <template #default="{ row }">
-                <el-button size="small" @click="router.push(`/projects/${projectKey}/cases/${row.key}`)">编辑</el-button>
-                <el-button size="small" @click="exportItem(row)">导出</el-button>
-                <el-button size="small" type="danger" @click="removeCase(row)">删除</el-button>
+                <div class="row-actions">
+                  <el-button
+                    class="edit-btn"
+                    size="small"
+                    :icon="EditPen"
+                    @click="
+                      router.push(`/projects/${projectKey}/cases/${row.key}`)
+                    "
+                  >
+                    编辑
+                  </el-button>
+                  <el-button
+                    class="export-btn"
+                    size="small"
+                    :icon="Download"
+                    @click="exportItem(row)"
+                    >导出</el-button
+                  >
+                  <el-button
+                    class="delete-btn"
+                    size="small"
+                    type="danger"
+                    :icon="Delete"
+                    title="删除用例"
+                    aria-label="删除用例"
+                    @click="removeCase(row)"
+                  />
+                </div>
               </template>
             </el-table-column>
           </el-table>
@@ -158,13 +214,26 @@ onMounted(loadData);
         <h3>回收站</h3>
         <div class="table-wrap">
           <!-- 回收站表同样要保留足够的最小宽度，避免被容器压扁后失去横向滚动。 -->
-          <el-table class="trash-table" :data="trash" border height="100%" empty-text="回收站暂无用例">
+          <el-table
+            class="trash-table"
+            :data="trash"
+            border
+            height="100%"
+            empty-text="回收站暂无用例"
+          >
             <el-table-column prop="name" label="用例名称" min-width="260" />
             <el-table-column prop="key" label="目录编号" min-width="160" />
             <el-table-column label="操作" width="260">
               <template #default="{ row }">
-                <el-button size="small" @click="restoreItem(row)">恢复</el-button>
-                <el-button size="small" type="danger" @click="removeTrashItem(row)">彻底删除</el-button>
+                <el-button size="small" @click="restoreItem(row)"
+                  >恢复</el-button
+                >
+                <el-button
+                  size="small"
+                  type="danger"
+                  @click="removeTrashItem(row)"
+                  >彻底删除</el-button
+                >
               </template>
             </el-table-column>
           </el-table>
@@ -262,11 +331,86 @@ onMounted(loadData);
   padding-right: 4px;
 }
 
+.row-actions {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 12px;
+}
+
+.row-actions :deep(.el-button) {
+  margin-left: 0;
+  border: none;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+  transition:
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.row-actions :deep(.el-button:hover),
+.row-actions :deep(.el-button:focus-visible) {
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
+}
+
+.row-actions :deep(.edit-btn) {
+  border: 1px solid #409eff;
+  background: #409eff;
+}
+
+.row-actions :deep(.edit-btn:hover),
+.row-actions :deep(.edit-btn:focus-visible) {
+  color: #ffffff;
+  border-color: #66b1ff;
+  background: #66b1ff;
+}
+
+.row-actions :deep(.export-btn) {
+  color: #606266;
+  border: 1px solid #dcdfe6;
+  background: #ffffff;
+}
+
+.row-actions :deep(.export-btn:hover),
+.row-actions :deep(.export-btn:focus-visible) {
+  color: #409eff;
+  border-color: #c6e2ff;
+  background: #ecf5ff;
+}
+
+.row-actions :deep(.delete-btn) {
+  margin-left: auto;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 6px;
+  box-shadow: 0 1px 6px rgba(220, 38, 38, 0.22);
+}
+
+.row-actions :deep(.delete-btn:hover),
+.row-actions :deep(.delete-btn:focus-visible) {
+  box-shadow: 0 3px 10px rgba(220, 38, 38, 0.28);
+}
+
 .case-table {
   min-width: 1400px;
 }
 
 .trash-table {
   min-width: 980px;
+}
+
+.trash-table :deep(.el-button) {
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+  transition:
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.trash-table :deep(.el-button:not(.is-disabled):hover),
+.trash-table :deep(.el-button:not(.is-disabled):focus-visible) {
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
+  transform: translateY(-1px);
 }
 </style>

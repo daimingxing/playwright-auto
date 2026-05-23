@@ -355,8 +355,8 @@ onMounted(async () => {
             </el-form-item>
             <el-form-item label="运行模式">
               <el-radio-group v-model="runMode" @change="changeRunMode">
-                <el-radio-button label="headless">无头运行</el-radio-button>
-                <el-radio-button label="headed">可视调试</el-radio-button>
+                <el-radio-button value="headless">无头运行</el-radio-button>
+                <el-radio-button value="headed">可视调试</el-radio-button>
               </el-radio-group>
             </el-form-item>
             <el-form-item label="并发数">
@@ -406,27 +406,29 @@ onMounted(async () => {
             <el-button size="small" @click="clearCases">全不选</el-button>
           </div>
           <div class="table-wrap">
-            <el-table :data="cases" border height="100%" empty-text="暂无可运行用例" row-key="key">
-              <el-table-column width="54">
-                <template #default="{ row }">
-                  <el-checkbox v-model="selectedCaseKeys" :value="row.key" />
-                </template>
-              </el-table-column>
-              <el-table-column prop="name" label="用例名称" min-width="150" show-overflow-tooltip />
-              <el-table-column prop="startPath" label="起始路径" min-width="130" show-overflow-tooltip />
-              <el-table-column label="实测检查" min-width="120">
-                <template #default="{ row }">
-                  <el-tag :type="getPracticalReviewTagType(row.practicalReview)" effect="light">
-                    {{ formatPracticalReviewStatus(row.practicalReview) }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column label="最后检查时间" min-width="180" show-overflow-tooltip>
-                <template #default="{ row }">
-                  {{ formatPracticalReviewTime(row.practicalReview) }}
-                </template>
-              </el-table-column>
-            </el-table>
+            <el-checkbox-group v-model="selectedCaseKeys">
+              <el-table :data="cases" border height="100%" empty-text="暂无可运行用例" row-key="key">
+                <el-table-column width="54">
+                  <template #default="{ row }">
+                    <el-checkbox :value="row.key" />
+                  </template>
+                </el-table-column>
+                <el-table-column prop="name" label="用例名称" min-width="150" show-overflow-tooltip />
+                <el-table-column prop="startPath" label="起始路径" min-width="130" show-overflow-tooltip />
+                <el-table-column label="实测检查" min-width="120">
+                  <template #default="{ row }">
+                    <el-tag :type="getPracticalReviewTagType(row.practicalReview)" effect="light">
+                      {{ formatPracticalReviewStatus(row.practicalReview) }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="最后检查时间" min-width="180" show-overflow-tooltip>
+                  <template #default="{ row }">
+                    {{ formatPracticalReviewTime(row.practicalReview) }}
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-checkbox-group>
           </div>
         </el-card>
       </div>
@@ -494,6 +496,19 @@ onMounted(async () => {
   justify-content: flex-end;
 }
 
+.toolbar-actions :deep(.el-button) {
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.14);
+  transition:
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.toolbar-actions :deep(.el-button:not(.is-disabled):hover),
+.toolbar-actions :deep(.el-button:not(.is-disabled):focus-visible) {
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
+  transform: translateY(-1px);
+}
+
 .toolbar h2 {
   margin: 8px 0 0;
 }
@@ -534,6 +549,19 @@ onMounted(async () => {
   gap: 12px;
   margin-top: 18px;
   flex-wrap: wrap;
+}
+
+.actions :deep(.el-button) {
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.14);
+  transition:
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.actions :deep(.el-button:not(.is-disabled):hover),
+.actions :deep(.el-button:not(.is-disabled):focus-visible) {
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
+  transform: translateY(-1px);
 }
 
 .run-area {
