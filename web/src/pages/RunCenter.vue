@@ -81,6 +81,23 @@ function clearCases() {
 }
 
 /**
+ * 切换单条测试用例的勾选状态。
+ */
+function toggleCaseSelection(caseKey: string, checked: boolean | string | number) {
+  const nextChecked = Boolean(checked);
+
+  if (nextChecked) {
+    if (!selectedCaseKeys.value.includes(caseKey)) {
+      selectedCaseKeys.value = [...selectedCaseKeys.value, caseKey];
+    }
+
+    return;
+  }
+
+  selectedCaseKeys.value = selectedCaseKeys.value.filter((item) => item !== caseKey);
+}
+
+/**
  * 加载项目登录态状态。
  */
 async function loadAuthState() {
@@ -324,7 +341,7 @@ onMounted(async () => {
         <el-button text :icon="Back" class="back-btn" @click="router.push(`/projects/${projectKey}`)">返回用例管理</el-button>
         <h2>运行中心</h2>
       </div>
-      <div class="toolbar-actions">
+      <div class="toolbar-actions btn-shadow-md">
         <el-button
           size="large"
           type="success"
@@ -370,7 +387,7 @@ onMounted(async () => {
             :title="hasAuth ? '已保存项目登录态，运行测试会自动复用' : '当前项目还没有保存登录态'"
           />
 
-          <div class="actions">
+          <div class="actions btn-shadow-md">
             <el-button type="primary" :loading="loading" @click="openLogin">打开浏览器登录</el-button>
             <el-button :disabled="!sessionId" :loading="saving" @click="saveAuth">我已完成登录，保存登录态</el-button>
           </div>
@@ -406,29 +423,30 @@ onMounted(async () => {
             <el-button size="small" @click="clearCases">全不选</el-button>
           </div>
           <div class="table-wrap">
-            <el-checkbox-group v-model="selectedCaseKeys">
-              <el-table :data="cases" border height="100%" empty-text="暂无可运行用例" row-key="key">
-                <el-table-column width="54">
-                  <template #default="{ row }">
-                    <el-checkbox :value="row.key" />
-                  </template>
-                </el-table-column>
-                <el-table-column prop="name" label="用例名称" min-width="150" show-overflow-tooltip />
-                <el-table-column prop="startPath" label="起始路径" min-width="130" show-overflow-tooltip />
-                <el-table-column label="实测检查" min-width="120">
-                  <template #default="{ row }">
-                    <el-tag :type="getPracticalReviewTagType(row.practicalReview)" effect="light">
-                      {{ formatPracticalReviewStatus(row.practicalReview) }}
-                    </el-tag>
-                  </template>
-                </el-table-column>
-                <el-table-column label="最后检查时间" min-width="180" show-overflow-tooltip>
-                  <template #default="{ row }">
-                    {{ formatPracticalReviewTime(row.practicalReview) }}
-                  </template>
-                </el-table-column>
-              </el-table>
-            </el-checkbox-group>
+            <el-table :data="cases" border height="100%" empty-text="暂无可运行用例" row-key="key">
+              <el-table-column width="54">
+                <template #default="{ row }">
+                  <el-checkbox
+                    :model-value="selectedCaseKeys.includes(row.key)"
+                    @change="(checked) => toggleCaseSelection(row.key, checked)"
+                  />
+                </template>
+              </el-table-column>
+              <el-table-column prop="name" label="用例名称" min-width="150" show-overflow-tooltip />
+              <el-table-column prop="startPath" label="起始路径" min-width="130" show-overflow-tooltip />
+              <el-table-column label="实测检查" min-width="120">
+                <template #default="{ row }">
+                  <el-tag :type="getPracticalReviewTagType(row.practicalReview)" effect="light">
+                    {{ formatPracticalReviewStatus(row.practicalReview) }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="最后检查时间" min-width="180" show-overflow-tooltip>
+                <template #default="{ row }">
+                  {{ formatPracticalReviewTime(row.practicalReview) }}
+                </template>
+              </el-table-column>
+            </el-table>
           </div>
         </el-card>
       </div>
@@ -496,19 +514,6 @@ onMounted(async () => {
   justify-content: flex-end;
 }
 
-.toolbar-actions :deep(.el-button) {
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.14);
-  transition:
-    box-shadow 0.18s ease,
-    transform 0.18s ease;
-}
-
-.toolbar-actions :deep(.el-button:not(.is-disabled):hover),
-.toolbar-actions :deep(.el-button:not(.is-disabled):focus-visible) {
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
-  transform: translateY(-1px);
-}
-
 .toolbar h2 {
   margin: 8px 0 0;
 }
@@ -549,19 +554,6 @@ onMounted(async () => {
   gap: 12px;
   margin-top: 18px;
   flex-wrap: wrap;
-}
-
-.actions :deep(.el-button) {
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.14);
-  transition:
-    box-shadow 0.18s ease,
-    transform 0.18s ease;
-}
-
-.actions :deep(.el-button:not(.is-disabled):hover),
-.actions :deep(.el-button:not(.is-disabled):focus-visible) {
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
-  transform: translateY(-1px);
 }
 
 .run-area {

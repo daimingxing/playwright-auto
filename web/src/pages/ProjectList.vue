@@ -260,7 +260,7 @@ onMounted(loadProjects);
 
 <template>
   <section class="page">
-    <div class="toolbar">
+    <div class="toolbar btn-shadow-md">
       <div>
         <h2>测试项目</h2>
         <p>创建项目后，URL、用例、回收站和运行产物都会按项目分目录保存。</p>
@@ -317,7 +317,7 @@ onMounted(loadProjects);
               <p>{{ getSelectedEnv(project)?.baseUrl }}</p>
             </div>
           </div>
-          <div class="card-actions">
+          <div class="card-actions btn-shadow-sm">
             <el-button type="primary" :icon="ArrowRight" @click="router.push(`/projects/${project.key}`)">
               进入项目
             </el-button>
@@ -434,19 +434,6 @@ onMounted(loadProjects);
 .toolbar p {
   margin: 0;
   color: #6b7280;
-}
-
-.toolbar :deep(.el-button) {
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.14);
-  transition:
-    box-shadow 0.18s ease,
-    transform 0.18s ease;
-}
-
-.toolbar :deep(.el-button:not(.is-disabled):hover),
-.toolbar :deep(.el-button:not(.is-disabled):focus-visible) {
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
-  transform: translateY(-1px);
 }
 
 .content {
@@ -608,16 +595,6 @@ onMounted(loadProjects);
 
 .card-actions :deep(.el-button) {
   margin-left: 0;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
-  transition:
-    box-shadow 0.18s ease,
-    transform 0.18s ease;
-}
-
-.card-actions :deep(.el-button:not(.is-disabled):hover),
-.card-actions :deep(.el-button:not(.is-disabled):focus-visible) {
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
-  transform: translateY(-1px);
 }
 
 .card-actions :deep(.el-button:not(.delete-project)) {

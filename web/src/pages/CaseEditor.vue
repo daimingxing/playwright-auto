@@ -600,7 +600,7 @@ onMounted(loadCase);
         <el-button text :icon="Back" class="back-btn" @click="router.push(`/projects/${projectKey}`)">返回用例管理</el-button>
         <h2>{{ item.name }}</h2>
       </div>
-      <div class="toolbar-actions">
+      <div class="toolbar-actions btn-shadow-md">
         <el-button v-if="!isRecording" @click="startRecordCase">开始录制</el-button>
         <el-button v-else type="warning" @click="stopRecordCase">停止录制</el-button>
         <el-button type="primary" :disabled="isRecording" @click="saveCase"
@@ -632,7 +632,7 @@ onMounted(loadCase);
               <div class="start-preview">{{ startPreview || "-" }}</div>
             </el-form-item>
             <el-form-item label="登录态">
-              <div class="auth-status-wrap">
+              <div class="auth-status-wrap btn-shadow-md">
                 <el-tag :type="hasAuth ? 'success' : 'info'" effect="light" class="auth-tag">
                   {{ hasAuth ? "已保存" : "未保存" }}
                 </el-tag>
@@ -680,7 +680,7 @@ onMounted(loadCase);
                 item.practicalReview.failureMessage
               }}
             </p>
-            <div class="panel-actions">
+            <div class="panel-actions btn-shadow-md">
               <el-button type="primary" :loading="practicalReviewing" @click="runPracticalCheck"
                 >开始实测检查</el-button
               >
@@ -690,7 +690,7 @@ onMounted(loadCase);
           </section>
         </div>
       </div>
-      <div class="step-actions">
+      <div class="step-actions btn-shadow-md">
         <el-dropdown trigger="click" @command="(type) => addStep(type as StepType)">
           <el-button type="primary">
             <el-icon><Plus /></el-icon>
@@ -957,19 +957,6 @@ onMounted(loadCase);
   justify-content: flex-end;
 }
 
-.toolbar-actions :deep(.el-button) {
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.14);
-  transition:
-    box-shadow 0.18s ease,
-    transform 0.18s ease;
-}
-
-.toolbar-actions :deep(.el-button:not(.is-disabled):hover),
-.toolbar-actions :deep(.el-button:not(.is-disabled):focus-visible) {
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
-  transform: translateY(-1px);
-}
-
 .back-btn {
   color: #315f8f;
   font-weight: 600;
@@ -1044,19 +1031,6 @@ onMounted(loadCase);
   margin-top: 14px;
 }
 
-.panel-actions :deep(.el-button) {
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.14);
-  transition:
-    box-shadow 0.18s ease,
-    transform 0.18s ease;
-}
-
-.panel-actions :deep(.el-button:not(.is-disabled):hover),
-.panel-actions :deep(.el-button:not(.is-disabled):focus-visible) {
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
-  transform: translateY(-1px);
-}
-
 .failure-summary {
   color: #d94747;
   margin: 12px 0 0;
@@ -1067,19 +1041,6 @@ onMounted(loadCase);
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-}
-
-.auth-status-wrap :deep(.el-button) {
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.14);
-  transition:
-    box-shadow 0.18s ease,
-    transform 0.18s ease;
-}
-
-.auth-status-wrap :deep(.el-button:not(.is-disabled):hover),
-.auth-status-wrap :deep(.el-button:not(.is-disabled):focus-visible) {
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
-  transform: translateY(-1px);
 }
 
 .auth-tag {
@@ -1114,19 +1075,6 @@ onMounted(loadCase);
   gap: 8px;
   align-items: center;
   margin: 16px 0;
-}
-
-.step-actions :deep(.el-button) {
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.14);
-  transition:
-    box-shadow 0.18s ease,
-    transform 0.18s ease;
-}
-
-.step-actions :deep(.el-button:not(.is-disabled):hover),
-.step-actions :deep(.el-button:not(.is-disabled):focus-visible) {
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
-  transform: translateY(-1px);
 }
 
 .insert-hint {

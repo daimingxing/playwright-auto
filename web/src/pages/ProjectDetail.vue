@@ -130,7 +130,7 @@ onMounted(loadData);
         >
         <h2>{{ projectKey }} 用例管理</h2>
       </div>
-      <div class="actions">
+      <div class="actions btn-shadow-md">
         <el-button type="primary" size="large" @click="dialogOpen = true"
           >新建用例</el-button
         >
@@ -176,7 +176,7 @@ onMounted(loadData);
             </el-table-column>
             <el-table-column label="操作" width="260">
               <template #default="{ row }">
-                <div class="row-actions">
+                <div class="row-actions btn-shadow-sm">
                   <el-button
                     class="edit-btn"
                     size="small"
@@ -215,7 +215,7 @@ onMounted(loadData);
         <div class="table-wrap">
           <!-- 回收站表同样要保留足够的最小宽度，避免被容器压扁后失去横向滚动。 -->
           <el-table
-            class="trash-table"
+            class="trash-table btn-shadow-sm"
             :data="trash"
             border
             height="100%"
@@ -342,15 +342,6 @@ onMounted(loadData);
   margin-left: 0;
   border: none;
   color: #ffffff;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
-  transition:
-    box-shadow 0.18s ease,
-    transform 0.18s ease;
-}
-
-.row-actions :deep(.el-button:hover),
-.row-actions :deep(.el-button:focus-visible) {
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
 }
 
 .row-actions :deep(.edit-btn) {
@@ -401,16 +392,4 @@ onMounted(loadData);
   min-width: 980px;
 }
 
-.trash-table :deep(.el-button) {
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
-  transition:
-    box-shadow 0.18s ease,
-    transform 0.18s ease;
-}
-
-.trash-table :deep(.el-button:not(.is-disabled):hover),
-.trash-table :deep(.el-button:not(.is-disabled):focus-visible) {
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
-  transform: translateY(-1px);
-}
 </style>
