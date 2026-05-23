@@ -1,5 +1,0 @@
-
-[mcp_servers]
-[mcp_servers.serena-codex-9124]
-type = "streamable-http"
-url = "http://127.0.0.1:9124/mcp"
