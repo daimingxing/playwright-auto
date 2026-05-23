@@ -41,17 +41,60 @@ describe('项目接口', () => {
     const created = await request(app).post('/api/projects').send({
       name: 'CRM 系统',
       key: 'crm',
+      envName: '测试环境',
       baseUrl: 'https://crm.test.local'
     });
 
     expect(created.status).toBe(201);
     expect(created.body.key).toBe('crm');
+    expect(created.body.envs[0].name).toBe('测试环境');
 
     const list = await request(app).get('/api/projects');
 
     expect(list.status).toBe(200);
     expect(list.body).toHaveLength(1);
     expect(list.body[0].name).toBe('CRM 系统');
+  });
+
+  it('创建项目时未填写默认环境名称会使用默认环境', async () => {
+    const app = createApp();
+
+    const missingName = await request(app).post('/api/projects').send({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    const blankName = await request(app).post('/api/projects').send({
+      name: '商城系统',
+      key: 'shop',
+      envName: '   ',
+      baseUrl: 'https://shop.test.local'
+    });
+
+    expect(missingName.status).toBe(201);
+    expect(missingName.body.envs[0].name).toBe('默认环境');
+    expect(blankName.status).toBe(201);
+    expect(blankName.body.envs[0].name).toBe('默认环境');
+  });
+
+  it('创建项目参数不合法时返回可读错误消息', async () => {
+    const app = createApp();
+
+    const invalidUrl = await request(app).post('/api/projects').send({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'bad-url'
+    });
+    expect(invalidUrl.status).toBe(400);
+    expect(invalidUrl.body.message.replace(/\s+/g, '')).toContain('URL不合法');
+
+    const invalidKey = await request(app).post('/api/projects').send({
+      name: 'CRM 系统',
+      key: 'CRM 系统',
+      baseUrl: 'https://crm.test.local'
+    });
+    expect(invalidKey.status).toBe(400);
+    expect(invalidKey.body.message.replace(/\s+/g, '')).toContain('标识不合法');
   });
 
   it('读取项目列表时忽略 projects 目录下的占位文件', async () => {
@@ -131,6 +174,61 @@ describe('项目接口', () => {
     expect(envs.status).toBe(200);
     expect(envs.body.defaultEnv).toBe('default');
     expect(envs.body.envs.map((item: { key: string }) => item.key)).toEqual(['default']);
+  });
+
+  it('可以导出项目并排除登录态文件', async () => {
+    const app = createApp();
+    await request(app).post('/api/projects').send({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    await request(app).post('/api/projects/crm/cases').send({
+      name: '创建订单',
+      startPath: '/orders/create'
+    });
+    await createAuthState('crm', { cookies: [{ name: 'sid', value: 'secret' }], origins: [] });
+
+    const res = await request(app)
+      .get('/api/projects/crm/export')
+      .buffer()
+      .parse((response, callback) => {
+        const chunks: Buffer[] = [];
+        response.on('data', (chunk: Buffer) => chunks.push(chunk));
+        response.on('end', () => callback(null, Buffer.concat(chunks)));
+      });
+    const zipText = Buffer.from(res.body).toString('utf8');
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('application/zip');
+    expect(res.headers['content-disposition']).toContain('crm.zip');
+    expect(zipText).toContain('project.json');
+    expect(zipText).toContain('cases/');
+    expect(zipText).not.toContain('auth/default.storageState.json');
+  });
+
+  it('可以彻底删除项目目录和所有项目数据', async () => {
+    const app = createApp();
+    await request(app).post('/api/projects').send({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    await request(app).post('/api/projects/crm/cases').send({
+      name: '创建订单',
+      startPath: '/orders/create'
+    });
+    await mkdir(join(getProjectsRoot(), 'crm', 'trash', 'old-case'), { recursive: true });
+    await mkdir(join(getProjectsRoot(), 'crm', 'reviews', 'review-1'), { recursive: true });
+    await writeFile(join(getProjectsRoot(), 'crm', 'trash', 'old-case', 'case.json'), '{}', 'utf8');
+    await writeFile(join(getProjectsRoot(), 'crm', 'reviews', 'review-1', 'review.json'), '{}', 'utf8');
+
+    const removed = await request(app).delete('/api/projects/crm');
+    const list = await request(app).get('/api/projects');
+
+    expect(removed.status).toBe(204);
+    await expect(stat(join(getProjectsRoot(), 'crm'))).rejects.toThrow();
+    expect(list.body).toEqual([]);
   });
 
   it('修改环境 URL 后该环境的实测检查结果变为过期', async () => {

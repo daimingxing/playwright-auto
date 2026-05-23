@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { ArrowDown, ArrowRight, Delete, Download, Monitor, Setting } from '@element-plus/icons-vue';
 import { onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import type { EnvMeta, ProjectMeta } from '../../../shared/types';
 import {
   addProjectEnv,
   createProject,
+  deleteProject,
   deleteProjectEnv,
+  exportProject,
   listProjects,
   updateProjectEnv
 } from '../api/projects';
@@ -27,8 +30,10 @@ const envForm = reactive({
 const form = reactive({
   name: '',
   key: '',
+  envName: '',
   baseUrl: ''
 });
+const selectedEnvKeys = reactive<Record<string, string>>({});
 
 /**
  * 加载项目列表。
@@ -46,21 +51,60 @@ async function loadProjects() {
  * 提交新建项目表单。
  */
 async function submitProject() {
-  const item = await createProject({
-    name: form.name,
-    key: form.key,
-    baseUrl: form.baseUrl
-  });
-  dialogOpen.value = false;
-  await loadProjects();
-  await router.push(`/projects/${item.key}`);
+  try {
+    const item = await createProject({
+      name: form.name,
+      key: form.key,
+      envName: form.envName,
+      baseUrl: form.baseUrl
+    });
+    dialogOpen.value = false;
+    await loadProjects();
+    await router.push(`/projects/${item.key}`);
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error));
+  }
 }
 
 /**
  * 读取项目固定默认环境。
  */
 function getDefaultEnv(project: ProjectMeta) {
-  return project.envs.find((env) => env.key === 'default') ?? project.envs[0];
+  const defaultKey = project.defaultEnv ?? 'default';
+
+  return project.envs.find((env) => env.key === defaultKey) ?? project.envs[0];
+}
+
+/**
+ * 读取卡片当前选中的环境。
+ */
+function getSelectedEnv(project: ProjectMeta) {
+  const envKey = selectedEnvKeys[project.key];
+
+  return project.envs.find((env) => env.key === envKey) ?? getDefaultEnv(project);
+}
+
+/**
+ * 判断项目是否有多个可切换环境。
+ */
+function hasMultipleEnvs(project: ProjectMeta) {
+  return project.envs.length > 1;
+}
+
+/**
+ * 切换项目卡片当前展示的环境。
+ */
+function selectEnv(project: ProjectMeta, envKey: string) {
+  selectedEnvKeys[project.key] = envKey;
+}
+
+/**
+ * 判断环境是否为项目默认环境。
+ */
+function isDefaultEnv(project: ProjectMeta, env?: EnvMeta) {
+  const defaultKey = getDefaultEnv(project)?.key;
+
+  return env?.key === defaultKey;
 }
 
 /**
@@ -153,6 +197,72 @@ async function removeEnv(env: EnvMeta) {
 }
 
 /**
+ * 导出项目压缩包。
+ */
+async function exportItem(project: ProjectMeta) {
+  const confirmed = await ElMessageBox.confirm(
+    `确认导出项目「${project.name}」吗？导出包不包含登录态文件，迁移后需要重新登录。`,
+    '导出项目',
+    {
+      confirmButtonText: '导出',
+      cancelButtonText: '取消',
+      type: 'warning'
+    }
+  ).catch(() => false);
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    await exportProject(project.key);
+    ElMessage.success('已开始下载项目');
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error));
+  }
+}
+
+/**
+ * 二次确认后彻底删除项目。
+ */
+async function removeProject(project: ProjectMeta) {
+  const firstConfirmed = await ElMessageBox.confirm(
+    `确认彻底删除项目「${project.name}」吗？这会删除所有用例、历史报告、回收站和失败解析。需要备份请先导出项目。`,
+    '彻底删除项目',
+    {
+      confirmButtonText: '继续',
+      cancelButtonText: '取消',
+      type: 'warning'
+    }
+  ).catch(() => false);
+
+  if (!firstConfirmed) {
+    return;
+  }
+
+  const value = await ElMessageBox.prompt(`请输入项目标识「${project.key}」确认删除。`, '再次确认', {
+    confirmButtonText: '彻底删除',
+    cancelButtonText: '取消',
+    inputPattern: new RegExp(`^${project.key}$`),
+    inputErrorMessage: '项目标识不一致',
+    type: 'error',
+    distinguishCancelAndClose: true
+  }).catch(() => false);
+
+  if (!value) {
+    return;
+  }
+
+  try {
+    await deleteProject(project.key);
+    await loadProjects();
+    ElMessage.success('项目已彻底删除');
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error));
+  }
+}
+
+/**
  * 刷新弹窗中的当前项目配置。
  */
 async function refreshActiveProject() {
@@ -182,7 +292,7 @@ onMounted(loadProjects);
       <el-empty v-if="!loading && projects.length === 0" description="暂无测试项目" />
 
       <div v-else class="grid">
-        <el-card v-for="project in projects" :key="project.key" shadow="never">
+        <el-card v-for="project in projects" :key="project.key" class="project-card" shadow="never">
           <div class="project-head">
             <div>
               <h3>{{ project.name }}</h3>
@@ -191,15 +301,57 @@ onMounted(loadProjects);
             <el-tag size="small">{{ project.envs.length }} 个环境</el-tag>
           </div>
           <div class="env-info">
-            <div class="env-header">
-              <el-tag size="small" type="info" effect="light">默认</el-tag>
-              <strong>{{ getDefaultEnv(project)?.name }}</strong>
+            <el-dropdown
+              v-if="hasMultipleEnvs(project)"
+              trigger="click"
+              @command="(envKey: string) => selectEnv(project, envKey)"
+            >
+              <button class="env-switch" type="button">
+                <el-icon><Monitor /></el-icon>
+                <el-tag v-if="isDefaultEnv(project, getSelectedEnv(project))" size="small" type="info" effect="light">
+                  默认
+                </el-tag>
+                <strong>{{ getSelectedEnv(project)?.name }}</strong>
+                <el-icon class="env-arrow"><ArrowDown /></el-icon>
+              </button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item v-for="env in project.envs" :key="env.key" :command="env.key">
+                    <div class="env-option">
+                      <span>{{ env.name }}</span>
+                      <el-tag v-if="isDefaultEnv(project, env)" size="small" type="info" effect="light">默认</el-tag>
+                    </div>
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+            <div v-else class="env-static">
+              <el-icon><Monitor /></el-icon>
+              <el-tag v-if="isDefaultEnv(project, getSelectedEnv(project))" size="small" type="info" effect="light">
+                默认
+              </el-tag>
+              <strong>{{ getSelectedEnv(project)?.name }}</strong>
             </div>
-            <p>{{ getDefaultEnv(project)?.baseUrl }}</p>
+            <div class="url-panel">
+              <span>URL</span>
+              <p>{{ getSelectedEnv(project)?.baseUrl }}</p>
+            </div>
           </div>
           <div class="card-actions">
-            <el-button @click="router.push(`/projects/${project.key}`)">进入项目</el-button>
-            <el-button @click="openEnvDialog(project)">环境配置</el-button>
+            <el-button type="primary" :icon="ArrowRight" @click="router.push(`/projects/${project.key}`)">
+              进入项目
+            </el-button>
+            <el-button :icon="Setting" @click="openEnvDialog(project)">环境配置</el-button>
+            <el-button :icon="Download" @click="exportItem(project)">导出项目</el-button>
+            <el-button
+              class="delete-project"
+              size="small"
+              type="danger"
+              :icon="Delete"
+              title="删除项目"
+              aria-label="删除项目"
+              @click="removeProject(project)"
+            />
           </div>
         </el-card>
       </div>
@@ -213,7 +365,10 @@ onMounted(loadProjects);
         <el-form-item label="项目标识">
           <el-input v-model="form.key" placeholder="例如：crm" />
         </el-form-item>
-        <el-form-item label="默认 URL">
+        <el-form-item label="环境名称">
+          <el-input v-model="form.envName" placeholder="不填则使用：默认环境" />
+        </el-form-item>
+        <el-form-item label="环境 URL">
           <el-input v-model="form.baseUrl" placeholder="https://test.example.com" />
         </el-form-item>
       </el-form>
@@ -310,9 +465,29 @@ onMounted(loadProjects);
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(440px, 1fr));
   gap: 16px;
   align-content: start;
+}
+
+.project-card {
+  border: 1px solid #e8edf5;
+  border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.project-card:hover {
+  border-color: #d5e1f1;
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.1);
+  transform: translateY(-1px);
+}
+
+.project-card :deep(.el-card__body) {
+  padding: 22px 24px 20px;
 }
 
 .project-head {
@@ -324,6 +499,9 @@ onMounted(loadProjects);
 
 .project-head h3 {
   margin: 0 0 4px;
+  color: #111827;
+  font-size: 18px;
+  line-height: 1.35;
 }
 
 .project-head p,
@@ -338,26 +516,120 @@ onMounted(loadProjects);
 
 .env-info {
   border-top: 1px solid #edf0f5;
-  margin-top: 14px;
-  padding-top: 14px;
+  margin-top: 16px;
+  padding-top: 16px;
 }
 
-.env-header {
+.env-switch,
+.env-static {
+  appearance: none;
+  background: #ffffff;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: #1f2937;
   display: flex;
   align-items: center;
   gap: 8px;
   margin-bottom: 6px;
+  min-height: 28px;
+  padding: 3px 6px;
 }
 
-.env-header strong {
+.env-switch {
+  cursor: pointer;
+}
+
+.env-static {
+  padding-left: 0;
+}
+
+.env-switch:hover {
+  background: #f8fbff;
+  border-color: #bfdbfe;
+}
+
+.env-switch:hover strong,
+.env-switch:focus-visible strong {
+  color: #2563eb;
+}
+
+.env-switch:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: 2px;
+}
+
+.env-switch :deep(.el-icon),
+.env-static :deep(.el-icon) {
+  color: #3b82f6;
+  font-size: 16px;
+}
+
+.env-switch strong,
+.env-static strong {
   font-size: 14px;
   color: #374151;
 }
 
-.card-actions {
+.env-arrow {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.env-option {
+  align-items: center;
   display: flex;
-  gap: 10px;
-  margin-top: 18px;
+  gap: 8px;
+  min-width: 160px;
+}
+
+.url-panel {
+  background: #f8fafc;
+  border: 1px solid #edf2f7;
+  border-radius: 6px;
+  margin-top: 10px;
+  padding: 10px 12px;
+}
+
+.url-panel span {
+  color: #64748b;
+  display: block;
+  font-size: 12px;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+
+.url-panel p {
+  color: #334155;
+  line-height: 1.5;
+}
+
+.card-actions {
+  border-top: 1px solid #edf0f5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 16px;
+  flex-wrap: nowrap;
+}
+
+.card-actions :deep(.el-button) {
+  margin-left: 0;
+}
+
+.card-actions :deep(.el-button:not(.delete-project)) {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.card-actions :deep(.delete-project) {
+  flex: 0 0 auto;
+  margin-left: auto;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  padding: 0;
+  border-radius: 6px;
 }
 
 .env-layout {

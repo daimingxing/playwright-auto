@@ -10,6 +10,7 @@ import { createEnvSchema, createProjectSchema, updateEnvSchema } from './schema'
 interface CreateProjectInput {
   name: string;
   key: string;
+  envName?: string;
   baseUrl: string;
 }
 
@@ -28,12 +29,13 @@ export async function createProject(input: CreateProjectInput) {
   }
 
   const now = new Date().toISOString();
+  const envName = value.envName?.trim() || '默认环境';
   const project: ProjectMeta = {
     name: value.name,
     key: value.key,
     envs: [
       {
-        name: '默认环境',
+        name: envName,
         key: 'default',
         baseUrl: value.baseUrl
       }
@@ -138,6 +140,14 @@ export async function deleteProjectEnv(projectKey: string, envKey: string) {
   });
   // 删除环境后同步清理同名登录态，避免以后重建同 key 环境时误用旧账号。
   await rm(join(getProjectPath(projectKey), 'auth', `${envKey}.storageState.json`), { force: true });
+}
+
+/**
+ * 彻底删除项目目录和项目下全部数据。
+ */
+export async function deleteProject(projectKey: string) {
+  await getProject(projectKey);
+  await rm(getProjectPath(projectKey), { recursive: true, force: false });
 }
 
 /**

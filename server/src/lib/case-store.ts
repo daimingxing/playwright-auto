@@ -84,14 +84,21 @@ export async function listTrash(projectKey: string) {
  * 将用例移动到项目回收站。
  */
 export async function deleteCase(projectKey: string, caseKey: string) {
-  await movePath(getCasePath(projectKey, caseKey), getTrashPath(projectKey, caseKey));
+  const trashKey = await getUniqueCaseKey(projectKey, caseKey, { group: 'cases', caseKey });
+  const item = await readJson<CaseMeta>(join(getCasePath(projectKey, caseKey), 'case.json'));
+
+  item.key = trashKey;
+  item.updatedAt = new Date().toISOString();
+  await writeJson(join(getCasePath(projectKey, caseKey), 'case.json'), item);
+  await writeSpec(projectKey, item, caseKey);
+  await movePath(getCasePath(projectKey, caseKey), getTrashPath(projectKey, trashKey));
 }
 
 /**
  * 将回收站中的用例恢复到可用用例目录。
  */
 export async function restoreTrashCase(projectKey: string, caseKey: string) {
-  const targetKey = await getRestoreCaseKey(projectKey, caseKey);
+  const targetKey = await getUniqueCaseKey(projectKey, caseKey, { group: 'trash', caseKey });
   const item = await readJson<CaseMeta>(join(getTrashPath(projectKey, caseKey), 'case.json'));
 
   item.key = targetKey;
@@ -132,8 +139,7 @@ export async function updateCase(projectKey: string, caseKey: string, input: Cas
  * 生成带时间和短随机后缀的用例标识。
  */
 async function getNextCaseKey(projectKey: string) {
-  const items = await Promise.all([listCases(projectKey), listTrash(projectKey)]);
-  const keys = new Set(items.flat().map((item) => item.key));
+  const keys = await getAllCaseKeys(projectKey);
   let caseKey = createCaseKey();
 
   while (keys.has(caseKey)) {
@@ -144,17 +150,51 @@ async function getNextCaseKey(projectKey: string) {
 }
 
 /**
- * 获取回收站恢复时可使用的用例标识。
+ * 获取移动用例时可使用的全局唯一标识。
  */
-async function getRestoreCaseKey(projectKey: string, caseKey: string) {
-  const items = await listCases(projectKey);
-  const keys = new Set(items.map((item) => item.key));
+async function getUniqueCaseKey(projectKey: string, caseKey: string, source?: { group: 'cases' | 'trash'; caseKey: string }) {
+  const keys = await getAllCaseKeys(projectKey, source);
 
   if (!keys.has(caseKey)) {
     return caseKey;
   }
 
-  return getNextCaseKey(projectKey);
+  let index = 1;
+  let nextKey = `${caseKey}-${index}`;
+
+  while (keys.has(nextKey)) {
+    index += 1;
+    nextKey = `${caseKey}-${index}`;
+  }
+
+  return nextKey;
+}
+
+/**
+ * 读取 cases 和 trash 共用命名空间中的所有用例标识。
+ */
+async function getAllCaseKeys(projectKey: string, source?: { group: 'cases' | 'trash'; caseKey: string }) {
+  const keys = new Set<string>();
+  const roots: Array<{ group: 'cases' | 'trash'; path: string }> = [
+    { group: 'cases', path: join(getProjectPath(projectKey), 'cases') },
+    { group: 'trash', path: join(getProjectPath(projectKey), 'trash') }
+  ];
+
+  for (const root of roots) {
+    if (!existsSync(root.path)) {
+      continue;
+    }
+
+    for (const name of await readdir(root.path)) {
+      if (source?.group === root.group && source.caseKey === name) {
+        continue;
+      }
+
+      keys.add(name);
+    }
+  }
+
+  return keys;
 }
 
 /**
@@ -201,8 +241,8 @@ function padNumber(value: number) {
 /**
  * 写入可迁移的 Playwright 测试文件。
  */
-async function writeSpec(projectKey: string, item: CaseMeta) {
-  await writeFile(join(getCasePath(projectKey, item.key), 'case.spec.ts'), generateSpec(item), 'utf8');
+async function writeSpec(projectKey: string, item: CaseMeta, caseKey = item.key) {
+  await writeFile(join(getCasePath(projectKey, caseKey), 'case.spec.ts'), generateSpec(item), 'utf8');
 }
 
 /**

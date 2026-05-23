@@ -2,12 +2,14 @@ import { Router } from 'express';
 import {
   addProjectEnv,
   createProject,
+  deleteProject,
   deleteProjectEnv,
   getProject,
   listProjectEnvs,
   listProjects,
   updateProjectEnv
 } from '../lib/project-store';
+import { zipProject } from '../services/export';
 
 export const projectsRouter = Router();
 
@@ -61,9 +63,35 @@ projectsRouter.delete('/:projectKey/envs/:envKey', async (req, res, next) => {
   }
 });
 
+projectsRouter.get('/:projectKey/export', async (req, res, next) => {
+  try {
+    await getProject(req.params.projectKey);
+    const file = await zipProject(req.params.projectKey);
+
+    res.download(file.zipPath, `${req.params.projectKey}.zip`, (error) => {
+      file.dispose().catch(next);
+
+      if (error) {
+        next(error);
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 projectsRouter.get('/:projectKey', async (req, res, next) => {
   try {
     res.json(await getProject(req.params.projectKey));
+  } catch (error) {
+    next(error);
+  }
+});
+
+projectsRouter.delete('/:projectKey', async (req, res, next) => {
+  try {
+    await deleteProject(req.params.projectKey);
+    res.status(204).send();
   } catch (error) {
     next(error);
   }

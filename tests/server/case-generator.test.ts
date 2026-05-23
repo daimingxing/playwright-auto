@@ -19,10 +19,10 @@ describe('用例生成器', () => {
 
     const code = generateSpec(item);
 
-    expect(code).toContain("test('创建订单'");
-    expect(code).toContain("await page.goto('/orders/create');");
-    expect(code).toContain("await page.locator('#name').fill('测试订单');");
-    expect(code).toContain("await expect(page.locator('.message')).toContainText('创建成功');");
+    expect(code).toContain('test("创建订单"');
+    expect(code).toContain('await page.goto("/orders/create");');
+    expect(code).toContain('await page.locator("#name").fill("测试订单");');
+    expect(code).toContain('await expect(page.locator(".message")).toContainText("创建成功");');
   });
 
   it('生成输入框值断言和精确文本断言', () => {
@@ -40,8 +40,8 @@ describe('用例生成器', () => {
 
     const code = generateSpec(item);
 
-    expect(code).toContain("await expect(page.locator('#nickname')).toHaveValue('张三');");
-    expect(code).toContain("await expect(page.locator('.title')).toHaveText('个人资料');");
+    expect(code).toContain('await expect(page.locator("#nickname")).toHaveValue("张三");');
+    expect(code).toContain('await expect(page.locator(".title")).toHaveText("个人资料");');
   });
 
   it('生成 codegen locator 表达式步骤', () => {
@@ -79,9 +79,9 @@ describe('用例生成器', () => {
 
     const code = generateSpec(item);
 
-    expect(code).toContain("await page.goto('https://crm.test.local/orders', { timeout: 5000 });");
-    expect(code).toContain("await page.locator('#save').click({ timeout: 1000 });");
-    expect(code).toContain("await page.locator('#name').fill('测试订单', { timeout: 1000 });");
+    expect(code).toContain('await page.goto("https://crm.test.local/orders", { timeout: 5000 });');
+    expect(code).toContain('await page.locator("#save").click({ timeout: 1000 });');
+    expect(code).toContain('await page.locator("#name").fill("测试订单", { timeout: 1000 });');
   });
 
   it('生成 goto 和 select 步骤', () => {
@@ -99,8 +99,8 @@ describe('用例生成器', () => {
 
     const code = generateSpec(item);
 
-    expect(code).toContain("await page.goto('/orders/list');");
-    expect(code).toContain("await page.locator('#status').selectOption('done');");
+    expect(code).toContain('await page.goto("/orders/list");');
+    expect(code).toContain('await page.locator("#status").selectOption("done");');
   });
 
   it('生成悬停、双击和右键点击步骤', () => {
@@ -120,8 +120,8 @@ describe('用例生成器', () => {
     const code = generateSpec(item);
 
     expect(code).toContain("await page.getByRole('link', { name: '售后 QQ' }).hover({ timeout: 1000 });");
-    expect(code).toContain("await page.locator('#more').dblclick({ timeout: 1000 });");
-    expect(code).toContain("await page.locator('.order-row').click({ button: 'right', timeout: 1000 });");
+    expect(code).toContain('await page.locator("#more").dblclick({ timeout: 1000 });');
+    expect(code).toContain('await page.locator(".order-row").click({ button: \'right\', timeout: 1000 });');
   });
 
   it('兼容历史数据中的 codegen 页面别名选择器', () => {
@@ -178,5 +178,25 @@ describe('用例生成器', () => {
     expect(code).toContain("await page.getByRole('link', { name: '采矿设备型号定义' }).click({ timeout: 1000 });");
     expect(code).toContain('const page1 = await page1Promise;');
     expect(code).toContain("await page1.getByRole('button', { name: 'select' }).first().click({ timeout: 1000 });");
+  });
+
+  it('生成包含单引号文本的合法 TypeScript 字符串', () => {
+    const item: CaseMeta = {
+      name: "O'Reilly 登录",
+      key: 'case-quote',
+      startPath: '/login',
+      createdAt: '2026-05-23T00:00:00.000Z',
+      updatedAt: '2026-05-23T00:00:00.000Z',
+      steps: [
+        { id: 's1', type: 'fill', selector: "#user-name", value: "O'Reilly" },
+        { id: 's2', type: 'assertText', selector: '.message', value: "You're logged in" }
+      ]
+    };
+
+    const code = generateSpec(item);
+
+    expect(code).toContain('test("O\'Reilly 登录"');
+    expect(code).toContain('await page.locator("#user-name").fill("O\'Reilly");');
+    expect(code).toContain('await expect(page.locator(".message")).toContainText("You\'re logged in");');
   });
 });

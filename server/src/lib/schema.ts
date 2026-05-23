@@ -7,6 +7,7 @@ export const urlSchema = z.string().url();
 export const createProjectSchema = z.object({
   name: z.string().min(1).max(80),
   key: projectKeySchema,
+  envName: z.string().max(80).optional(),
   baseUrl: urlSchema
 });
 

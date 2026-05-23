@@ -146,7 +146,7 @@ function renderLocator(selector: string | undefined, name: string, pageName = 'p
  * 生成安全字符串字面量。
  */
 function quote(value: string) {
-  return JSON.stringify(value).replace(/^"|"$/g, "'");
+  return JSON.stringify(value);
 }
 
 /**

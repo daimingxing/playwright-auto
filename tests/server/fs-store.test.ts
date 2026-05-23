@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -127,6 +127,61 @@ describe('文件存储', () => {
     expect(restored.key).toBe('case-1');
     expect((await listCases('crm')).map((item) => item.key)).toEqual(['case-1']);
     expect(await listTrash('crm')).toHaveLength(0);
+  });
+
+  it('删除用例时在全局用例命名空间中避开回收站同名目录', async () => {
+    await createProject({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    const oldCase = {
+      name: '历史用例',
+      key: 'case-1',
+      startPath: '/orders/create',
+      steps: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    await writeJson(join(getTrashPath('crm', 'case-1'), 'case.json'), oldCase);
+    await writeJson(join(root, 'projects', 'crm', 'cases', 'case-1', 'case.json'), oldCase);
+
+    await deleteCase('crm', 'case-1');
+
+    expect((await listCases('crm')).map((item) => item.key)).toEqual([]);
+    expect(await readdir(join(root, 'projects', 'crm', 'trash'))).toEqual(['case-1', 'case-1-1']);
+    expect((await listTrash('crm')).map((item) => item.key)).toEqual(['case-1', 'case-1-1']);
+
+    const restored = await restoreTrashCase('crm', 'case-1-1');
+
+    expect(restored.key).toBe('case-1-1');
+    expect((await listCases('crm')).map((item) => item.key)).toEqual(['case-1-1']);
+  });
+
+  it('恢复回收站用例时在全局用例命名空间中避开可用用例同名目录', async () => {
+    await createProject({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    const oldCase = {
+      name: '历史用例',
+      key: 'case-1',
+      startPath: '/orders/create',
+      steps: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    await writeJson(join(root, 'projects', 'crm', 'cases', 'case-1', 'case.json'), oldCase);
+    await writeJson(join(getTrashPath('crm', 'case-1'), 'case.json'), oldCase);
+
+    const restored = await restoreTrashCase('crm', 'case-1');
+
+    expect(restored.key).toBe('case-1-1');
+    expect(await readdir(join(root, 'projects', 'crm', 'cases'))).toEqual(['case-1', 'case-1-1']);
+    expect((await listCases('crm')).map((item) => item.key)).toEqual(['case-1', 'case-1-1']);
   });
 
   it('创建运行记录时生成运行目录', async () => {

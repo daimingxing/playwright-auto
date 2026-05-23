@@ -13,3 +13,8 @@ vendor/*
 vendor/playwright/*
 !vendor/playwright/.gitkeep
 vendor/playwright/.registry
+output/
+
+graphify-out/manifest.json
+graphify-out/cost.json
+graphify-out/cache/

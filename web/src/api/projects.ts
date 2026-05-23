@@ -1,9 +1,11 @@
 import type { EnvMeta, ProjectMeta } from '../../../shared/types';
+import { downloadFile } from './http';
 import { requestJson } from './http';
 
 export interface CreateProjectInput {
   name: string;
   key: string;
+  envName?: string;
   baseUrl: string;
 }
 
@@ -83,6 +85,22 @@ export function updateProjectEnv(projectKey: string, envKey: string, input: Upda
  */
 export function deleteProjectEnv(projectKey: string, envKey: string) {
   return requestJson<void>(`/api/projects/${projectKey}/envs/${envKey}`, {
+    method: 'DELETE'
+  });
+}
+
+/**
+ * 下载项目压缩包。
+ */
+export function exportProject(projectKey: string) {
+  return downloadFile(`/api/projects/${projectKey}/export`, `${projectKey}.zip`);
+}
+
+/**
+ * 彻底删除测试项目。
+ */
+export function deleteProject(projectKey: string) {
+  return requestJson<void>(`/api/projects/${projectKey}`, {
     method: 'DELETE'
   });
 }

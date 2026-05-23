@@ -124,6 +124,34 @@ describe('用例接口', () => {
     expect(restored.body.key).toBe('case-1');
   });
 
+  it('通过接口删除用例到回收站时会同步冲突后的用例编号', async () => {
+    const app = createApp();
+    await request(app).post('/api/projects').send({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    const oldCase = {
+      name: '回收站旧用例',
+      key: 'case-1',
+      startPath: '/orders/create',
+      steps: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    await writeJson(join(root, 'projects', 'crm', 'cases', 'case-1', 'case.json'), oldCase);
+    await writeJson(join(getTrashPath('crm', 'case-1'), 'case.json'), oldCase);
+
+    const removed = await request(app).delete('/api/projects/crm/cases/case-1');
+    const trash = await request(app).get('/api/projects/crm/trash');
+    const restored = await request(app).post('/api/projects/crm/trash/case-1-1/restore');
+
+    expect(removed.status).toBe(204);
+    expect(trash.body.map((item: { key: string }) => item.key)).toEqual(['case-1', 'case-1-1']);
+    expect(restored.status).toBe(200);
+    expect(restored.body.key).toBe('case-1-1');
+  });
+
   it('读取历史用例时自动补充审查结果', async () => {
     const app = createApp();
     await request(app).post('/api/projects').send({
