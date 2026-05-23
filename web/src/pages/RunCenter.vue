@@ -8,6 +8,7 @@ import { getAuthState, saveLogin, startLogin } from '../api/auth';
 import { listCases } from '../api/cases';
 import { getProject } from '../api/projects';
 import { deleteRun, exportRun, getRunConfig, listRuns, runProject } from '../api/runs';
+import { getProjectEnv, setProjectEnv } from '../state/project-env';
 import { getErrorMessage } from '../utils/error';
 import {
   canStartRun,
@@ -50,7 +51,7 @@ async function loadProject() {
   const [project, config, items] = await Promise.all([getProject(projectKey), getRunConfig(projectKey), listCases(projectKey)]);
 
   envs.value = project.envs;
-  selectedEnv.value = 'default';
+  selectedEnv.value = getProjectEnv(project)?.key ?? '';
   runConfig.value = config;
   workers.value = config.headlessWorkers;
   cases.value = items;
@@ -91,6 +92,7 @@ async function loadAuthState() {
  * 切换运行环境后刷新登录态状态。
  */
 async function changeEnv() {
+  setProjectEnv(projectKey, selectedEnv.value);
   sessionId.value = '';
   await loadAuthState();
 }

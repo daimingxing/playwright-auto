@@ -34,6 +34,7 @@ import {
 } from "../api/cases";
 import { getAuthState, saveLogin, startLogin } from "../api/auth";
 import { getAppStepConfig, getProject } from "../api/projects";
+import { getProjectEnv, setProjectEnv } from "../state/project-env";
 import { getErrorMessage } from "../utils/error";
 import {
   canMoveSteps,
@@ -64,7 +65,9 @@ const router = useRouter();
 const projectKey = String(route.params.projectKey);
 const caseKey = String(route.params.caseKey);
 const item = ref<CaseMeta | null>(null);
+const envs = ref<EnvMeta[]>([]);
 const activeEnv = ref<EnvMeta | null>(null);
+const selectedEnv = ref("");
 const stepConfig = ref(stepTimeouts);
 const stepTable = ref<TableInstance>();
 const recordId = ref("");
@@ -129,8 +132,24 @@ async function loadCase() {
   ]);
   item.value = caseInfo;
   stepConfig.value = config.steps.timeouts;
-  activeEnv.value =
-    project.envs.find((env) => env.key === project.defaultEnv) ?? project.envs[0] ?? null;
+  envs.value = project.envs;
+  activeEnv.value = getProjectEnv(project) ?? null;
+  selectedEnv.value = activeEnv.value?.key ?? "";
+  await loadAuthState();
+}
+
+/**
+ * 切换当前实测检查环境。
+ */
+async function changeEnv() {
+  const nextEnv = envs.value.find((env) => env.key === selectedEnv.value) ?? null;
+  activeEnv.value = nextEnv;
+  loginId.value = "";
+
+  if (nextEnv) {
+    setProjectEnv(projectKey, nextEnv.key);
+  }
+
   await loadAuthState();
 }
 
@@ -610,7 +629,7 @@ onMounted(loadCase);
               <el-input v-model="item.startPath" />
             </el-form-item>
             <el-form-item label="实际地址">
-              <div class="start-preview">{{ startPreview }}</div>
+              <div class="start-preview">{{ startPreview || "-" }}</div>
             </el-form-item>
             <el-form-item label="登录态">
               <div class="auth-status-wrap">
@@ -640,6 +659,17 @@ onMounted(loadCase);
               <el-tag :type="getPracticalReviewTagType(item.practicalReview)" effect="light">
                 {{ formatPracticalReviewStatus(item.practicalReview) }}
               </el-tag>
+            </div>
+            <div class="panel-row env-row">
+              <span>检查环境</span>
+              <el-select v-model="selectedEnv" class="practical-env-select" @change="changeEnv">
+                <el-option
+                  v-for="env in envs"
+                  :key="env.key"
+                  :label="`${env.name}（${env.key}）`"
+                  :value="env.key"
+                />
+              </el-select>
             </div>
             <div class="panel-row">
               <span>最后检查时间</span>
@@ -983,8 +1013,16 @@ onMounted(loadCase);
   margin-top: 10px;
 }
 
+.env-row {
+  align-items: center;
+}
+
 .panel-row strong {
   color: #1f2937;
+}
+
+.practical-env-select {
+  width: 260px;
 }
 
 .panel-actions {
@@ -1016,19 +1054,6 @@ onMounted(loadCase);
   font-size: 14px;
 }
 
-.step-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  margin: 16px 0;
-}
-
-.insert-hint {
-  color: #5f7188;
-  font-size: 13px;
-}
-
 .start-preview {
   width: 100%;
   min-height: 32px;
@@ -1042,6 +1067,19 @@ onMounted(loadCase);
   font-family: Consolas, "Courier New", monospace;
   font-size: 13px;
   line-height: 1.45;
+}
+
+.step-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 16px 0;
+}
+
+.insert-hint {
+  color: #5f7188;
+  font-size: 13px;
 }
 
 .batch-count {

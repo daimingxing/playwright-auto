@@ -13,6 +13,7 @@ import {
   listProjects,
   updateProjectEnv
 } from '../api/projects';
+import { getDefaultEnv, getProjectEnv, isDefaultEnv, setProjectEnv } from '../state/project-env';
 import { getErrorMessage } from '../utils/error';
 
 const router = useRouter();
@@ -33,7 +34,6 @@ const form = reactive({
   envName: '',
   baseUrl: ''
 });
-const selectedEnvKeys = reactive<Record<string, string>>({});
 
 /**
  * 加载项目列表。
@@ -67,21 +67,10 @@ async function submitProject() {
 }
 
 /**
- * 读取项目固定默认环境。
- */
-function getDefaultEnv(project: ProjectMeta) {
-  const defaultKey = project.defaultEnv ?? 'default';
-
-  return project.envs.find((env) => env.key === defaultKey) ?? project.envs[0];
-}
-
-/**
  * 读取卡片当前选中的环境。
  */
 function getSelectedEnv(project: ProjectMeta) {
-  const envKey = selectedEnvKeys[project.key];
-
-  return project.envs.find((env) => env.key === envKey) ?? getDefaultEnv(project);
+  return getProjectEnv(project);
 }
 
 /**
@@ -95,16 +84,7 @@ function hasMultipleEnvs(project: ProjectMeta) {
  * 切换项目卡片当前展示的环境。
  */
 function selectEnv(project: ProjectMeta, envKey: string) {
-  selectedEnvKeys[project.key] = envKey;
-}
-
-/**
- * 判断环境是否为项目默认环境。
- */
-function isDefaultEnv(project: ProjectMeta, env?: EnvMeta) {
-  const defaultKey = getDefaultEnv(project)?.key;
-
-  return env?.key === defaultKey;
+  setProjectEnv(project.key, envKey);
 }
 
 /**
@@ -308,10 +288,10 @@ onMounted(loadProjects);
             >
               <button class="env-switch" type="button">
                 <el-icon><Monitor /></el-icon>
+                <strong>{{ getSelectedEnv(project)?.name }}</strong>
                 <el-tag v-if="isDefaultEnv(project, getSelectedEnv(project))" size="small" type="info" effect="light">
                   默认
                 </el-tag>
-                <strong>{{ getSelectedEnv(project)?.name }}</strong>
                 <el-icon class="env-arrow"><ArrowDown /></el-icon>
               </button>
               <template #dropdown>
@@ -327,10 +307,10 @@ onMounted(loadProjects);
             </el-dropdown>
             <div v-else class="env-static">
               <el-icon><Monitor /></el-icon>
+              <strong>{{ getSelectedEnv(project)?.name }}</strong>
               <el-tag v-if="isDefaultEnv(project, getSelectedEnv(project))" size="small" type="info" effect="light">
                 默认
               </el-tag>
-              <strong>{{ getSelectedEnv(project)?.name }}</strong>
             </div>
             <div class="url-panel">
               <span>URL</span>
