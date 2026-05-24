@@ -52,6 +52,7 @@ import {
   getFailedPracticalStep,
   getInsertIndex,
   getPracticalReviewTagType,
+  getStepIndexLabel,
   getStartPreview,
   hasSelector,
   hasTimeout,
@@ -947,6 +948,7 @@ onMounted(loadCase);
           ref="stepTable"
           :data="item.steps"
           border
+          stripe
           height="100%"
           row-key="id"
           :row-class-name="getRowClass"
@@ -954,6 +956,11 @@ onMounted(loadCase);
           @selection-change="updateBatch"
         >
           <el-table-column v-if="isBatchMode" type="selection" width="44" reserve-selection />
+          <el-table-column label="序号" width="60" align="center">
+            <template #default="{ $index }">
+              <span class="step-index">{{ getStepIndexLabel($index) }}</span>
+            </template>
+          </el-table-column>
           <el-table-column label="步骤类型" width="120">
             <template #default="{ row }">
               <div class="step-type">
@@ -1122,7 +1129,7 @@ onMounted(loadCase);
       </el-drawer>
 
       <el-drawer v-model="practicalHistoryOpen" title="实测检查历史" size="520px">
-        <el-table :data="practicalHistory" border empty-text="暂无实测检查历史">
+        <el-table :data="practicalHistory" border stripe empty-text="暂无实测检查历史">
           <el-table-column prop="startedAt" label="开始时间" min-width="180" />
           <el-table-column prop="envKey" label="环境" width="100" />
           <el-table-column label="结果" width="90">
@@ -1400,6 +1407,11 @@ onMounted(loadCase);
   color: #c0c4cc;
 }
 
+.step-index {
+  color: #64748b;
+  font-weight: 600;
+}
+
 .table-wrap {
   min-height: 0;
   overflow: auto;
@@ -1413,11 +1425,11 @@ onMounted(loadCase);
 }
 
 .table-wrap :deep(.el-table__row.is-selected-step > td.el-table__cell) {
-  background: #eaf4ff;
+  background: #dbeafe;
 }
 
 .table-wrap :deep(.el-table__row.is-step-flash > td.el-table__cell) {
-  background: #dbeeff;
+  background: #bfdbfe;
   animation: step-slide 180ms ease;
 }
 

@@ -14,6 +14,7 @@ import {
   getFailedPracticalStep,
   getInsertIndex,
   getPracticalReviewTagType,
+  getStepIndexLabel,
   getStartPreview,
   mergeStepReviewState,
   hasSelector,
@@ -95,6 +96,11 @@ describe('用例编辑器步骤工具', () => {
   it('会把步骤类型展示为中文主文案和代码副标识', () => {
     expect(formatStepType('goto')).toEqual({ label: '打开页面', code: 'goto' });
     expect(formatStepType('click')).toEqual({ label: '点击', code: 'click' });
+  });
+
+  it('会把步骤下标显示为从 1 开始的序号', () => {
+    expect(getStepIndexLabel(0)).toBe(1);
+    expect(getStepIndexLabel(4)).toBe(5);
   });
 
   it('静态定位检查通过文案会避免和实测检查混淆', () => {

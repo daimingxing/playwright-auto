@@ -367,7 +367,7 @@ onMounted(loadProjects);
 
     <el-dialog v-model="envDialogOpen" title="环境配置" width="760px" @closed="resetEnvForm">
       <div v-if="activeProject" class="env-layout">
-        <el-table :data="activeProject.envs" border>
+        <el-table :data="activeProject.envs" border stripe>
           <el-table-column label="环境" min-width="170">
             <template #default="{ row }">
               <div class="env-name">

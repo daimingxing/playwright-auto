@@ -41,6 +41,13 @@ export function getSelectedCases(cases: CaseMeta[], selectedKeys: string[]) {
 }
 
 /**
+ * 从表格多选行中读取用例 key。
+ */
+export function getSelectedKeys(rows: CaseMeta[]) {
+  return rows.map((row) => row.key);
+}
+
+/**
  * 判断用例是否允许进入运行中心。
  */
 export function isRunnableCase(item: CaseMeta) {

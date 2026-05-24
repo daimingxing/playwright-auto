@@ -8,6 +8,7 @@ import {
   getReportUrl,
   getRunButtonText,
   getSelectedCases,
+  getSelectedKeys,
   isRunnableCase,
   mergeSelectedCaseKeys
 } from '../../web/src/pages/run-center';
@@ -48,6 +49,14 @@ describe('运行中心用例选择工具', () => {
     const selectedCases = getSelectedCases(cases, ['case-b']);
 
     expect(selectedCases.map((item) => item.key)).toEqual(['case-b']);
+  });
+
+  it('会从表格多选行同步选中 key', () => {
+    const cases = [makeCase('case-a', 'active'), makeCase('case-b', 'active')];
+
+    const keys = getSelectedKeys(cases);
+
+    expect(keys).toEqual(['case-a', 'case-b']);
   });
 
   it('运行中心只选择启用且基础检查通过的用例', () => {

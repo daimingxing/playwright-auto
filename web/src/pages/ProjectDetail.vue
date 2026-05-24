@@ -301,7 +301,7 @@ onMounted(loadData);
               <el-button size="small" type="success" :disabled="selectedKeys.length === 0" @click="changeBatchStatus('active')">设为启用</el-button>
             </div>
           </div>
-          <el-table class="case-table" :data="filteredCases" border height="100%" row-key="key" @selection-change="updateSelection">
+          <el-table class="case-table" :data="filteredCases" border stripe height="100%" row-key="key" @selection-change="updateSelection">
             <el-table-column type="selection" width="44" reserve-selection />
             <el-table-column prop="name" label="用例名称" min-width="220">
               <template #default="{ row }">
@@ -407,6 +407,7 @@ onMounted(loadData);
             class="trash-table btn-shadow-sm"
             :data="trash"
             border
+            stripe
             height="100%"
             empty-text="回收站暂无用例"
           >

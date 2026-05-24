@@ -122,6 +122,13 @@ export function formatStepType(type: StepType) {
 }
 
 /**
+ * 显示步骤在列表中的序号。
+ */
+export function getStepIndexLabel(index: number) {
+  return index + 1;
+}
+
+/**
  * 显示用例状态。
  */
 export function formatCaseStatus(status: CaseStatus | undefined) {
