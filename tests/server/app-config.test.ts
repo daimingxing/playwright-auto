@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 let root = '';
 
@@ -154,6 +154,16 @@ describe('应用配置', () => {
       }
     });
   });
+
+  it('配置文件损坏时会直接报错并暴露路径', async () => {
+    await mkdir(root, { recursive: true });
+    await writeFile(process.env.PLAYWRIGHT_AUTO_CONFIG!, '{bad json', 'utf8');
+
+    const { getAppConfig } = await importFreshConfig();
+
+    expect(() => getAppConfig()).toThrow('配置文件解析失败');
+    expect(() => getAppConfig()).toThrow('playwright-auto.config.json');
+  });
 });
 
 /**
@@ -168,5 +178,6 @@ async function writeConfig(value: unknown) {
  * 避免模块缓存影响环境变量测试。
  */
 async function importFreshConfig() {
+  vi.resetModules();
   return import('../../server/src/lib/app-config');
 }

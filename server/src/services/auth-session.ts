@@ -65,9 +65,11 @@ interface ManualSession {
   context?: BrowserContext;
   page?: Page;
   createdAt: string;
+  timer: ReturnType<typeof setTimeout>;
 }
 
 const sessions = new Map<string, ManualSession>();
+const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 
 /**
  * 打开有头浏览器让用户手动登录。
@@ -77,10 +79,12 @@ export async function startLoginSession(projectKey: string, input: ManualLoginIn
 
   if (process.env.NODE_ENV === 'test') {
     const sessionId = crypto.randomUUID();
+    const timer = createSessionTimer(sessionId);
     sessions.set(sessionId, {
       projectKey,
       envKey,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      timer
     });
 
     return {
@@ -98,6 +102,7 @@ export async function startLoginSession(projectKey: string, input: ManualLoginIn
   const context = await browser.newContext();
   const page = await context.newPage();
   const sessionId = crypto.randomUUID();
+  const timer = createSessionTimer(sessionId);
 
   sessions.set(sessionId, {
     projectKey,
@@ -105,7 +110,8 @@ export async function startLoginSession(projectKey: string, input: ManualLoginIn
     browser,
     context,
     page,
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    timer
   });
 
   await page.goto(envMeta.baseUrl);
@@ -122,7 +128,9 @@ export async function startLoginSession(projectKey: string, input: ManualLoginIn
 export async function saveLoginSession(projectKey: string, sessionId: string) {
   const session = sessions.get(sessionId);
 
-  if (!session || session.projectKey !== projectKey) {
+  if (!session || session.projectKey !== projectKey || isSessionExpired(session.createdAt)) {
+    clearSession(session);
+    sessions.delete(sessionId);
     throw badRequest('登录会话不存在或已过期');
   }
 
@@ -133,6 +141,7 @@ export async function saveLoginSession(projectKey: string, sessionId: string) {
   } else {
     await createAuthState(projectKey, { cookies: [], origins: [] }, session.envKey);
   }
+  clearSession(session);
   sessions.delete(sessionId);
 
   return {
@@ -166,4 +175,41 @@ async function getAuthEnv(projectKey: string, envKey?: string) {
     envKey: key,
     envMeta
   };
+}
+
+/**
+ * 创建会话过期定时器。
+ */
+function createSessionTimer(sessionId: string) {
+  const timer = setTimeout(() => {
+    const session = sessions.get(sessionId);
+
+    clearSession(session);
+    sessions.delete(sessionId);
+  }, SESSION_TTL_MS);
+
+  timer.unref?.();
+  return timer;
+}
+
+/**
+ * 判断会话是否已过期。
+ */
+function isSessionExpired(createdAt: string) {
+  return Date.now() - Date.parse(createdAt) >= SESSION_TTL_MS;
+}
+
+/**
+ * 清理会话关联资源。
+ */
+function clearSession(session: ManualSession | undefined) {
+  if (!session) {
+    return;
+  }
+
+  clearTimeout(session.timer);
+
+  if (session.browser) {
+    session.browser.close().catch(() => {});
+  }
 }

@@ -18,6 +18,7 @@ interface RecordSession {
   outputPath: string;
   child?: ChildProcess;
   createdAt: string;
+  timer: ReturnType<typeof setTimeout>;
 }
 
 interface RecordInput {
@@ -25,6 +26,7 @@ interface RecordInput {
 }
 
 const sessions = new Map<string, RecordSession>();
+const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 
 /**
  * 启动 Playwright codegen 录制会话。
@@ -46,7 +48,13 @@ export async function startRecordSession(projectKey: string, caseKey: string, in
 
   if (process.env.NODE_ENV === 'test') {
     await writeFile(outputPath, createTestSpec(startUrl), 'utf8');
-    sessions.set(sessionId, { projectKey, caseKey, outputPath, createdAt: new Date().toISOString() });
+    sessions.set(sessionId, {
+      projectKey,
+      caseKey,
+      outputPath,
+      createdAt: new Date().toISOString(),
+      timer: createSessionTimer(sessionId)
+    });
     return { sessionId, url: startUrl };
   }
 
@@ -84,7 +92,8 @@ export async function startRecordSession(projectKey: string, caseKey: string, in
     caseKey,
     outputPath,
     child,
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    timer: createSessionTimer(sessionId)
   });
 
   return { sessionId, url: startUrl };
@@ -100,11 +109,18 @@ export async function stopRecordSession(projectKey: string, caseKey: string, ses
     throw badRequest('录制会话不存在或已结束');
   }
 
+  if (isSessionExpired(session.createdAt)) {
+    clearSession(session);
+    sessions.delete(sessionId);
+    throw badRequest('录制会话不存在或已结束');
+  }
+
   await stopChild(session.child);
 
   const code = await readFile(session.outputPath, 'utf8');
   const result = parseCodegenSpec(code);
 
+  clearSession(session);
   sessions.delete(sessionId);
 
   return {
@@ -150,6 +166,43 @@ async function killProcessTree(pid: number) {
     killer.once('exit', () => resolve());
     killer.once('error', () => resolve());
   });
+}
+
+/**
+ * 创建会话过期定时器。
+ */
+function createSessionTimer(sessionId: string) {
+  const timer = setTimeout(() => {
+    const session = sessions.get(sessionId);
+
+    clearSession(session);
+    sessions.delete(sessionId);
+  }, SESSION_TTL_MS);
+
+  timer.unref?.();
+  return timer;
+}
+
+/**
+ * 判断会话是否已过期。
+ */
+function isSessionExpired(createdAt: string) {
+  return Date.now() - Date.parse(createdAt) >= SESSION_TTL_MS;
+}
+
+/**
+ * 清理会话关联资源。
+ */
+function clearSession(session: RecordSession | undefined) {
+  if (!session) {
+    return;
+  }
+
+  clearTimeout(session.timer);
+
+  if (session.child && !session.child.killed && session.child.exitCode === null) {
+    session.child.kill('SIGTERM');
+  }
 }
 
 /**

@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
 /**
@@ -13,7 +13,17 @@ export async function ensureDir(path: string) {
  */
 export async function writeJson(path: string, value: unknown) {
   await ensureDir(dirname(path));
-  await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+
+  // 先写临时文件，再原地替换目标文件，避免直接覆盖留下半截 JSON。
+  const tempPath = `${path}.tmp`;
+
+  try {
+    await writeFile(tempPath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+    await rename(tempPath, path);
+  } catch (error) {
+    await rm(tempPath, { force: true });
+    throw error;
+  }
 }
 
 /**

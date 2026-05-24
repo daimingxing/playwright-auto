@@ -150,9 +150,17 @@ function readFileConfig(): FileConfig {
   }
 
   try {
-    return JSON.parse(readFileSync(configPath, 'utf8')) as FileConfig;
-  } catch {
-    return {};
+    const parsed = JSON.parse(readFileSync(configPath, 'utf8'));
+
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('配置文件必须是对象');
+    }
+
+    return parsed as FileConfig;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    throw new Error(`配置文件解析失败：${configPath}（${message}）`);
   }
 }
 
