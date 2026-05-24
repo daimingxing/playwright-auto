@@ -26,11 +26,35 @@ const weakCssSelectorPattern = /^[a-z][a-z0-9-]*$/i;
 const roleWithoutNameOptionPattern = /getByRole\(\s*['"`][^'"`]+['"`]\s*,\s*\{\s*(?:name\s*:\s*['"`]\s*['"`]\s*)?\}\s*\)/;
 const roleTrailingCommaPattern = /getByRole\(\s*['"`][^'"`]+['"`]\s*,\s*\)/;
 const roleWithNamePattern = /getByRole\(\s*['"`][^'"`]+['"`]\s*,\s*\{[^}]*name\s*:/;
-const emptyLocatorOptionPattern = /\b(?:name|hasText)\s*:\s*(?=[,}])/;
-const blankNameOptionPattern = /\bname\s*:\s*(['"`])\s*\1/;
-const externalLocatorVariablePattern = /\{\s*(?:name|hasText)\s*(?:[,}])/;
-const suspiciousRoleOptionPattern = /getByRole\([^)]*\{\s*[^}]*hasText\s*:/;
-const weakNthSelectorPattern = /locator\(\s*['"`][a-z][a-z0-9-]*['"`]\s*\).*filter\(\s*\{\s*hasText\s*:\s*(['"`])\s*\1\s*\}\s*\).*\.nth\(\s*\d+\s*\)/i;
+const locatorMethodNamePattern = /(?:^|\.)([A-Za-z_$][\w$]*)\s*\(/g;
+const roleOptionNames = new Set(['checked', 'description', 'disabled', 'exact', 'expanded', 'includeHidden', 'level', 'name', 'pressed', 'selected']);
+const filterOptionNames = new Set(['has', 'hasNot', 'hasText', 'hasNotText', 'visible']);
+const locatorMethodNames = new Set([
+  'locator',
+  'filter',
+  'getByRole',
+  'getByText',
+  'getByLabel',
+  'getByPlaceholder',
+  'getByTestId',
+  'getByTitle',
+  'getByAltText',
+  'nth',
+  'first',
+  'last'
+]);
+
+interface LocatorOption {
+  key: string;
+  hasValue: boolean;
+  blankText: boolean;
+  shorthand: boolean;
+}
+
+interface OptionParseResult {
+  options: LocatorOption[];
+  invalid: boolean;
+}
 
 /**
  * 检查用例整体结构和每个步骤的必填字段。
@@ -181,28 +205,14 @@ function validateSelectorSyntax(step: CaseStep, stepIndex: number, selector: str
     );
   }
 
-  if (externalLocatorVariablePattern.test(selector)) {
-    return createStepReviewItem(
-      { ...step, selector },
-      stepIndex,
-      'external-locator-variable',
-      'error',
-      'locator',
-      '定位器配置依赖外部变量。',
-      '请直接填写明确的文本、正则或定位条件，避免生成的测试文件运行时变量不存在。'
-    );
+  const methodIssue = reviewLocatorMethods(step, stepIndex, selector);
+
+  if (methodIssue) {
+    return methodIssue;
   }
 
-  if (emptyLocatorOptionPattern.test(selector) || blankNameOptionPattern.test(selector)) {
-    return createStepReviewItem(
-      { ...step, selector },
-      stepIndex,
-      'empty-locator-option',
-      'error',
-      'locator',
-      '定位器配置项缺少有效值。',
-      '请为 name、hasText 等定位配置补充非空文本、正则或定位条件。'
-    );
+  for (const optionIssue of reviewLocatorOptions(step, stepIndex, selector)) {
+    return optionIssue;
   }
 
   return undefined;
@@ -285,34 +295,6 @@ function reviewSelectorQuality(step: CaseStep, stepIndex: number, selector: stri
     );
   }
 
-  if (suspiciousRoleOptionPattern.test(selector)) {
-    items.push(
-      createStepReviewItem(
-        context,
-        stepIndex,
-        'suspicious-role-option',
-        'warning',
-        'locator',
-        '角色定位中使用了可疑的 hasText 配置。',
-        '请优先使用 name 约束角色名称，或先 getByRole 后再使用 filter({ hasText })。'
-      )
-    );
-  }
-
-  if (weakNthSelectorPattern.test(selector)) {
-    items.push(
-      createStepReviewItem(
-        context,
-        stepIndex,
-        'weak-nth-selector',
-        'danger',
-        'locator',
-        '选择器依赖空文本过滤和序号定位，页面结构变化后很容易点错元素。',
-        '请补充有效文本、角色名称、标签或测试标识，避免只按序号选择元素。'
-      )
-    );
-  }
-
   if (isWeakCssSelector(selector)) {
     items.push(
       createStepReviewItem(
@@ -328,6 +310,509 @@ function reviewSelectorQuality(step: CaseStep, stepIndex: number, selector: stri
   }
 
   return items;
+}
+
+/**
+ * 检查 Playwright 定位表达式中的方法名是否属于支持白名单。
+ */
+function reviewLocatorMethods(step: CaseStep, stepIndex: number, selector: string) {
+  if (!shouldCheckLocatorMethods(selector)) {
+    return undefined;
+  }
+
+  for (const methodName of parseLocatorMethodNames(selector)) {
+    if (!locatorMethodNames.has(methodName)) {
+      return createStepReviewItem(
+        { ...step, selector },
+        stepIndex,
+        'unknown-locator-method',
+        'error',
+        'locator',
+        '选择器使用了不支持的 Playwright 定位方法。',
+        '请使用 locator、filter、getByRole、getByText、getByLabel、getByPlaceholder、getByTestId、getByTitle、getByAltText、nth、first 或 last。'
+      );
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * 判断 selector 是否需要按 Playwright 定位方法白名单检查。
+ */
+function shouldCheckLocatorMethods(selector: string) {
+  return /(^|\.)[A-Za-z_$][\w$]*\s*\(/.test(selector);
+}
+
+/**
+ * 提取 Playwright 风格定位表达式中的方法名。
+ */
+function parseLocatorMethodNames(selector: string) {
+  const names: string[] = [];
+  locatorMethodNamePattern.lastIndex = 0;
+
+  for (let match = locatorMethodNamePattern.exec(selector); match; match = locatorMethodNamePattern.exec(selector)) {
+    names.push(match[1]);
+  }
+
+  return names;
+}
+
+/**
+ * 检查 Playwright 定位器方法的 options 对象是否符合当前 API。
+ */
+function reviewLocatorOptions(step: CaseStep, stepIndex: number, selector: string): CaseReviewItem[] {
+  const items: CaseReviewItem[] = [];
+  const context = { ...step, selector };
+
+  const roleResult = parseCallOptions(selector, 'getByRole');
+  const filterResult = parseCallOptions(selector, 'filter');
+
+  if (roleResult.invalid || filterResult.invalid) {
+    items.push(
+      createStepReviewItem(
+        context,
+        stepIndex,
+        'invalid-selector',
+        'error',
+        'locator',
+        '定位器 options 语法不完整。',
+        '请检查 getByRole 或 filter 的配置对象是否为合法对象字面量。'
+      )
+    );
+
+    return items;
+  }
+
+  for (const option of roleResult.options) {
+    const roleIssue = reviewOption(context, stepIndex, option, roleOptionNames, 'role');
+
+    if (roleIssue) {
+      items.push(roleIssue);
+    }
+  }
+
+  for (const option of filterResult.options) {
+    const filterIssue = reviewOption(context, stepIndex, option, filterOptionNames, 'filter');
+
+    if (filterIssue) {
+      items.push(filterIssue);
+    }
+  }
+
+  return items;
+}
+
+/**
+ * 检查单个 options 字段是否缺值、依赖外部变量或不属于目标方法。
+ */
+function reviewOption(
+  step: CaseStep,
+  stepIndex: number,
+  option: LocatorOption,
+  validNames: Set<string>,
+  owner: 'role' | 'filter'
+) {
+  if (!option.hasValue && !option.shorthand) {
+    return createStepReviewItem(
+      step,
+      stepIndex,
+      'empty-locator-option',
+      'error',
+      'locator',
+      '定位器配置项缺少有效值。',
+      '请为定位配置补充非空文本、正则、布尔值或定位条件。'
+    );
+  }
+
+  if (option.shorthand) {
+    return createStepReviewItem(
+      step,
+      stepIndex,
+      'external-locator-variable',
+      'error',
+      'locator',
+      '定位器配置依赖外部变量。',
+      '请直接填写明确的文本、正则、布尔值或定位条件，避免生成的测试文件运行时变量不存在。'
+    );
+  }
+
+  if (!validNames.has(option.key)) {
+    const ruleCode = owner === 'role' ? 'unknown-role-option' : 'unknown-filter-option';
+    const message = owner === 'role' ? 'getByRole 使用了不支持的配置项。' : 'filter 使用了不支持的配置项。';
+    const suggestion =
+      owner === 'role'
+        ? '请只使用 checked、description、disabled、exact、expanded、includeHidden、level、name、pressed、selected。'
+        : '请只使用 has、hasNot、hasText、hasNotText、visible。';
+
+    return createStepReviewItem(step, stepIndex, ruleCode, 'error', 'locator', message, suggestion);
+  }
+
+  if (option.blankText) {
+    return createStepReviewItem(
+      step,
+      stepIndex,
+      'empty-locator-option',
+      'error',
+      'locator',
+      '定位器配置项缺少有效值。',
+      '请为定位配置补充非空文本、正则、布尔值或定位条件。'
+    );
+  }
+
+  return undefined;
+}
+
+/**
+ * 解析指定定位器方法的顶层 options 字段。
+ */
+function parseCallOptions(selector: string, methodName: string): OptionParseResult {
+  const options: LocatorOption[] = [];
+  let searchStart = 0;
+  let invalid = false;
+
+  while (searchStart < selector.length) {
+    const methodIndex = selector.indexOf(`${methodName}(`, searchStart);
+
+    if (methodIndex < 0) {
+      break;
+    }
+
+    const callStart = methodIndex + methodName.length;
+    const callEnd = findPairEnd(selector, callStart, '(', ')');
+
+    if (callEnd < 0) {
+      invalid = true;
+      break;
+    }
+
+    const objectStart = findTopLevelOptionStart(selector, callStart);
+
+    if (objectStart < 0) {
+      searchStart = methodIndex + methodName.length;
+      continue;
+    }
+
+    if (!hasValidOptionPrefix(selector.slice(callStart + 1, objectStart))) {
+      invalid = true;
+      break;
+    }
+
+    const objectEnd = findPairEnd(selector, objectStart, '{', '}');
+
+    if (objectEnd < 0) {
+      invalid = true;
+      break;
+    }
+
+    const objectResult = parseObjectOptions(selector.slice(objectStart + 1, objectEnd));
+    options.push(...objectResult.options);
+    invalid = invalid || objectResult.invalid;
+    searchStart = objectEnd + 1;
+  }
+
+  return { options, invalid };
+}
+
+/**
+ * 找到方法调用中顶层 options 对象的起始位置。
+ */
+function findTopLevelOptionStart(selector: string, callStart: number) {
+  const callEnd = findPairEnd(selector, callStart, '(', ')');
+
+  if (callEnd < 0) {
+    return -1;
+  }
+
+  for (let index = callStart + 1; index < callEnd; index += 1) {
+    if (selector[index] === '{' && isTopLevelChar(selector, callStart, index)) {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
+/**
+ * 判断 options 对象前是否只有合法的前置参数或逗号。
+ */
+function hasValidOptionPrefix(prefix: string) {
+  const text = prefix.trim();
+
+  if (!text) {
+    return true;
+  }
+
+  return text.endsWith(',');
+}
+
+/**
+ * 判断指定字符是否位于当前方法调用的顶层参数中。
+ */
+function isTopLevelChar(value: string, scopeStart: number, targetIndex: number) {
+  let depth = 0;
+  let quote = '';
+  let escaped = false;
+
+  for (let index = scopeStart + 1; index < targetIndex; index += 1) {
+    const char = value[index];
+
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+
+    if (char === '\\') {
+      escaped = true;
+      continue;
+    }
+
+    if (quote) {
+      if (char === quote) {
+        quote = '';
+      }
+      continue;
+    }
+
+    if (char === '\'' || char === '"' || char === '`') {
+      quote = char;
+      continue;
+    }
+
+    if (char === '(' || char === '[' || char === '{') {
+      depth += 1;
+      continue;
+    }
+
+    if (char === ')' || char === ']' || char === '}') {
+      depth -= 1;
+    }
+  }
+
+  return depth === 0;
+}
+
+/**
+ * 找到成对符号的结束位置。
+ */
+function findPairEnd(value: string, startIndex: number, openChar: string, closeChar: string) {
+  let depth = 0;
+  let quote = '';
+  let escaped = false;
+
+  for (let index = startIndex; index < value.length; index += 1) {
+    const char = value[index];
+
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+
+    if (char === '\\') {
+      escaped = true;
+      continue;
+    }
+
+    if (quote) {
+      if (char === quote) {
+        quote = '';
+      }
+      continue;
+    }
+
+    if (char === '\'' || char === '"' || char === '`') {
+      quote = char;
+      continue;
+    }
+
+    if (char === openChar) {
+      depth += 1;
+      continue;
+    }
+
+    if (char === closeChar) {
+      depth -= 1;
+
+      if (depth === 0) {
+        return index;
+      }
+    }
+  }
+
+  return -1;
+}
+
+/**
+ * 解析 options 对象中的顶层字段。
+ */
+function parseObjectOptions(body: string): OptionParseResult {
+  const options: LocatorOption[] = [];
+  let invalid = false;
+
+  for (const item of splitTopLevel(body)) {
+    const text = item.trim();
+
+    if (!text) {
+      continue;
+    }
+
+    const option = parseOptionItem(text);
+
+    if (!option) {
+      invalid = true;
+      continue;
+    }
+
+    options.push(option);
+  }
+
+  return { options, invalid };
+}
+
+/**
+ * 按顶层逗号拆分对象字段。
+ */
+function splitTopLevel(value: string) {
+  const parts: string[] = [];
+  let start = 0;
+  let depth = 0;
+  let quote = '';
+  let escaped = false;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+
+    if (char === '\\') {
+      escaped = true;
+      continue;
+    }
+
+    if (quote) {
+      if (char === quote) {
+        quote = '';
+      }
+      continue;
+    }
+
+    if (char === '\'' || char === '"' || char === '`') {
+      quote = char;
+      continue;
+    }
+
+    if (char === '(' || char === '[' || char === '{') {
+      depth += 1;
+      continue;
+    }
+
+    if (char === ')' || char === ']' || char === '}') {
+      depth -= 1;
+      continue;
+    }
+
+    if (char === ',' && depth === 0) {
+      parts.push(value.slice(start, index));
+      start = index + 1;
+    }
+  }
+
+  parts.push(value.slice(start));
+  return parts;
+}
+
+/**
+ * 解析单个 options 字段。
+ */
+function parseOptionItem(item: string): LocatorOption | undefined {
+  const text = item.trim();
+
+  if (!text) {
+    return undefined;
+  }
+
+  const separatorIndex = findTopLevelColon(text);
+
+  if (separatorIndex < 0) {
+    return /^[A-Za-z_$][\w$]*$/.test(text) ? { key: text, hasValue: false, blankText: false, shorthand: true } : undefined;
+  }
+
+  const key = text.slice(0, separatorIndex).trim();
+  const value = text.slice(separatorIndex + 1).trim();
+
+  if (!/^[A-Za-z_$][\w$]*$/.test(key)) {
+    return undefined;
+  }
+
+  return {
+    key,
+    hasValue: Boolean(value),
+    blankText: isBlankTextValue(value),
+    shorthand: false
+  };
+}
+
+/**
+ * 找到对象字段名和值之间的顶层冒号。
+ */
+function findTopLevelColon(value: string) {
+  let depth = 0;
+  let quote = '';
+  let escaped = false;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+
+    if (char === '\\') {
+      escaped = true;
+      continue;
+    }
+
+    if (quote) {
+      if (char === quote) {
+        quote = '';
+      }
+      continue;
+    }
+
+    if (char === '\'' || char === '"' || char === '`') {
+      quote = char;
+      continue;
+    }
+
+    if (char === '(' || char === '[' || char === '{') {
+      depth += 1;
+      continue;
+    }
+
+    if (char === ')' || char === ']' || char === '}') {
+      depth -= 1;
+      continue;
+    }
+
+    if (char === ':' && depth === 0) {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
+/**
+ * 判断字段值是否为空字符串。
+ */
+function isBlankTextValue(value: string) {
+  const match = value.match(/^(['"`])([\s\S]*)\1$/);
+
+  return Boolean(match && !match[2].trim());
 }
 
 /**

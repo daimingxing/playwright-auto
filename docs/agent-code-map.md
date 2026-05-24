@@ -21,7 +21,7 @@
 - 项目管理：`web/src/api/projects.ts`、`server/src/routes/projects.ts`、`server/src/lib/project-store.ts`
 - 用例管理、回收站、导出：`web/src/api/cases.ts`、`server/src/routes/cases.ts`、`server/src/lib/case-store.ts`、`server/src/services/export.ts`
 - 用例状态、批量状态切换：`shared/types.ts`、`web/src/pages/ProjectDetail.vue`、`web/src/api/cases.ts`、`server/src/routes/cases.ts`、`server/src/lib/case-store.ts`
-- 基础检查和定位质量检查：`shared/case-review.ts`、`server/src/services/case-review/index.ts`、`web/src/pages/case-editor.ts`、`web/src/pages/CaseEditor.vue`
+- 基础检查和定位质量检查：`shared/case-review.ts`、`server/src/services/case-review/index.ts`、`web/src/pages/case-editor.ts`、`web/src/pages/CaseEditor.vue`，规则文档见 `docs/case-review-rules.md`
 - 用例步骤编辑和批量操作：`web/src/pages/CaseEditor.vue`、`web/src/pages/case-editor.ts`、`tests/web/case-editor.test.ts`
 - 用例步骤生成 Playwright spec：`server/src/services/case-generator.ts`
 - Playwright codegen 录制导入：`server/src/routes/record.ts`、`server/src/services/record-session.ts`、`server/src/services/codegen-parser.ts`
