@@ -21,9 +21,9 @@
 - 项目管理：`web/src/api/projects.ts`、`server/src/routes/projects.ts`、`server/src/lib/project-store.ts`
 - 用例管理、回收站、导出：`web/src/api/cases.ts`、`server/src/routes/cases.ts`、`server/src/lib/case-store.ts`、`server/src/services/export.ts`
 - 用例状态、批量状态切换：`shared/types.ts`、`web/src/pages/ProjectDetail.vue`、`web/src/api/cases.ts`、`server/src/routes/cases.ts`、`server/src/lib/case-store.ts`
-- 基础检查和定位质量检查：`shared/case-review.ts`、`server/src/services/case-review/index.ts`、`web/src/pages/case-editor.ts`、`web/src/pages/CaseEditor.vue`，规则文档见 `docs/case-review-rules.md`
+- 基础检查和定位质量检查：`shared/case-review.ts`、`server/src/services/case-review/index.ts`、`web/src/pages/case-editor.ts`、`web/src/pages/CaseEditor.vue`、`web/src/pages/case-editor-composables.ts`，规则文档见 `docs/case-review-rules.md`
 - 定位器构建器：`shared/locator-builder.ts`、`web/src/pages/locator-builder.ts`、`web/src/components/LocatorBuilderDrawer.vue`、`server/src/services/case-generator.ts`、`server/src/services/practical-review-spec.ts`，设计和能力矩阵见 `docs/locator-builder-development.md`
-- 用例步骤编辑和批量操作：`web/src/pages/CaseEditor.vue`、`web/src/pages/case-editor.ts`、`tests/web/case-editor.test.ts`
+- 用例步骤编辑和批量操作：`web/src/pages/CaseEditor.vue`、`web/src/pages/case-editor.ts`、`web/src/pages/case-editor-composables.ts`、`tests/web/case-editor.test.ts`、`tests/web/case-editor-composables.test.ts`
 - 用例步骤生成 Playwright spec：`server/src/services/case-generator.ts`
 - Playwright codegen 录制导入：`server/src/routes/record.ts`、`server/src/services/record-session.ts`、`server/src/services/codegen-parser.ts`
 - 运行项目与报告：`web/src/api/runs.ts`、`web/src/pages/RunCenter.vue`、`web/src/pages/run-center.ts`、`server/src/routes/runs.ts`、`server/src/services/runner.ts`、`server/src/lib/run-store.ts`
@@ -59,8 +59,8 @@
 - 改用例状态或基础检查规则时，同步检查 `shared/types.ts`、`shared/case-review.ts`、`server/src/services/case-review/index.ts`、`case-store.ts`、`routes/cases.ts`、`runner.ts`、`ProjectDetail.vue`、`CaseEditor.vue`、`RunCenter.vue` 和相关测试
 - 改 API 路径或响应结构时，同步检查 `web/src/api/*`、`server/src/routes/*` 和对应 `tests/server/*`
 - 改用例步骤类型或定位器草稿结构时，同步检查 `shared/types.ts`、`shared/locator-builder.ts`、`CaseEditor.vue`、`LocatorBuilderDrawer.vue`、`case-editor.ts`、`case-generator.ts`、`practical-review-spec.ts`、`codegen-parser.ts` 和相关测试
-- 改用例步骤编辑交互或批量操作时，同步检查 `CaseEditor.vue`、`case-editor.ts` 和 `tests/web/case-editor.test.ts`
-- 改配置类型、步骤默认等待时间或前端可见配置时，同步检查 `playwright-auto.config.json`、`shared/types.ts`、`app-config.ts`、`web/src/api/projects.ts`、`CaseEditor.vue`、`codegen-parser.ts` 和相关测试
+- 改用例步骤编辑交互、批量操作、登录态、录制或实测检查时，同步检查 `CaseEditor.vue`、`case-editor.ts`、`case-editor-composables.ts`、`tests/web/case-editor.test.ts` 和 `tests/web/case-editor-composables.test.ts`
+- 改配置类型、步骤默认等待时间或前端可见配置时，同步检查 `playwright-auto.config.json`、`shared/types.ts`、`app-config.ts`、`web/src/api/projects.ts`、`CaseEditor.vue`、`case-editor-composables.ts`、`codegen-parser.ts` 和相关测试
 - 改 `server.corsOrigins` 或本地服务来源限制时，同步检查 `playwright-auto.config.json`、`app-config.ts`、`app.ts`、`README.md` 和 `tests/server/api-projects.test.ts`
 - 改路径参数规则时，同步检查 `guard.ts`、`path.ts`、相关路由和 API 测试
 - 改新建项目标识归一化时，同步检查 `ProjectList.vue`、`schema.ts`、`project-store.ts` 和 `tests/server/api-projects.test.ts`

@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import type { TableInstance } from "element-plus";
-import { ElMessage, ElMessageBox } from "element-plus";
+import { ElMessage } from "element-plus";
 import {
   ArrowDown,
   ArrowUp,
@@ -20,33 +20,23 @@ import type {
   CaseMeta,
   CaseStep,
   EnvMeta,
-  PracticalReviewRecord,
   CaseStatus,
   RunMode,
   StepType,
 } from "../../../shared/types";
 import {
-  clearPracticalReviews,
   getCase,
-  getPracticalReview,
-  listPracticalReviews,
   saveCaseDraft,
-  startPracticalReview,
-  startRecord,
-  stopRecord,
   updateCase,
   updateCaseStatus,
 } from "../api/cases";
-import { getAuthState, saveLogin, startLogin } from "../api/auth";
 import { getAppStepConfig, getProject } from "../api/projects";
-import { getProjectEnv, setProjectEnv } from "../state/project-env";
+import { getProjectEnv } from "../state/project-env";
 import { getErrorIssues, getErrorMessage } from "../utils/error";
 import { formatDateTime } from "../utils/time";
 import { reviewCaseStep } from "../../../shared/case-review";
 import {
-  canMoveSteps,
   copyStep,
-  copySteps,
   formatCaseStatus,
   formatCheckStatus,
   formatStepType,
@@ -62,15 +52,14 @@ import {
   hasValue,
   insertStep,
   moveStep,
-  moveSteps,
   removeStep,
-  removeSteps,
   mergeStepReviewState,
   type StepReviewPreview,
   stepGroups,
   stepLabels,
   stepTimeouts,
 } from "./case-editor";
+import { useCaseAuth, useCasePractical, useCaseRecord, useStepBatch } from "./case-editor-composables";
 import { formatLocatorSummary, type LocatorBuilderState } from "./locator-builder";
 
 const route = useRoute();
@@ -84,25 +73,11 @@ const selectedEnv = ref("");
 const practicalMode = ref<RunMode>("headless");
 const stepConfig = ref(stepTimeouts);
 const stepTable = ref<TableInstance>();
-const recordId = ref("");
-const isRecording = ref(false);
-const isBatchMode = ref(false);
 const selectedId = ref("");
-const batchIds = ref<string[]>([]);
 const highlightId = ref("");
-const practicalReviewing = ref(false);
-const practicalHistoryOpen = ref(false);
-const failureDrawerOpen = ref(false);
 const locatorDrawerOpen = ref(false);
 const locatorStepId = ref("");
-const practicalHistory = ref<PracticalReviewRecord[]>([]);
-const activePracticalRecord = ref<PracticalReviewRecord | null>(null);
 const stepReviewPreview = ref(new Map<string, StepReviewPreview>());
-const hasAuth = ref(false);
-const authPath = ref("");
-const loginId = ref("");
-const loadingLogin = ref(false);
-const savingLogin = ref(false);
 const stepFlashMs = 180;
 const reviewDebounceMs = 400;
 // 浏览器环境下 `window.setTimeout` 返回数值型定时器句柄，避免与 Node 的 `Timeout` 类型混淆。
@@ -137,17 +112,79 @@ const reviewMap = computed(() => {
 
   return map;
 });
-const hasBatch = computed(() => batchIds.value.length > 0);
-const canBatchUp = computed(() =>
-  item.value ? canMoveSteps(item.value.steps, batchIds.value, -1) : false,
-);
-const canBatchDown = computed(() =>
-  item.value ? canMoveSteps(item.value.steps, batchIds.value, 1) : false,
-);
 const startPreview = computed(() => getStartPreview(item.value, activeEnv.value));
 const activeLocatorStep = computed(() => item.value?.steps.find((row) => row.id === locatorStepId.value));
 const activeLocatorSelector = computed(() => activeLocatorStep.value?.selector ?? "");
 const activeLocatorDraft = computed(() => activeLocatorStep.value?.selectorDraft);
+const {
+  hasAuth,
+  authPath,
+  loginId,
+  loadingLogin,
+  savingLogin,
+  loadAuthState,
+  changeEnv,
+  openLogin,
+  saveAuth,
+} = useCaseAuth({
+  projectKey,
+  envs,
+  activeEnv,
+  selectedEnv,
+});
+const {
+  isBatchMode,
+  batchIds,
+  hasBatch,
+  canBatchUp,
+  canBatchDown,
+  toggleBatchMode,
+  updateBatch,
+  selectAllSteps,
+  deleteBatch,
+  duplicateBatch,
+  shiftBatch,
+} = useStepBatch({
+  item,
+  stepTable,
+  selectedId,
+  setActiveSteps,
+  markStepReviewPending,
+  clearStepReview,
+  showError,
+});
+const {
+  practicalReviewing,
+  practicalHistoryOpen,
+  failureDrawerOpen,
+  practicalHistory,
+  activePracticalRecord,
+  runPracticalCheck,
+  openPracticalHistory,
+  clearPracticalHistory,
+  openFailureAnalysis,
+  openLatestFailureAnalysis,
+} = useCasePractical({
+  projectKey,
+  caseKey,
+  item,
+  activeEnv,
+  practicalMode,
+  showError,
+});
+const {
+  recordId,
+  isRecording,
+  startRecordCase,
+  stopRecordCase,
+} = useCaseRecord({
+  projectKey,
+  caseKey,
+  item,
+  clearStepReviewPreview,
+  runStepReviewPreview,
+  showError,
+});
 
 /**
  * 切换当前用例状态。
@@ -188,82 +225,6 @@ async function loadCase() {
 }
 
 /**
- * 切换当前实测检查环境。
- */
-async function changeEnv() {
-  const nextEnv = envs.value.find((env) => env.key === selectedEnv.value) ?? null;
-  activeEnv.value = nextEnv;
-  loginId.value = "";
-
-  if (nextEnv) {
-    setProjectEnv(projectKey, nextEnv.key);
-  }
-
-  await loadAuthState();
-}
-
-/**
- * 加载当前实测环境的登录态状态。
- */
-async function loadAuthState() {
-  if (!activeEnv.value) {
-    hasAuth.value = false;
-    authPath.value = "";
-    return;
-  }
-
-  const state = await getAuthState(projectKey, activeEnv.value.key);
-  hasAuth.value = state.exists;
-  authPath.value = state.path;
-}
-
-/**
- * 打开浏览器让用户保存当前实测环境登录态。
- */
-async function openLogin() {
-  if (!activeEnv.value) {
-    ElMessage.warning("请先配置项目环境");
-    return;
-  }
-
-  loadingLogin.value = true;
-
-  try {
-    const session = await startLogin(projectKey, { envKey: activeEnv.value.key });
-    loginId.value = session.sessionId;
-    ElMessage.success("已打开浏览器，请完成登录后返回本页面保存登录态");
-  } catch (error) {
-    ElMessage.error(getErrorMessage(error));
-  } finally {
-    loadingLogin.value = false;
-  }
-}
-
-/**
- * 保存当前实测环境的登录态文件。
- */
-async function saveAuth() {
-  if (!loginId.value) {
-    ElMessage.warning("请先打开浏览器完成登录");
-    return;
-  }
-
-  savingLogin.value = true;
-
-  try {
-    const auth = await saveLogin(projectKey, loginId.value);
-    authPath.value = auth.path;
-    hasAuth.value = true;
-    loginId.value = "";
-    ElMessage.success("登录态已保存，实测检查和运行测试会自动复用");
-  } catch (error) {
-    ElMessage.error(getErrorMessage(error));
-  } finally {
-    savingLogin.value = false;
-  }
-}
-
-/**
  * 按当前选中位置新增一个步骤。
  */
 function addStep(type: StepType) {
@@ -296,106 +257,6 @@ function deleteStep(index: number) {
   if (row?.id === selectedId.value) {
     selectedId.value = "";
   }
-}
-
-/**
- * 进入或退出批量操作模式。
- */
-function toggleBatchMode() {
-  isBatchMode.value = !isBatchMode.value;
-
-  if (!isBatchMode.value) {
-    clearBatch();
-  }
-}
-
-/**
- * 同步表格多选状态。
- */
-function updateBatch(rows: CaseStep[]) {
-  batchIds.value = rows.map((row) => row.id);
-}
-
-/**
- * 清空批量选择。
- */
-function clearBatch() {
-  batchIds.value = [];
-  stepTable.value?.clearSelection();
-}
-
-/**
- * 全选当前所有步骤。
- */
-async function selectAllSteps() {
-  if (!item.value) {
-    return;
-  }
-
-  await nextTick();
-  stepTable.value?.clearSelection();
-
-  for (const row of item.value.steps) {
-    stepTable.value?.toggleRowSelection(row, true);
-  }
-
-  batchIds.value = item.value.steps.map((row) => row.id);
-}
-
-/**
- * 批量删除选中的步骤。
- */
-async function deleteBatch() {
-  if (!item.value || !hasBatch.value) {
-    return;
-  }
-
-  try {
-    await ElMessageBox.confirm(`确认删除选中的 ${batchIds.value.length} 个步骤吗？`, "批量删除", {
-      type: "warning",
-    });
-    const removed = removeSteps(item.value.steps, batchIds.value);
-    for (const row of removed) {
-      clearStepReview(row.id);
-    }
-    clearBatch();
-
-    if (removed.some((row) => row.id === selectedId.value)) {
-      selectedId.value = "";
-    }
-  } catch (error) {
-    if (error !== "cancel") {
-      showError(error);
-    }
-  }
-}
-
-/**
- * 批量复制选中的步骤。
- */
-function duplicateBatch() {
-  if (!item.value || !hasBatch.value) {
-    return;
-  }
-
-  const rows = copySteps(item.value.steps, batchIds.value);
-  setActiveSteps(rows);
-  for (const row of rows) {
-    markStepReviewPending(row);
-  }
-  clearBatch();
-}
-
-/**
- * 批量调整步骤顺序。
- */
-function shiftBatch(offset: -1 | 1) {
-  if (!item.value || !hasBatch.value) {
-    return;
-  }
-
-  const rows = moveSteps(item.value.steps, batchIds.value, offset);
-  setActiveSteps(rows);
 }
 
 /**
@@ -630,107 +491,6 @@ function clearStepReviewPreview() {
 }
 
 /**
- * 执行当前用例的实测检查。
- */
-async function runPracticalCheck() {
-  if (!activeEnv.value) {
-    ElMessage.warning("请先配置项目环境");
-    return;
-  }
-
-  practicalReviewing.value = true;
-
-  try {
-    const record = await startPracticalReview(projectKey, caseKey, {
-      envKey: activeEnv.value.key,
-      mode: practicalMode.value,
-    });
-    activePracticalRecord.value = record;
-    item.value = await getCase(projectKey, caseKey);
-
-    if (record.status === "failed") {
-      failureDrawerOpen.value = true;
-      ElMessage.error(record.summary.failureMessage ?? "实测检查失败");
-    } else {
-      ElMessage.success("实测检查通过");
-    }
-  } catch (error) {
-    showError(error);
-  } finally {
-    practicalReviewing.value = false;
-  }
-}
-
-/**
- * 打开当前用例的实测检查历史。
- */
-async function openPracticalHistory() {
-  try {
-    practicalHistory.value = await listPracticalReviews(projectKey, caseKey);
-    practicalHistoryOpen.value = true;
-  } catch (error) {
-    showError(error);
-  }
-}
-
-/**
- * 清理当前用例的实测检查历史。
- */
-async function clearPracticalHistory() {
-  const confirmed = await ElMessageBox.confirm("确认清理当前用例的实测检查历史吗？", "清理历史", {
-    confirmButtonText: "清理",
-    cancelButtonText: "取消",
-    type: "warning",
-  }).catch(() => false);
-
-  if (!confirmed) {
-    return;
-  }
-
-  try {
-    await clearPracticalReviews(projectKey, caseKey);
-    practicalHistory.value = [];
-    ElMessage.success("实测检查历史已清理");
-  } catch (error) {
-    showError(error);
-  }
-}
-
-/**
- * 打开指定实测检查记录的失败分析。
- */
-function openFailureAnalysis(record: PracticalReviewRecord) {
-  activePracticalRecord.value = record;
-  failureDrawerOpen.value = true;
-}
-
-/**
- * 打开最近一次失败实测检查的分析。
- */
-async function openLatestFailureAnalysis() {
-  if (!item.value?.practicalReview?.reviewId) {
-    return;
-  }
-
-  try {
-    if (
-      !activePracticalRecord.value ||
-      activePracticalRecord.value.id !== item.value.practicalReview.reviewId
-    ) {
-      activePracticalRecord.value = await getPracticalReview(
-        projectKey,
-        caseKey,
-        item.value.practicalReview.reviewId,
-      );
-    }
-
-    failureDrawerOpen.value = true;
-  } catch (error) {
-    showError(error);
-  }
-}
-
-/**
  * 保存用例并重新生成测试文件。
  */
 async function saveCase() {
@@ -759,51 +519,6 @@ async function saveDraft() {
     item.value = await saveCaseDraft(projectKey, caseKey, item.value);
     clearStepReviewPreview();
     ElMessage.success("草稿已保存");
-  } catch (error) {
-    showError(error);
-  }
-}
-
-/**
- * 启动有头浏览器录制当前用例。
- */
-async function startRecordCase() {
-  try {
-    await ElMessageBox.confirm(
-      "停止录制后会用录制结果替换当前编辑页步骤，替换后仍需手动保存。",
-      "开始录制",
-      { type: "warning" },
-    );
-
-    const result = await startRecord(projectKey, caseKey);
-    recordId.value = result.sessionId;
-    isRecording.value = true;
-    ElMessage.success("录制窗口已打开，请在浏览器中完成操作和断言");
-  } catch (error) {
-    if (error !== "cancel") {
-      showError(error);
-    }
-  }
-}
-
-/**
- * 停止录制并把录制步骤导入当前编辑页。
- */
-async function stopRecordCase() {
-  if (!recordId.value) {
-    return;
-  }
-
-  try {
-    const result = await stopRecord(projectKey, caseKey, recordId.value);
-    if (item.value) {
-      item.value.steps = result.steps;
-      clearStepReviewPreview();
-      item.value.steps.forEach((step) => runStepReviewPreview(step));
-    }
-    recordId.value = "";
-    isRecording.value = false;
-    ElMessage.success("录制结果已导入当前编辑页，请保存草稿或生成测试文件");
   } catch (error) {
     showError(error);
   }

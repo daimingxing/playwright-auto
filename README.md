@@ -188,7 +188,7 @@ npm run test:e2e
 
 ## 目录说明
 
-- `web/src/pages`：前端页面
+- `web/src/pages`：前端页面和页面级组合逻辑
 - `web/src/components`：前端通用或页面拆出的组件
 - `web/src/api`：前端 API 调用
 - `server/src/routes`：后端 HTTP 路由
