@@ -770,7 +770,7 @@ async function saveDraft() {
 async function startRecordCase() {
   try {
     await ElMessageBox.confirm(
-      "录制完成后会用录制结果覆盖当前步骤，请确认当前改动已保存。",
+      "停止录制后会用录制结果替换当前编辑页步骤，替换后仍需手动保存。",
       "开始录制",
       { type: "warning" },
     );
@@ -787,7 +787,7 @@ async function startRecordCase() {
 }
 
 /**
- * 停止录制并导入录制步骤。
+ * 停止录制并把录制步骤导入当前编辑页。
  */
 async function stopRecordCase() {
   if (!recordId.value) {
@@ -795,10 +795,15 @@ async function stopRecordCase() {
   }
 
   try {
-    item.value = await stopRecord(projectKey, caseKey, recordId.value);
+    const result = await stopRecord(projectKey, caseKey, recordId.value);
+    if (item.value) {
+      item.value.steps = result.steps;
+      clearStepReviewPreview();
+      item.value.steps.forEach((step) => runStepReviewPreview(step));
+    }
     recordId.value = "";
     isRecording.value = false;
-    ElMessage.success("录制结果已导入当前用例");
+    ElMessage.success("录制结果已导入当前编辑页，请保存草稿或生成测试文件");
   } catch (error) {
     showError(error);
   }

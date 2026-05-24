@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { CaseMeta } from '../../../shared/types';
 import { buildStartUrl } from '../../../shared/url';
-import { getCase, updateCase } from '../lib/case-store';
+import { getCase } from '../lib/case-store';
 import { getProject } from '../lib/project-store';
 import { getProjectAuthPath, hasProjectAuth } from './auth-session';
 import { parseCodegenSpec } from './codegen-parser';
@@ -91,7 +91,7 @@ export async function startRecordSession(projectKey: string, caseKey: string, in
 }
 
 /**
- * 停止录制并把录制步骤覆盖到当前用例。
+ * 停止录制并返回录制步骤，不保存当前用例。
  */
 export async function stopRecordSession(projectKey: string, caseKey: string, sessionId: string) {
   const session = sessions.get(sessionId);
@@ -102,17 +102,14 @@ export async function stopRecordSession(projectKey: string, caseKey: string, ses
 
   await stopChild(session.child);
 
-  const item = await getCase(projectKey, caseKey);
   const code = await readFile(session.outputPath, 'utf8');
   const result = parseCodegenSpec(code);
-  const nextItem: CaseMeta = {
-    ...item,
-    steps: result.steps
-  };
 
   sessions.delete(sessionId);
 
-  return updateCase(projectKey, caseKey, nextItem);
+  return {
+    steps: result.steps
+  };
 }
 
 /**

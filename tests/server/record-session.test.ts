@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -51,17 +51,18 @@ describe('录制会话服务', () => {
     expect(session.url).toBe('http://xcmpmstest.baowuresources.info/xcmpms-imms-f/web/NGBS03');
   });
 
-  it('停止录制后覆盖当前用例步骤', async () => {
+  it('停止录制后只返回录制步骤且不保存当前用例', async () => {
     await createProject({ name: 'CRM', key: 'crm', baseUrl: 'https://crm.test.local' });
     const item = await createCase('crm', { name: '创建订单', startPath: '/orders' });
 
     const session = await startRecordSession('crm', item.key);
-    const updated = await stopRecordSession('crm', item.key, session.sessionId);
+    const result = await stopRecordSession('crm', item.key, session.sessionId);
     const saved = await getCase('crm', item.key);
 
-    expect(updated.steps.length).toBeGreaterThan(0);
-    expect(saved.steps).toEqual(updated.steps);
-    expect(saved.steps.some((step) => step.type === 'assertVisible')).toBe(true);
+    expect(result.steps.length).toBeGreaterThan(0);
+    expect(result.steps.some((step) => step.type === 'assertVisible')).toBe(true);
+    expect(saved.steps).toEqual([]);
+    await expect(stat(join(getProjectPath('crm'), 'cases', item.key, 'case.spec.ts'))).rejects.toThrow();
   });
 
   it('拒绝停止其他用例的录制会话', async () => {
