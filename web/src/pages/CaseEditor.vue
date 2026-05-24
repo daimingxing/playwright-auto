@@ -20,6 +20,7 @@ import type {
   CaseStep,
   EnvMeta,
   PracticalReviewRecord,
+  CaseStatus,
   StepType,
 } from "../../../shared/types";
 import {
@@ -27,21 +28,26 @@ import {
   getCase,
   getPracticalReview,
   listPracticalReviews,
+  saveCaseDraft,
   startPracticalReview,
   startRecord,
   stopRecord,
   updateCase,
+  updateCaseStatus,
 } from "../api/cases";
 import { getAuthState, saveLogin, startLogin } from "../api/auth";
 import { getAppStepConfig, getProject } from "../api/projects";
 import { getProjectEnv, setProjectEnv } from "../state/project-env";
-import { getErrorMessage } from "../utils/error";
+import { getErrorIssues, getErrorMessage } from "../utils/error";
+import { reviewCaseStep } from "../../../shared/case-review";
 import {
   canMoveSteps,
   copyStep,
   copySteps,
-  formatLocatorCheckPass,
+  formatCaseStatus,
+  formatCheckStatus,
   formatStepType,
+  formatStepReviewState,
   formatPracticalReviewStatus,
   getFailedPracticalStep,
   getInsertIndex,
@@ -55,6 +61,8 @@ import {
   moveSteps,
   removeStep,
   removeSteps,
+  mergeStepReviewState,
+  type StepReviewPreview,
   stepGroups,
   stepLabels,
   stepTimeouts,
@@ -81,14 +89,17 @@ const practicalHistoryOpen = ref(false);
 const failureDrawerOpen = ref(false);
 const practicalHistory = ref<PracticalReviewRecord[]>([]);
 const activePracticalRecord = ref<PracticalReviewRecord | null>(null);
+const stepReviewPreview = ref(new Map<string, StepReviewPreview>());
 const hasAuth = ref(false);
 const authPath = ref("");
 const loginId = ref("");
 const loadingLogin = ref(false);
 const savingLogin = ref(false);
 const stepFlashMs = 180;
+const reviewDebounceMs = 400;
 // 浏览器环境下 `window.setTimeout` 返回数值型定时器句柄，避免与 Node 的 `Timeout` 类型混淆。
 let highlightTimer: number | undefined;
+const reviewTimers = new Map<string, number>();
 const reviewLabels = {
   error: "错误",
   danger: "高危",
@@ -100,6 +111,12 @@ const reviewTypes = {
   danger: "warning",
   warning: "warning",
   info: "info",
+} as const;
+const reviewGroupLabels = {
+  integrity: "完整性",
+  locator: "定位",
+  assertion: "断言",
+  timeout: "等待时间",
 } as const;
 const reviewMap = computed(() => {
   const map = new Map<string, NonNullable<CaseMeta["review"]>["items"]>();
@@ -122,6 +139,26 @@ const canBatchDown = computed(() =>
 const startPreview = computed(() => getStartPreview(item.value, activeEnv.value));
 
 /**
+ * 切换当前用例状态。
+ */
+async function changeCaseStatus(status: CaseStatus) {
+  if (!item.value) {
+    return;
+  }
+
+  const previous = item.value.status;
+
+  try {
+    item.value.status = status;
+    item.value = await updateCaseStatus(projectKey, caseKey, status);
+    ElMessage.success("用例状态已更新");
+  } catch (error) {
+    item.value.status = previous;
+    showError(error);
+  }
+}
+
+/**
  * 加载当前用例。
  */
 async function loadCase() {
@@ -131,6 +168,7 @@ async function loadCase() {
     getProject(projectKey),
   ]);
   item.value = caseInfo;
+  clearStepReviewPreview();
   stepConfig.value = config.steps.timeouts;
   envs.value = project.envs;
   activeEnv.value = getProjectEnv(project) ?? null;
@@ -229,6 +267,7 @@ function addStep(type: StepType) {
     stepConfig.value,
   );
   setActiveStep(row);
+  markStepReviewPending(row);
 }
 
 /**
@@ -241,6 +280,7 @@ function deleteStep(index: number) {
 
   const row = item.value.steps[index];
   removeStep(item.value.steps, index);
+  clearStepReview(row?.id);
 
   if (row?.id === selectedId.value) {
     selectedId.value = "";
@@ -304,6 +344,9 @@ async function deleteBatch() {
       type: "warning",
     });
     const removed = removeSteps(item.value.steps, batchIds.value);
+    for (const row of removed) {
+      clearStepReview(row.id);
+    }
     clearBatch();
 
     if (removed.some((row) => row.id === selectedId.value)) {
@@ -311,7 +354,7 @@ async function deleteBatch() {
     }
   } catch (error) {
     if (error !== "cancel") {
-      ElMessage.error(getErrorMessage(error));
+      showError(error);
     }
   }
 }
@@ -326,6 +369,9 @@ function duplicateBatch() {
 
   const rows = copySteps(item.value.steps, batchIds.value);
   setActiveSteps(rows);
+  for (const row of rows) {
+    markStepReviewPending(row);
+  }
   clearBatch();
 }
 
@@ -351,6 +397,7 @@ function duplicateStep(index: number) {
 
   const row = copyStep(item.value.steps, index);
   setActiveStep(row);
+  markStepReviewPending(row);
 }
 
 /**
@@ -441,6 +488,110 @@ function getStepReviews(step: CaseStep) {
 }
 
 /**
+ * 获取步骤合并后的基础检查状态。
+ */
+function getStepReviewState(step: CaseStep) {
+  return mergeStepReviewState(step.id, getStepReviews(step), stepReviewPreview.value);
+}
+
+/**
+ * 获取步骤当前展示的基础检查问题。
+ */
+function getVisibleStepReviews(step: CaseStep) {
+  return getStepReviewState(step).reviews;
+}
+
+/**
+ * 标记步骤基础检查预览等待重新计算。
+ */
+function markStepReviewPending(step: CaseStep) {
+  stepReviewPreview.value.set(step.id, "pending");
+  stepReviewPreview.value = new Map(stepReviewPreview.value);
+  scheduleStepReview(step);
+}
+
+/**
+ * 停止编辑 400ms 后执行当前步骤基础检查预览。
+ */
+function scheduleStepReview(step: CaseStep) {
+  const previousTimer = reviewTimers.get(step.id);
+
+  if (previousTimer) {
+    window.clearTimeout(previousTimer);
+  }
+
+  const timer = window.setTimeout(() => {
+    runStepReviewPreview(step);
+  }, reviewDebounceMs);
+
+  reviewTimers.set(step.id, timer);
+}
+
+/**
+ * 输入框失焦时立即执行还在等待的基础检查预览。
+ */
+function flushStepReview(step: CaseStep) {
+  if (!reviewTimers.has(step.id)) {
+    return;
+  }
+
+  runStepReviewPreview(step);
+}
+
+/**
+ * 运行单步骤基础检查预览。
+ */
+function runStepReviewPreview(step: CaseStep) {
+  const timer = reviewTimers.get(step.id);
+
+  if (timer) {
+    window.clearTimeout(timer);
+    reviewTimers.delete(step.id);
+  }
+
+  const stepIndex = item.value?.steps.findIndex((row) => row.id === step.id) ?? -1;
+
+  if (stepIndex < 0) {
+    clearStepReview(step.id);
+    return;
+  }
+
+  stepReviewPreview.value.set(step.id, reviewCaseStep(step, stepIndex));
+  stepReviewPreview.value = new Map(stepReviewPreview.value);
+}
+
+/**
+ * 清理指定步骤的基础检查预览状态。
+ */
+function clearStepReview(stepId?: string) {
+  if (!stepId) {
+    return;
+  }
+
+  const timer = reviewTimers.get(stepId);
+
+  if (timer) {
+    window.clearTimeout(timer);
+    reviewTimers.delete(stepId);
+  }
+
+  stepReviewPreview.value.delete(stepId);
+  stepReviewPreview.value = new Map(stepReviewPreview.value);
+}
+
+/**
+ * 清理全部基础检查预览状态。
+ */
+function clearStepReviewPreview() {
+  for (const timer of reviewTimers.values()) {
+    window.clearTimeout(timer);
+  }
+
+  reviewTimers.clear();
+  stepReviewPreview.value = new Map();
+}
+
+/**
  * 执行当前用例的实测检查。
  */
 async function runPracticalCheck() {
@@ -463,7 +614,7 @@ async function runPracticalCheck() {
       ElMessage.success("实测检查通过");
     }
   } catch (error) {
-    ElMessage.error(getErrorMessage(error));
+    showError(error);
   } finally {
     practicalReviewing.value = false;
   }
@@ -477,7 +628,7 @@ async function openPracticalHistory() {
     practicalHistory.value = await listPracticalReviews(projectKey, caseKey);
     practicalHistoryOpen.value = true;
   } catch (error) {
-    ElMessage.error(getErrorMessage(error));
+    showError(error);
   }
 }
 
@@ -500,7 +651,7 @@ async function clearPracticalHistory() {
     practicalHistory.value = [];
     ElMessage.success("实测检查历史已清理");
   } catch (error) {
-    ElMessage.error(getErrorMessage(error));
+    showError(error);
   }
 }
 
@@ -534,7 +685,7 @@ async function openLatestFailureAnalysis() {
 
     failureDrawerOpen.value = true;
   } catch (error) {
-    ElMessage.error(getErrorMessage(error));
+    showError(error);
   }
 }
 
@@ -546,8 +697,30 @@ async function saveCase() {
     return;
   }
 
-  item.value = await updateCase(projectKey, caseKey, item.value);
-  await router.push(`/projects/${projectKey}`);
+  try {
+    item.value = await updateCase(projectKey, caseKey, item.value);
+    clearStepReviewPreview();
+    await router.push(`/projects/${projectKey}`);
+  } catch (error) {
+    showError(error);
+  }
+}
+
+/**
+ * 保存当前用例草稿。
+ */
+async function saveDraft() {
+  if (!item.value) {
+    return;
+  }
+
+  try {
+    item.value = await saveCaseDraft(projectKey, caseKey, item.value);
+    clearStepReviewPreview();
+    ElMessage.success("草稿已保存");
+  } catch (error) {
+    showError(error);
+  }
 }
 
 /**
@@ -567,7 +740,7 @@ async function startRecordCase() {
     ElMessage.success("录制窗口已打开，请在浏览器中完成操作和断言");
   } catch (error) {
     if (error !== "cancel") {
-      ElMessage.error(getErrorMessage(error));
+      showError(error);
     }
   }
 }
@@ -586,8 +759,22 @@ async function stopRecordCase() {
     isRecording.value = false;
     ElMessage.success("录制结果已导入当前用例");
   } catch (error) {
-    ElMessage.error(getErrorMessage(error));
+    showError(error);
   }
+}
+
+/**
+ * 展示接口错误和基础检查问题。
+ */
+function showError(error: unknown) {
+  const issues = getErrorIssues(error);
+
+  if (issues.length > 0) {
+    ElMessage.error(`${getErrorMessage(error)}：${issues[0]}`);
+    return;
+  }
+
+  ElMessage.error(getErrorMessage(error));
 }
 
 onMounted(loadCase);
@@ -603,6 +790,7 @@ onMounted(loadCase);
       <div class="toolbar-actions btn-shadow-md">
         <el-button v-if="!isRecording" @click="startRecordCase">开始录制</el-button>
         <el-button v-else type="warning" @click="stopRecordCase">停止录制</el-button>
+        <el-button :disabled="isRecording" @click="saveDraft">保存草稿</el-button>
         <el-button type="primary" :disabled="isRecording" @click="saveCase"
           >保存并生成测试文件</el-button
         >
@@ -622,6 +810,25 @@ onMounted(loadCase);
 
         <div class="meta-grid">
           <el-form label-width="90px">
+            <el-form-item label="用例状态">
+              <div class="case-state-row">
+                <el-select
+                  :model-value="item.status"
+                  class="case-state-select"
+                  @change="(value) => changeCaseStatus(value as CaseStatus)"
+                >
+                  <el-option label="草稿" value="draft" />
+                  <el-option label="待启用" value="ready" />
+                  <el-option label="启用" value="active" />
+                </el-select>
+                <el-tag :type="formatCaseStatus(item.status).type" effect="light">
+                  {{ formatCaseStatus(item.status).label }}
+                </el-tag>
+                <el-tag :type="formatCheckStatus(item).type" effect="light">
+                  {{ formatCheckStatus(item).label }}
+                </el-tag>
+              </div>
+            </el-form-item>
             <el-form-item label="用例名称">
               <el-input v-model="item.name" />
             </el-form-item>
@@ -755,12 +962,12 @@ onMounted(loadCase);
               </div>
             </template>
           </el-table-column>
-          <el-table-column label="定位检查" width="150">
+          <el-table-column label="基础检查" width="170">
             <template #default="{ row }">
               <div class="review-tags">
-                <template v-if="getStepReviews(row).length > 0">
+                <template v-if="getVisibleStepReviews(row).length > 0">
                   <el-popover
-                    v-for="review in getStepReviews(row)"
+                    v-for="review in getVisibleStepReviews(row)"
                     :key="review.id"
                     placement="top"
                     width="320"
@@ -773,6 +980,7 @@ onMounted(loadCase);
                     </template>
                     <div class="review-popover">
                       <strong>{{ review.message }}</strong>
+                      <span class="review-group">{{ reviewGroupLabels[review.group] }}</span>
                       <p>{{ review.suggestion }}</p>
                     </div>
                   </el-popover>
@@ -783,17 +991,27 @@ onMounted(loadCase);
                   effect="light"
                   class="clickable-tag"
                   @click.stop="openLatestFailureAnalysis"
-                >
+                  >
                   实测失败
+                </el-tag>
+                <el-tag
+                  v-if="
+                    getStepReviewState(row).status === 'pending' &&
+                    !getFailedPracticalStep(item.practicalReview, row)
+                  "
+                  :type="formatStepReviewState(getStepReviewState(row)).type"
+                  effect="light"
+                >
+                  {{ formatStepReviewState(getStepReviewState(row)).label }}
                 </el-tag>
                 <span
                   v-if="
-                    getStepReviews(row).length === 0 &&
+                    getStepReviewState(row).status === 'passed' &&
                     !getFailedPracticalStep(item.practicalReview, row)
                   "
                   class="review-pass"
                 >
-                  {{ formatLocatorCheckPass() }}
+                  {{ formatStepReviewState(getStepReviewState(row)).label }}
                 </span>
               </div>
             </template>
@@ -804,6 +1022,8 @@ onMounted(loadCase);
                 v-if="hasSelector(row.type)"
                 v-model="row.selector"
                 placeholder="例如：#username"
+                @input="markStepReviewPending(row)"
+                @blur="flushStepReview(row)"
               />
               <span v-else class="field-empty">-</span>
             </template>
@@ -814,6 +1034,8 @@ onMounted(loadCase);
                 v-if="hasValue(row.type)"
                 v-model="row.value"
                 placeholder="输入值或断言内容"
+                @input="markStepReviewPending(row)"
+                @blur="flushStepReview(row)"
               />
               <span v-else class="field-empty">-</span>
             </template>
@@ -825,6 +1047,8 @@ onMounted(loadCase);
                 v-model="row.timeout"
                 :min="0"
                 :step="500"
+                @change="markStepReviewPending(row)"
+                @blur="flushStepReview(row)"
               />
               <span v-else class="field-empty">-</span>
             </template>
@@ -1043,6 +1267,17 @@ onMounted(loadCase);
   flex-wrap: wrap;
 }
 
+.case-state-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.case-state-select {
+  width: 128px;
+}
+
 .auth-tag {
   min-width: 54px;
   text-align: center;
@@ -1215,6 +1450,16 @@ onMounted(loadCase);
   margin: 8px 0 0;
   color: #606266;
   line-height: 1.5;
+}
+
+.review-group {
+  display: inline-flex;
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #eef5fb;
+  color: #315f8f;
+  font-size: 12px;
 }
 
 .analysis-block h3 {

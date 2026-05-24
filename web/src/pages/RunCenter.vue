@@ -9,6 +9,7 @@ import { listCases } from '../api/cases';
 import { getProject } from '../api/projects';
 import { deleteRun, exportRun, getRunConfig, listRuns, runProject } from '../api/runs';
 import { getProjectEnv, setProjectEnv } from '../state/project-env';
+import { useProjectUiStore } from '../state/project-ui';
 import { getErrorMessage } from '../utils/error';
 import {
   canStartRun,
@@ -17,12 +18,14 @@ import {
   getPracticalReviewTagType,
   getReportUrl,
   getRunButtonText,
+  isRunnableCase,
   mergeSelectedCaseKeys
 } from './run-center';
 
 const route = useRoute();
 const router = useRouter();
 const projectKey = String(route.params.projectKey);
+const projectUi = useProjectUiStore();
 const loading = ref(false);
 const saving = ref(false);
 const running = ref(false);
@@ -43,7 +46,7 @@ const reportUrl = ref('');
 const runError = ref('');
 const reports = ref<RunMeta[]>([]);
 const cases = ref<CaseMeta[]>([]);
-const selectedCaseKeys = ref<string[]>([]);
+const selectedCaseKeys = ref<string[]>(projectUi.getRunCaseKeys(projectKey));
 const refreshingReports = ref(false);
 
 /**
@@ -56,8 +59,9 @@ async function loadProject() {
   selectedEnv.value = getProjectEnv(project)?.key ?? '';
   runConfig.value = config;
   workers.value = config.headlessWorkers;
-  cases.value = items;
+  cases.value = items.filter(isRunnableCase);
   selectedCaseKeys.value = mergeSelectedCaseKeys(items, selectedCaseKeys.value);
+  projectUi.setRunCaseKeys(projectKey, selectedCaseKeys.value);
 }
 
 /**
@@ -91,6 +95,7 @@ async function refreshReports() {
  */
 function selectAllCases() {
   selectedCaseKeys.value = cases.value.map((item) => item.key);
+  projectUi.setRunCaseKeys(projectKey, selectedCaseKeys.value);
 }
 
 /**
@@ -98,6 +103,7 @@ function selectAllCases() {
  */
 function clearCases() {
   selectedCaseKeys.value = [];
+  projectUi.setRunCaseKeys(projectKey, selectedCaseKeys.value);
 }
 
 /**
@@ -111,10 +117,12 @@ function toggleCaseSelection(caseKey: string, checked: boolean | string | number
       selectedCaseKeys.value = [...selectedCaseKeys.value, caseKey];
     }
 
+    projectUi.setRunCaseKeys(projectKey, selectedCaseKeys.value);
     return;
   }
 
   selectedCaseKeys.value = selectedCaseKeys.value.filter((item) => item !== caseKey);
+  projectUi.setRunCaseKeys(projectKey, selectedCaseKeys.value);
 }
 
 /**

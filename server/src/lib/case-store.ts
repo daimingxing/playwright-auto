@@ -2,13 +2,14 @@ import { existsSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { CaseMeta } from '../../../shared/types';
+import type { CaseMeta, CaseStatus } from '../../../shared/types';
 import { ensureDir, movePath, readJson, writeJson } from './fs';
 import { getCasePath, getProjectPath, getTrashPath } from './path';
 import { expirePracticalReviewIfNeeded } from './practical-review-store';
 import { createCaseSchema } from './schema';
 import { generateSpec } from '../services/case-generator';
-import { reviewCase } from '../services/case-review';
+import { isReviewPassed, reviewCase } from '../services/case-review';
+import { HttpError, badRequest } from './http-error';
 
 interface CreateCaseInput {
   name: string;
@@ -25,16 +26,15 @@ export async function createCase(projectKey: string, input: CreateCaseInput) {
   const item: CaseMeta = {
     name: value.name,
     key: caseKey,
+    status: 'draft',
     startPath: value.startPath,
     steps: [],
     createdAt: now,
     updatedAt: now
   };
-  item.review = reviewCase(item);
 
   await ensureDir(getCasePath(projectKey, caseKey));
   await writeJson(join(getCasePath(projectKey, caseKey), 'case.json'), item);
-  await writeSpec(projectKey, item);
 
   return item;
 }
@@ -49,16 +49,16 @@ export async function copyCase(projectKey: string, caseKey: string) {
   const item: CaseMeta = {
     name: await getCopyName(projectKey, source.name),
     key: nextKey,
+    status: 'draft',
     startPath: source.startPath,
     steps: source.steps,
+    review: source.review,
     createdAt: now,
     updatedAt: now
   };
-  item.review = reviewCase(item);
 
   await ensureDir(getCasePath(projectKey, nextKey));
   await writeJson(join(getCasePath(projectKey, nextKey), 'case.json'), item);
-  await writeSpec(projectKey, item);
 
   return item;
 }
@@ -141,22 +141,92 @@ export async function removeTrashCase(projectKey: string, caseKey: string) {
 }
 
 /**
+ * 保存草稿并执行基础检查，不生成测试文件。
+ */
+export async function updateCaseDraft(projectKey: string, caseKey: string, input: CaseMeta) {
+  return saveCase(projectKey, caseKey, input, { generateSpecFile: false, status: 'draft' });
+}
+
+/**
  * 更新结构化用例并重新生成测试文件。
  */
 export async function updateCase(projectKey: string, caseKey: string, input: CaseMeta) {
+  return saveCase(projectKey, caseKey, input, { generateSpecFile: true });
+}
+
+/**
+ * 保存结构化用例并按需要生成测试文件。
+ */
+async function saveCase(projectKey: string, caseKey: string, input: CaseMeta, options: { generateSpecFile: boolean; status?: CaseStatus }) {
   const previous = await readJson<CaseMeta>(join(getCasePath(projectKey, caseKey), 'case.json'));
   const item: CaseMeta = {
     ...input,
     key: caseKey,
+    status: options.status ?? readCaseStatus(input.status),
     practicalReview: previous.practicalReview,
     updatedAt: new Date().toISOString()
   };
   item.review = reviewCase(item);
 
+  if (options.generateSpecFile) {
+    assertReviewPassedForSpec(item, '基础检查不通过，不能生成测试文件');
+  }
+
   await writeJson(join(getCasePath(projectKey, caseKey), 'case.json'), item);
-  await writeSpec(projectKey, item);
+
+  if (options.generateSpecFile) {
+    await writeSpec(projectKey, item);
+  }
 
   return expirePracticalReviewIfNeeded(projectKey, item);
+}
+
+/**
+ * 更新单条用例状态。
+ */
+export async function updateCaseStatus(projectKey: string, caseKey: string, status: CaseStatus) {
+  const item = await getCase(projectKey, caseKey);
+  assertCaseStatusAllowed(item, status);
+
+  const nextItem: CaseMeta = {
+    ...item,
+    status,
+    updatedAt: new Date().toISOString()
+  };
+
+  await writeJson(join(getCasePath(projectKey, caseKey), 'case.json'), nextItem);
+  if (status !== 'draft') {
+    await writeSpec(projectKey, nextItem);
+  }
+
+  return nextItem;
+}
+
+/**
+ * 批量更新用例状态并返回逐条结果。
+ */
+export async function batchUpdateCaseStatus(projectKey: string, caseKeys: string[], status: CaseStatus) {
+  if (caseKeys.length === 0) {
+    throw badRequest('请选择至少一条测试用例');
+  }
+
+  const updated: Array<{ caseKey: string; status: CaseStatus }> = [];
+  const failed: Array<{ caseKey: string; message: string; issues?: ReturnType<typeof toReviewIssues> }> = [];
+
+  for (const caseKey of caseKeys) {
+    try {
+      await updateCaseStatus(projectKey, caseKey, status);
+      updated.push({ caseKey, status });
+    } catch (error) {
+      failed.push({
+        caseKey,
+        message: error instanceof Error ? error.message : '状态更新失败',
+        issues: error instanceof HttpError && hasIssues(error.details) ? error.details.issues : undefined
+      });
+    }
+  }
+
+  return { updated, failed };
 }
 
 /**
@@ -296,16 +366,73 @@ async function writeSpec(projectKey: string, item: CaseMeta, caseKey = item.key)
  * 为历史用例补充静态审查结果。
  */
 async function ensureReview(projectKey: string, item: CaseMeta) {
-  const nextItem = item.review
-    ? item
+  const itemWithStatus = {
+    ...item,
+    status: readCaseStatus(item.status)
+  };
+  const nextItem = itemWithStatus.review || itemWithStatus.steps.length === 0
+    ? itemWithStatus
     : {
-        ...item,
-        review: reviewCase(item)
+        ...itemWithStatus,
+        review: reviewCase(itemWithStatus)
       };
 
-  if (!item.review) {
+  if (!item.review || item.status !== nextItem.status) {
     await writeJson(join(getCasePath(projectKey, item.key), 'case.json'), nextItem);
   }
 
   return expirePracticalReviewIfNeeded(projectKey, nextItem);
+}
+
+/**
+ * 读取用例状态并兼容历史数据。
+ */
+function readCaseStatus(status: unknown): CaseStatus {
+  return status === 'ready' || status === 'active' ? status : 'draft';
+}
+
+/**
+ * 判断状态切换是否满足基础检查门槛。
+ */
+function assertCaseStatusAllowed(item: CaseMeta, status: CaseStatus) {
+  if (status === 'draft') {
+    return;
+  }
+
+  assertReviewPassedForSpec(item, '基础检查不通过，不能切换用例状态');
+}
+
+/**
+ * 阻断无法生成测试文件的基础检查结果。
+ */
+function assertReviewPassedForSpec(item: CaseMeta, message: string) {
+  if (isReviewPassed(item.review)) {
+    return;
+  }
+
+  throw badRequest(message, { issues: toReviewIssues(item) });
+}
+
+/**
+ * 生成前端可展示的基础检查阻断项。
+ */
+function toReviewIssues(item: CaseMeta) {
+  return (item.review?.items ?? [])
+    .filter((issue) => issue.level === 'error' || issue.level === 'danger')
+    .map((issue) => ({
+      stepId: issue.stepId,
+      stepIndex: issue.stepIndex,
+      level: issue.level,
+      group: issue.group,
+      ruleCode: issue.ruleCode,
+      message: issue.message,
+      suggestion: issue.suggestion
+    }));
+}
+
+/**
+ * 判断错误详情是否包含基础检查问题列表。
+ */
+function hasIssues(details: unknown): details is { issues: ReturnType<typeof toReviewIssues> } {
+  return typeof details === 'object' && details !== null && 'issues' in details;
 }

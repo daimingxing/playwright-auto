@@ -1,6 +1,7 @@
 import { rm } from 'node:fs/promises';
 import { Router } from 'express';
 import {
+  batchUpdateCaseStatus,
   copyCase,
   createCase,
   deleteCase,
@@ -9,8 +10,11 @@ import {
   listTrash,
   removeTrashCase,
   restoreTrashCase,
-  updateCase
+  updateCase,
+  updateCaseDraft,
+  updateCaseStatus
 } from '../lib/case-store';
+import type { CaseStatus } from '../../../shared/types';
 import { listPracticalReviewRecords, readPracticalReviewRecord } from '../lib/practical-review-store';
 import { getCasePath, getPracticalReviewPath } from '../lib/path';
 import { practicalReviewInputSchema } from '../lib/schema';
@@ -49,9 +53,29 @@ casesRouter.post<ProjectParams>('/', async (req, res, next) => {
   }
 });
 
+casesRouter.patch<ProjectParams>('/status', async (req, res, next) => {
+  try {
+    const { caseKeys, status } = parseStatusBatchInput(req.body);
+
+    res.json(await batchUpdateCaseStatus(req.params.projectKey, caseKeys, status));
+  } catch (error) {
+    next(error);
+  }
+});
+
 casesRouter.post<CaseParams>('/:caseKey/copy', async (req, res, next) => {
   try {
     res.status(201).json(await copyCase(req.params.projectKey, req.params.caseKey));
+  } catch (error) {
+    next(error);
+  }
+});
+
+casesRouter.patch<CaseParams>('/:caseKey/status', async (req, res, next) => {
+  try {
+    const status = parseCaseStatus(req.body?.status);
+
+    res.json(await updateCaseStatus(req.params.projectKey, req.params.caseKey, status));
   } catch (error) {
     next(error);
   }
@@ -148,6 +172,14 @@ casesRouter.put<CaseParams>('/:caseKey', async (req, res, next) => {
   }
 });
 
+casesRouter.put<CaseParams>('/:caseKey/draft', async (req, res, next) => {
+  try {
+    res.json(await updateCaseDraft(req.params.projectKey, req.params.caseKey, req.body));
+  } catch (error) {
+    next(error);
+  }
+});
+
 /**
  * 校验实测检查请求参数。
  */
@@ -159,6 +191,36 @@ function parsePracticalReviewInput(body: unknown) {
   }
 
   return result.data;
+}
+
+/**
+ * 校验单条用例状态。
+ */
+function parseCaseStatus(value: unknown): CaseStatus {
+  if (value === 'draft' || value === 'ready' || value === 'active') {
+    return value;
+  }
+
+  throw badRequest('用例状态不合法');
+}
+
+/**
+ * 校验批量状态切换请求。
+ */
+function parseStatusBatchInput(body: unknown) {
+  if (!body || typeof body !== 'object') {
+    throw badRequest('请求参数不合法：请检查用例和状态');
+  }
+
+  const value = body as { caseKeys?: unknown; status?: unknown };
+  if (!Array.isArray(value.caseKeys) || !value.caseKeys.every((item) => typeof item === 'string')) {
+    throw badRequest('请求参数不合法：请检查用例列表');
+  }
+
+  return {
+    caseKeys: value.caseKeys,
+    status: parseCaseStatus(value.status)
+  };
 }
 
 export const trashRouter = Router({ mergeParams: true });

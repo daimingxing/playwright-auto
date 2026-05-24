@@ -1,15 +1,18 @@
 import type { CaseMeta, PracticalReviewSummary } from '../../../shared/types';
 import { resolveApiUrl } from '../api/http';
+import { getCaseCheckStatus } from './case-editor';
 
 /**
  * 合并用例列表和当前选择，首次加载时默认选中全部用例。
  */
 export function mergeSelectedCaseKeys(cases: CaseMeta[], selectedKeys: string[]) {
+  const runnableCases = cases.filter(isRunnableCase);
+
   if (selectedKeys.length === 0) {
-    return cases.map((item) => item.key);
+    return runnableCases.map((item) => item.key);
   }
 
-  const caseKeys = new Set(cases.map((item) => item.key));
+  const caseKeys = new Set(runnableCases.map((item) => item.key));
 
   return selectedKeys.filter((key) => caseKeys.has(key));
 }
@@ -35,6 +38,13 @@ export function getSelectedCases(cases: CaseMeta[], selectedKeys: string[]) {
   const selectedSet = new Set(selectedKeys);
 
   return cases.filter((item) => selectedSet.has(item.key));
+}
+
+/**
+ * 判断用例是否允许进入运行中心。
+ */
+export function isRunnableCase(item: CaseMeta) {
+  return item.status === 'active' && getCaseCheckStatus(item) !== 'review-failed' && getCaseCheckStatus(item) !== 'unchecked';
 }
 
 /**

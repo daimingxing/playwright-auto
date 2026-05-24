@@ -3,12 +3,13 @@ import { createRun, updateRun } from '../lib/run-store';
 import { getProjectPath, getRunPath } from '../lib/path';
 import { listCases } from '../lib/case-store';
 import { getProject } from '../lib/project-store';
-import type { RunConfig, RunInput } from '../../../shared/types';
+import type { CaseMeta, RunConfig, RunInput } from '../../../shared/types';
 import { getProjectAuthPath, hasProjectAuth } from './auth-session';
 import { assertVendorBrowser, getVendorEnv } from './vendor-browser';
 import { getAppConfig } from '../lib/app-config';
 import { spawnPlaywrightCli } from './playwright-cli';
 import { badRequest, notFound } from '../lib/http-error';
+import { isReviewPassed } from './case-review';
 
 interface RunProjectInput extends RunInput {
   storageState?: string;
@@ -159,12 +160,25 @@ export async function getProjectRunFiles(projectKey: string, caseKeys?: string[]
     throw badRequest('选择的测试用例不存在或已被删除');
   }
 
-  return selectedCases.map((item) => {
+  const runnableCases = selectedCases.filter(isRunnableCase);
+
+  if (selectedKeys && runnableCases.length !== selectedCases.length) {
+    throw badRequest('选择的测试用例未启用或基础检查不通过');
+  }
+
+  return runnableCases.map((item) => {
     const project = escapeRegExp(projectKey);
     const key = escapeRegExp(item.key);
 
     return `.*${project}.*cases.*${key}.*case\\.spec\\.ts`;
   });
+}
+
+/**
+ * 判断用例是否允许进入运行中心。
+ */
+function isRunnableCase(item: CaseMeta) {
+  return item.status === 'active' && isReviewPassed(item.review);
 }
 
 /**

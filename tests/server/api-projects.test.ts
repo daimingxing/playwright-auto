@@ -85,6 +85,24 @@ describe('项目接口', () => {
     expect(list.body[0].name).toBe('CRM 系统');
   });
 
+  it('创建项目时自动把项目标识转为小写', async () => {
+    const app = createApp();
+
+    const created = await request(app).post('/api/projects').send({
+      name: 'CRM 系统',
+      key: 'CRM',
+      baseUrl: 'https://crm.test.local'
+    });
+
+    expect(created.status).toBe(201);
+    expect(created.body.key).toBe('crm');
+
+    const detail = await request(app).get('/api/projects/crm');
+
+    expect(detail.status).toBe(200);
+    expect(detail.body.key).toBe('crm');
+  });
+
   it('不存在的项目返回 404', async () => {
     const app = createApp();
 

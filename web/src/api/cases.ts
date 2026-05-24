@@ -1,4 +1,4 @@
-import type { CaseMeta, PracticalReviewRecord } from '../../../shared/types';
+import type { CaseMeta, CaseStatus, PracticalReviewRecord } from '../../../shared/types';
 import { downloadFile } from './http';
 import { requestJson } from './http';
 
@@ -20,25 +20,59 @@ export interface PracticalReviewInput {
   envKey?: string;
 }
 
+export interface BatchStatusInput {
+  caseKeys: string[];
+  status: CaseStatus;
+}
+
+export interface BatchStatusResult {
+  updated: Array<{ caseKey: string; status: CaseStatus }>;
+  failed: Array<{ caseKey: string; message: string; issues?: unknown[] }>;
+}
+
+/**
+ * 读取用例状态并兼容历史接口数据。
+ */
+function readCaseStatus(status: unknown): CaseStatus {
+  return status === 'ready' || status === 'active' ? status : 'draft';
+}
+
+/**
+ * 归一化单条用例，避免历史数据缺少状态时影响界面展示。
+ */
+function normalizeCase(item: CaseMeta): CaseMeta {
+  return {
+    ...item,
+    status: readCaseStatus(item.status)
+  };
+}
+
+/**
+ * 归一化用例列表。
+ */
+function normalizeCases(items: CaseMeta[]): CaseMeta[] {
+  return items.map(normalizeCase);
+}
+
 /**
  * 获取项目用例列表。
  */
 export function listCases(projectKey: string) {
-  return requestJson<CaseMeta[]>(`/api/projects/${projectKey}/cases`);
+  return requestJson<CaseMeta[]>(`/api/projects/${projectKey}/cases`).then(normalizeCases);
 }
 
 /**
  * 获取项目回收站。
  */
 export function listTrash(projectKey: string) {
-  return requestJson<CaseMeta[]>(`/api/projects/${projectKey}/trash`);
+  return requestJson<CaseMeta[]>(`/api/projects/${projectKey}/trash`).then(normalizeCases);
 }
 
 /**
  * 获取单个测试用例。
  */
 export function getCase(projectKey: string, caseKey: string) {
-  return requestJson<CaseMeta>(`/api/projects/${projectKey}/cases/${caseKey}`);
+  return requestJson<CaseMeta>(`/api/projects/${projectKey}/cases/${caseKey}`).then(normalizeCase);
 }
 
 /**
@@ -48,7 +82,7 @@ export function createCase(projectKey: string, input: CreateCaseInput) {
   return requestJson<CaseMeta>(`/api/projects/${projectKey}/cases`, {
     method: 'POST',
     body: JSON.stringify(input)
-  });
+  }).then(normalizeCase);
 }
 
 /**
@@ -57,7 +91,7 @@ export function createCase(projectKey: string, input: CreateCaseInput) {
 export function copyCase(projectKey: string, caseKey: string) {
   return requestJson<CaseMeta>(`/api/projects/${projectKey}/cases/${caseKey}/copy`, {
     method: 'POST'
-  });
+  }).then(normalizeCase);
 }
 
 /**
@@ -82,7 +116,7 @@ export function exportCase(projectKey: string, caseKey: string) {
 export function restoreCase(projectKey: string, caseKey: string) {
   return requestJson<CaseMeta>(`/api/projects/${projectKey}/trash/${caseKey}/restore`, {
     method: 'POST'
-  });
+  }).then(normalizeCase);
 }
 
 /**
@@ -100,6 +134,36 @@ export function removeTrashCase(projectKey: string, caseKey: string) {
 export function updateCase(projectKey: string, caseKey: string, input: CaseMeta) {
   return requestJson<CaseMeta>(`/api/projects/${projectKey}/cases/${caseKey}`, {
     method: 'PUT',
+    body: JSON.stringify(input)
+  }).then(normalizeCase);
+}
+
+/**
+ * 保存测试用例草稿。
+ */
+export function saveCaseDraft(projectKey: string, caseKey: string, input: CaseMeta) {
+  return requestJson<CaseMeta>(`/api/projects/${projectKey}/cases/${caseKey}/draft`, {
+    method: 'PUT',
+    body: JSON.stringify(input)
+  }).then(normalizeCase);
+}
+
+/**
+ * 更新单条测试用例状态。
+ */
+export function updateCaseStatus(projectKey: string, caseKey: string, status: CaseStatus) {
+  return requestJson<CaseMeta>(`/api/projects/${projectKey}/cases/${caseKey}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status })
+  }).then(normalizeCase);
+}
+
+/**
+ * 批量更新测试用例状态。
+ */
+export function batchUpdateCaseStatus(projectKey: string, input: BatchStatusInput) {
+  return requestJson<BatchStatusResult>(`/api/projects/${projectKey}/cases/status`, {
+    method: 'PATCH',
     body: JSON.stringify(input)
   });
 }
@@ -154,5 +218,5 @@ export function stopRecord(projectKey: string, caseKey: string, sessionId: strin
   return requestJson<CaseMeta>(`/api/projects/${projectKey}/cases/${caseKey}/record/stop`, {
     method: 'POST',
     body: JSON.stringify({ sessionId })
-  });
+  }).then(normalizeCase);
 }

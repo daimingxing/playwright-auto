@@ -48,13 +48,20 @@ async function loadProjects() {
 }
 
 /**
+ * 归一化路径标识输入。
+ */
+function normalizeKey(value: string) {
+  return value.trim().toLowerCase();
+}
+
+/**
  * 提交新建项目表单。
  */
 async function submitProject() {
   try {
     const item = await createProject({
       name: form.name,
-      key: form.key,
+      key: normalizeKey(form.key),
       envName: form.envName,
       baseUrl: form.baseUrl
     });

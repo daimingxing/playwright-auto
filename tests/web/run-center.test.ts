@@ -8,12 +8,13 @@ import {
   getReportUrl,
   getRunButtonText,
   getSelectedCases,
+  isRunnableCase,
   mergeSelectedCaseKeys
 } from '../../web/src/pages/run-center';
 
 describe('运行中心用例选择工具', () => {
   it('首次加载用例时默认选中全部可用用例', () => {
-    const cases = [makeCase('case-a'), makeCase('case-b')];
+    const cases = [makeCase('case-a', 'active'), makeCase('case-b', 'active')];
 
     const keys = mergeSelectedCaseKeys(cases, []);
 
@@ -21,7 +22,7 @@ describe('运行中心用例选择工具', () => {
   });
 
   it('刷新用例列表时保留仍然存在的已选用例', () => {
-    const cases = [makeCase('case-a'), makeCase('case-c')];
+    const cases = [makeCase('case-a', 'active'), makeCase('case-c', 'active')];
 
     const keys = mergeSelectedCaseKeys(cases, ['case-a', 'case-b']);
 
@@ -42,23 +43,50 @@ describe('运行中心用例选择工具', () => {
   });
 
   it('会根据选中 key 返回用例明细', () => {
-    const cases = [makeCase('case-a'), makeCase('case-b')];
+    const cases = [makeCase('case-a', 'active'), makeCase('case-b', 'active')];
 
     const selectedCases = getSelectedCases(cases, ['case-b']);
 
     expect(selectedCases.map((item) => item.key)).toEqual(['case-b']);
+  });
+
+  it('运行中心只选择启用且基础检查通过的用例', () => {
+    const active = makeCase('case-a', 'active');
+    const draft = makeCase('case-b', 'draft');
+    const failed = makeCase('case-c', 'active', 'error');
+
+    expect(isRunnableCase(active)).toBe(true);
+    expect(isRunnableCase(draft)).toBe(false);
+    expect(isRunnableCase(failed)).toBe(false);
+    expect(mergeSelectedCaseKeys([active, draft, failed], [])).toEqual(['case-a']);
   });
 });
 
 /**
  * 创建运行中心测试用例数据。
  */
-function makeCase(key: string): CaseMeta {
+function makeCase(
+  key: string,
+  status: CaseMeta['status'] = 'draft',
+  reviewLevel: NonNullable<CaseMeta['review']>['summary']['level'] = 'pass'
+): CaseMeta {
   return {
     name: key,
     key,
+    status,
     startPath: `/${key}`,
     steps: [],
+    review: {
+      summary: {
+        level: reviewLevel,
+        error: reviewLevel === 'error' ? 1 : 0,
+        danger: reviewLevel === 'danger' ? 1 : 0,
+        warning: reviewLevel === 'warning' ? 1 : 0,
+        info: reviewLevel === 'info' ? 1 : 0
+      },
+      items: [],
+      updatedAt: '2026-05-22T00:00:00.000Z'
+    },
     createdAt: '2026-05-22T00:00:00.000Z',
     updatedAt: '2026-05-22T00:00:00.000Z'
   };

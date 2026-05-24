@@ -1,17 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import type { CaseStep, PracticalReviewSummary } from '../../shared/types';
+import type { CaseMeta, CaseStep, PracticalReviewSummary } from '../../shared/types';
 import {
   canMoveSteps,
   copyStep,
   copySteps,
   createStep,
+  formatCaseStatus,
+  formatCheckStatus,
   formatLocatorCheckPass,
+  formatStepReviewState,
   formatPracticalReviewStatus,
   formatStepType,
   getFailedPracticalStep,
   getInsertIndex,
   getPracticalReviewTagType,
   getStartPreview,
+  mergeStepReviewState,
   hasSelector,
   hasTimeout,
   hasValue,
@@ -57,6 +61,29 @@ function makePracticalSummary(status: PracticalReviewSummary['status']): Practic
 }
 
 describe('用例编辑器步骤工具', () => {
+  it('会显示用例状态和检查状态', () => {
+    expect(formatCaseStatus('draft')).toEqual({ label: '草稿', type: 'info' });
+    expect(formatCaseStatus('ready')).toEqual({ label: '待启用', type: 'warning' });
+    expect(formatCaseStatus('active')).toEqual({ label: '启用', type: 'success' });
+
+    expect(formatCheckStatus(makeCase())).toEqual({ label: '未审查', type: 'info' });
+    expect(formatCheckStatus({ ...makeCase(), review: makeReview('error') })).toEqual({
+      label: '审查不通过',
+      type: 'danger'
+    });
+    expect(formatCheckStatus({ ...makeCase(), review: makeReview('pass') })).toEqual({
+      label: '待实测',
+      type: 'warning'
+    });
+    expect(
+      formatCheckStatus({
+        ...makeCase(),
+        review: makeReview('pass'),
+        practicalReview: makePracticalSummary('passed')
+      })
+    ).toEqual({ label: '实测通过', type: 'success' });
+  });
+
   it('步骤类型已经包含 goto 和 select', () => {
     expect(stepTypes).toContain('goto');
     expect(stepTypes).toContain('select');
@@ -74,11 +101,52 @@ describe('用例编辑器步骤工具', () => {
     expect(formatLocatorCheckPass()).toBe('定位通过');
   });
 
+  it('编辑中的步骤会用预览基础检查状态覆盖已保存结果', () => {
+    const saved = makeReview('pass').items;
+
+    expect(formatStepReviewState(mergeStepReviewState('s1', saved, new Map([['s1', 'pending']])))).toEqual({
+      label: '待检查',
+      type: 'info'
+    });
+
+    expect(formatStepReviewState(mergeStepReviewState('s1', saved, new Map([['s1', []]])))).toEqual({
+      label: '定位通过',
+      type: 'success'
+    });
+
+    expect(
+      mergeStepReviewState(
+        's1',
+        saved,
+        new Map([
+          [
+            's1',
+            [
+              {
+                id: 's1-missing-selector',
+                stepId: 's1',
+                stepIndex: 0,
+                stepType: 'click',
+                selector: '',
+                level: 'error',
+                group: 'integrity',
+                ruleCode: 'missing-selector',
+                message: '步骤缺少元素选择器。',
+                suggestion: '请补充可稳定定位目标元素的 selector。'
+              }
+            ]
+          ]
+        ])
+      ).reviews
+    ).toHaveLength(1);
+  });
+
   it('根据项目环境和起始路径计算实际打开地址', () => {
     const preview = getStartPreview(
       {
         name: '下拉框选择',
         key: 'case-1',
+        status: 'draft',
         startPath: '/web/NGBS03',
         steps: [],
         createdAt: '2026-05-22T00:00:00.000Z',
@@ -232,6 +300,38 @@ describe('用例编辑器步骤工具', () => {
     expect(steps.map((row) => row.id)).toEqual(['a', 'b', 'c']);
   });
 });
+
+/**
+ * 创建测试用例数据。
+ */
+function makeCase(): CaseMeta {
+  return {
+    name: '用例',
+    key: 'case-a',
+    status: 'draft',
+    startPath: '/',
+    steps: [],
+    createdAt: '2026-05-22T00:00:00.000Z',
+    updatedAt: '2026-05-22T00:00:00.000Z'
+  };
+}
+
+/**
+ * 创建基础检查摘要测试数据。
+ */
+function makeReview(level: NonNullable<CaseMeta['review']>['summary']['level']): NonNullable<CaseMeta['review']> {
+  return {
+    summary: {
+      level,
+      error: level === 'error' ? 1 : 0,
+      danger: level === 'danger' ? 1 : 0,
+      warning: level === 'warning' ? 1 : 0,
+      info: level === 'info' ? 1 : 0
+    },
+    items: [],
+    updatedAt: '2026-05-22T00:00:00.000Z'
+  };
+}
 
 describe('实测检查展示工具', () => {
   it('会显示未审查、通过、失败和过期状态', () => {

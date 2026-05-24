@@ -7,10 +7,11 @@ import {
   Download,
   EditPen,
 } from "@element-plus/icons-vue";
-import { onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import type { CaseMeta } from "../../../shared/types";
+import type { CaseMeta, CaseStatus } from "../../../shared/types";
 import {
+  batchUpdateCaseStatus,
   copyCase,
   createCase,
   deleteCase,
@@ -19,24 +20,39 @@ import {
   listTrash,
   removeTrashCase,
   restoreCase,
+  updateCaseStatus,
 } from "../api/cases";
-import { getErrorMessage } from "../utils/error";
+import { useProjectUiStore, type CaseStatusFilter } from "../state/project-ui";
+import { getErrorIssues, getErrorMessage } from "../utils/error";
 import {
-  formatPracticalReviewStatus,
-  formatPracticalReviewTime,
-  getPracticalReviewTagType,
-} from "./run-center";
+  formatCaseStatus,
+  formatCheckStatus,
+} from "./case-editor";
+import { formatPracticalReviewTime } from "./run-center";
 
 const route = useRoute();
 const router = useRouter();
 const projectKey = String(route.params.projectKey);
+const projectUi = useProjectUiStore();
 const dialogOpen = ref(false);
 const cases = ref<CaseMeta[]>([]);
 const trash = ref<CaseMeta[]>([]);
+const selectedKeys = ref<string[]>([]);
+const statusFilter = ref<CaseStatusFilter>(projectUi.getCaseStatusFilter(projectKey));
 const form = reactive({
   name: "",
   startPath: "/",
 });
+const statusOptions: Array<{ label: string; value: CaseStatusFilter }> = [
+  { label: "全部", value: "all" },
+  { label: "草稿", value: "draft" },
+  { label: "待启用", value: "ready" },
+  { label: "启用", value: "active" },
+];
+
+const filteredCases = computed(() =>
+  statusFilter.value === "all" ? cases.value : cases.value.filter((item) => item.status === statusFilter.value),
+);
 
 /**
  * 加载项目用例和回收站。
@@ -48,6 +64,111 @@ async function loadData() {
   ]);
   cases.value = caseList;
   trash.value = trashList;
+  selectedKeys.value = selectedKeys.value.filter((key) => caseList.some((item) => item.key === key));
+}
+
+/**
+ * 切换用例状态筛选。
+ */
+function changeStatusFilter(value: CaseStatusFilter) {
+  projectUi.setCaseStatusFilter(projectKey, value);
+}
+
+/**
+ * 同步表格多选用例。
+ */
+function updateSelection(rows: CaseMeta[]) {
+  selectedKeys.value = rows.map((row) => row.key);
+}
+
+/**
+ * 切换单条用例状态。
+ */
+async function changeCaseStatus(row: CaseMeta, status: CaseStatus) {
+  const previous = row.status;
+
+  try {
+    row.status = status;
+    const next = await updateCaseStatus(projectKey, row.key, status);
+    Object.assign(row, next);
+    ElMessage.success("用例状态已更新");
+  } catch (error) {
+    row.status = previous;
+    showError(error);
+  }
+}
+
+/**
+ * 批量切换用例状态。
+ */
+async function changeBatchStatus(status: CaseStatus) {
+  if (selectedKeys.value.length === 0) {
+    ElMessage.warning("请先选择测试用例");
+    return;
+  }
+
+  try {
+    const result = await batchUpdateCaseStatus(projectKey, {
+      caseKeys: selectedKeys.value,
+      status,
+    });
+    await loadData();
+
+    if (result.failed.length > 0) {
+      ElMessage.warning(`已更新 ${result.updated.length} 条，${result.failed.length} 条未更新：${formatBatchFailure(result.failed[0])}`);
+      return;
+    }
+
+    ElMessage.success(`已更新 ${result.updated.length} 条用例`);
+  } catch (error) {
+    showError(error);
+  }
+}
+
+/**
+ * 展示接口错误和基础检查问题。
+ */
+function showError(error: unknown) {
+  const issues = getErrorIssues(error);
+
+  if (issues.length > 0) {
+    ElMessage.error(`${getErrorMessage(error)}：${issues[0]}`);
+    return;
+  }
+
+  ElMessage.error(getErrorMessage(error));
+}
+
+/**
+ * 格式化批量状态切换失败原因。
+ */
+function formatBatchFailure(failure: { message: string; issues?: unknown[] }) {
+  const issue = readBatchIssue(failure.issues);
+
+  if (!issue) {
+    return failure.message;
+  }
+
+  return `${failure.message}：${issue}`;
+}
+
+/**
+ * 读取批量失败中的第一条基础检查问题。
+ */
+function readBatchIssue(issues: unknown[] | undefined) {
+  const issue = issues?.[0];
+
+  if (typeof issue !== "object" || issue === null) {
+    return "";
+  }
+
+  const stepIndex = "stepIndex" in issue && typeof issue.stepIndex === "number" && issue.stepIndex >= 0
+    ? `第 ${issue.stepIndex + 1} 步：`
+    : "";
+  const message = "message" in issue && typeof issue.message === "string" ? issue.message : "";
+  const suggestion = "suggestion" in issue && typeof issue.suggestion === "string" ? issue.suggestion : "";
+
+  return `${stepIndex}${message}${suggestion}`;
 }
 
 /**
@@ -168,7 +289,20 @@ onMounted(loadData);
         <h3>用例列表</h3>
         <div class="table-wrap">
           <!-- 主表保留更大的最小宽度，确保在窄窗口下真实产生横向溢出。 -->
-          <el-table class="case-table" :data="cases" border height="100%">
+          <div class="case-tools">
+            <el-radio-group v-model="statusFilter" @change="(value) => changeStatusFilter(value as CaseStatusFilter)">
+              <el-radio-button v-for="option in statusOptions" :key="option.value" :value="option.value">
+                {{ option.label }}
+              </el-radio-button>
+            </el-radio-group>
+            <div class="batch-actions btn-shadow-sm">
+              <el-button size="small" :disabled="selectedKeys.length === 0" @click="changeBatchStatus('draft')">设为草稿</el-button>
+              <el-button size="small" :disabled="selectedKeys.length === 0" @click="changeBatchStatus('ready')">设为待启用</el-button>
+              <el-button size="small" type="success" :disabled="selectedKeys.length === 0" @click="changeBatchStatus('active')">设为启用</el-button>
+            </div>
+          </div>
+          <el-table class="case-table" :data="filteredCases" border height="100%" row-key="key" @selection-change="updateSelection">
+            <el-table-column type="selection" width="44" reserve-selection />
             <el-table-column prop="name" label="用例名称" min-width="220">
               <template #default="{ row }">
                 <span
@@ -187,13 +321,27 @@ onMounted(loadData);
               label="起始路径"
               min-width="220"
             />
-            <el-table-column label="实测检查" min-width="140">
+            <el-table-column label="用例状态" width="140">
+              <template #default="{ row }">
+                <el-select
+                  :model-value="row.status"
+                  class="status-select"
+                  size="small"
+                  @change="(value) => changeCaseStatus(row, value as CaseStatus)"
+                >
+                  <el-option label="草稿" value="draft" />
+                  <el-option label="待启用" value="ready" />
+                  <el-option label="启用" value="active" />
+                </el-select>
+              </template>
+            </el-table-column>
+            <el-table-column label="检查状态" min-width="140">
               <template #default="{ row }">
                 <el-tag
-                  :type="getPracticalReviewTagType(row.practicalReview)"
+                  :type="formatCheckStatus(row).type"
                   effect="light"
                 >
-                  {{ formatPracticalReviewStatus(row.practicalReview) }}
+                  {{ formatCheckStatus(row).label }}
                 </el-tag>
               </template>
             </el-table-column>
@@ -363,6 +511,30 @@ onMounted(loadData);
 .list-block h3 {
   flex: 0 0 auto;
   margin: 0 0 12px;
+}
+
+.case-tools {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.batch-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.batch-actions :deep(.el-button) {
+  margin-left: 0;
+}
+
+.status-select {
+  width: 112px;
 }
 
 .table-wrap {

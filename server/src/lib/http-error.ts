@@ -3,22 +3,24 @@
  */
 export class HttpError extends Error {
   status: number;
+  details?: unknown;
 
   /**
    * 创建可被全局错误处理中间件识别的错误。
    */
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, details?: unknown) {
     super(message);
     this.name = 'HttpError';
     this.status = status;
+    this.details = details;
   }
 }
 
 /**
  * 创建参数错误。
  */
-export function badRequest(message: string) {
-  return new HttpError(400, message);
+export function badRequest(message: string, details?: unknown) {
+  return new HttpError(400, message, details);
 }
 
 /**
