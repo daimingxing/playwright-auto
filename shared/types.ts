@@ -194,6 +194,17 @@ export interface RunConfig {
   maxWorkers: number;
 }
 
+export interface ServerConfig {
+  port: number;
+  dataRoot: string;
+  corsOrigins: string[];
+}
+
+export interface WebConfig {
+  origin: string;
+  apiBase: string;
+}
+
 export interface StepTimeoutConfig {
   navigation: number;
   action: number;
@@ -204,9 +215,18 @@ export interface StepConfig {
   timeouts: StepTimeoutConfig;
 }
 
-export interface AppConfig {
+export interface FullAppConfig {
+  server: ServerConfig;
+  web: WebConfig;
+  runner: RunConfig;
   steps: StepConfig;
 }
+
+export interface PublicAppConfig {
+  steps: StepConfig;
+}
+
+export type AppConfig = PublicAppConfig;
 
 export interface AuthState {
   path: string;

@@ -148,6 +148,53 @@ describe('录制会话服务', () => {
 
     expect(session.url).toBe('https://pre.crm.test.local/orders');
   });
+
+  it('录制会话过期后不能继续停止', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-24T00:00:00.000Z'));
+
+    try {
+      await createProject({ name: 'CRM', key: 'crm', baseUrl: 'https://crm.test.local' });
+      const item = await createCase('crm', { name: '创建订单', startPath: '/orders' });
+      const session = await startRecordSession('crm', item.key);
+
+      await vi.advanceTimersByTimeAsync(8 * 60 * 60 * 1000 + 1);
+      await expect(stopRecordSession('crm', item.key, session.sessionId)).rejects.toThrow(
+        '录制会话不存在或已结束'
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('真实录制会话过期后会结束 codegen 子进程', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-24T00:00:00.000Z'));
+
+    try {
+      process.env.NODE_ENV = 'development';
+      const killMock = vi.fn(() => true);
+      await createProject({ name: 'CRM', key: 'crm', baseUrl: 'https://crm.test.local' });
+      const item = await createCase('crm', { name: '创建订单', startPath: '/orders' });
+      spawnMock.mockReturnValue({
+        pid: 1234,
+        killed: false,
+        exitCode: null,
+        stdin: undefined,
+        once() {
+          return this;
+        },
+        kill: killMock
+      });
+
+      await startRecordSession('crm', item.key);
+      await vi.advanceTimersByTimeAsync(8 * 60 * 60 * 1000 + 1);
+
+      expect(killMock).toHaveBeenCalledWith('SIGTERM');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 /**

@@ -52,6 +52,8 @@ https://cdn.playwright.dev/dbazure/download/playwright/builds/winldd/1007/winldd
 npm run dev
 ```
 
+`npm run dev` 会先启动本地服务，再等待健康检查通过后启动前端开发服务，避免前端代理在后端未就绪时出现连接失败。
+
 默认地址：
 
 - 前端页面：http://localhost:5173
@@ -125,7 +127,7 @@ npm run dev
 - 用例导出：导出单条用例目录，包含结构化数据和 Playwright spec
 - 步骤编辑：支持跳转、点击、右键、双击、悬停、输入、选择、等待和断言步骤；支持选中步骤后插入、单步上移下移、单步复制和批量删除、批量上移下移、批量复制、全选、取消批量
 - 录制导入：通过 Playwright codegen 录制操作，并导入为步骤数据
-- 登录态：通过有头浏览器手动登录，保存 storageState 后复用
+- 登录态：通过有头浏览器手动登录，保存 storageState 后复用；不需要登录的项目可以直接运行
 - 运行管理：按项目运行测试，查看运行状态、报告地址并导出报告
 
 ## 数据目录
@@ -186,7 +188,7 @@ npm run test:e2e
 
 ## 目录说明
 
-- `web/src/pages`：前端页面
+- `web/src/pages`：前端页面和页面级组合逻辑
 - `web/src/components`：前端通用或页面拆出的组件
 - `web/src/api`：前端 API 调用
 - `server/src/routes`：后端 HTTP 路由

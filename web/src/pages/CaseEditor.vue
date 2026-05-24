@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import type { TableInstance } from "element-plus";
-import { ElMessage, ElMessageBox } from "element-plus";
+import { ElMessage } from "element-plus";
 import {
   ArrowDown,
   ArrowUp,
@@ -14,39 +14,31 @@ import {
   MoreFilled,
   Plus,
   Select,
+  Document,
+  DocumentChecked
 } from "@element-plus/icons-vue";
 import LocatorBuilderDrawer from "../components/LocatorBuilderDrawer.vue";
 import type {
   CaseMeta,
   CaseStep,
   EnvMeta,
-  PracticalReviewRecord,
   CaseStatus,
   RunMode,
   StepType,
 } from "../../../shared/types";
 import {
-  clearPracticalReviews,
   getCase,
-  getPracticalReview,
-  listPracticalReviews,
   saveCaseDraft,
-  startPracticalReview,
-  startRecord,
-  stopRecord,
   updateCase,
   updateCaseStatus,
 } from "../api/cases";
-import { getAuthState, saveLogin, startLogin } from "../api/auth";
 import { getAppStepConfig, getProject } from "../api/projects";
-import { getProjectEnv, setProjectEnv } from "../state/project-env";
+import { getProjectEnv } from "../state/project-env";
 import { getErrorIssues, getErrorMessage } from "../utils/error";
 import { formatDateTime } from "../utils/time";
 import { reviewCaseStep } from "../../../shared/case-review";
 import {
-  canMoveSteps,
   copyStep,
-  copySteps,
   formatCaseStatus,
   formatCheckStatus,
   formatStepType,
@@ -62,15 +54,14 @@ import {
   hasValue,
   insertStep,
   moveStep,
-  moveSteps,
   removeStep,
-  removeSteps,
   mergeStepReviewState,
   type StepReviewPreview,
   stepGroups,
   stepLabels,
   stepTimeouts,
 } from "./case-editor";
+import { useCaseAuth, useCasePractical, useCaseRecord, useStepBatch } from "./case-editor-composables";
 import { formatLocatorSummary, type LocatorBuilderState } from "./locator-builder";
 
 const route = useRoute();
@@ -84,25 +75,11 @@ const selectedEnv = ref("");
 const practicalMode = ref<RunMode>("headless");
 const stepConfig = ref(stepTimeouts);
 const stepTable = ref<TableInstance>();
-const recordId = ref("");
-const isRecording = ref(false);
-const isBatchMode = ref(false);
 const selectedId = ref("");
-const batchIds = ref<string[]>([]);
 const highlightId = ref("");
-const practicalReviewing = ref(false);
-const practicalHistoryOpen = ref(false);
-const failureDrawerOpen = ref(false);
 const locatorDrawerOpen = ref(false);
 const locatorStepId = ref("");
-const practicalHistory = ref<PracticalReviewRecord[]>([]);
-const activePracticalRecord = ref<PracticalReviewRecord | null>(null);
 const stepReviewPreview = ref(new Map<string, StepReviewPreview>());
-const hasAuth = ref(false);
-const authPath = ref("");
-const loginId = ref("");
-const loadingLogin = ref(false);
-const savingLogin = ref(false);
 const stepFlashMs = 180;
 const reviewDebounceMs = 400;
 // 浏览器环境下 `window.setTimeout` 返回数值型定时器句柄，避免与 Node 的 `Timeout` 类型混淆。
@@ -137,17 +114,80 @@ const reviewMap = computed(() => {
 
   return map;
 });
-const hasBatch = computed(() => batchIds.value.length > 0);
-const canBatchUp = computed(() =>
-  item.value ? canMoveSteps(item.value.steps, batchIds.value, -1) : false,
-);
-const canBatchDown = computed(() =>
-  item.value ? canMoveSteps(item.value.steps, batchIds.value, 1) : false,
-);
 const startPreview = computed(() => getStartPreview(item.value, activeEnv.value));
 const activeLocatorStep = computed(() => item.value?.steps.find((row) => row.id === locatorStepId.value));
 const activeLocatorSelector = computed(() => activeLocatorStep.value?.selector ?? "");
 const activeLocatorDraft = computed(() => activeLocatorStep.value?.selectorDraft);
+const {
+  hasAuth,
+  authPath,
+  loginId,
+  loadingLogin,
+  savingLogin,
+  loadAuthState,
+  changeEnv,
+  openLogin,
+  saveAuth,
+} = useCaseAuth({
+  projectKey,
+  envs,
+  activeEnv,
+  selectedEnv,
+});
+const {
+  isBatchMode,
+  batchIds,
+  hasBatch,
+  canBatchUp,
+  canBatchDown,
+  toggleBatchMode,
+  updateBatch,
+  selectAllSteps,
+  deleteBatch,
+  duplicateBatch,
+  shiftBatch,
+} = useStepBatch({
+  item,
+  stepTable,
+  selectedId,
+  setActiveSteps,
+  markStepReviewPending,
+  clearStepReview,
+  showError,
+});
+const {
+  practicalReviewing,
+  practicalHistoryOpen,
+  failureDrawerOpen,
+  practicalHistory,
+  activePracticalRecord,
+  runPracticalCheck,
+  openPracticalHistory,
+  clearPracticalHistory,
+  openFailureAnalysis,
+  openLatestFailureAnalysis,
+} = useCasePractical({
+  projectKey,
+  caseKey,
+  item,
+  activeEnv,
+  practicalMode,
+  showError,
+});
+const {
+  recordId,
+  isRecording,
+  startRecordCase,
+  stopRecordCase,
+} = useCaseRecord({
+  projectKey,
+  caseKey,
+  item,
+  activeEnv,
+  clearStepReviewPreview,
+  runStepReviewPreview,
+  showError,
+});
 
 /**
  * 切换当前用例状态。
@@ -188,82 +228,6 @@ async function loadCase() {
 }
 
 /**
- * 切换当前实测检查环境。
- */
-async function changeEnv() {
-  const nextEnv = envs.value.find((env) => env.key === selectedEnv.value) ?? null;
-  activeEnv.value = nextEnv;
-  loginId.value = "";
-
-  if (nextEnv) {
-    setProjectEnv(projectKey, nextEnv.key);
-  }
-
-  await loadAuthState();
-}
-
-/**
- * 加载当前实测环境的登录态状态。
- */
-async function loadAuthState() {
-  if (!activeEnv.value) {
-    hasAuth.value = false;
-    authPath.value = "";
-    return;
-  }
-
-  const state = await getAuthState(projectKey, activeEnv.value.key);
-  hasAuth.value = state.exists;
-  authPath.value = state.path;
-}
-
-/**
- * 打开浏览器让用户保存当前实测环境登录态。
- */
-async function openLogin() {
-  if (!activeEnv.value) {
-    ElMessage.warning("请先配置项目环境");
-    return;
-  }
-
-  loadingLogin.value = true;
-
-  try {
-    const session = await startLogin(projectKey, { envKey: activeEnv.value.key });
-    loginId.value = session.sessionId;
-    ElMessage.success("已打开浏览器，请完成登录后返回本页面保存登录态");
-  } catch (error) {
-    ElMessage.error(getErrorMessage(error));
-  } finally {
-    loadingLogin.value = false;
-  }
-}
-
-/**
- * 保存当前实测环境的登录态文件。
- */
-async function saveAuth() {
-  if (!loginId.value) {
-    ElMessage.warning("请先打开浏览器完成登录");
-    return;
-  }
-
-  savingLogin.value = true;
-
-  try {
-    const auth = await saveLogin(projectKey, loginId.value);
-    authPath.value = auth.path;
-    hasAuth.value = true;
-    loginId.value = "";
-    ElMessage.success("登录态已保存，实测检查和运行测试会自动复用");
-  } catch (error) {
-    ElMessage.error(getErrorMessage(error));
-  } finally {
-    savingLogin.value = false;
-  }
-}
-
-/**
  * 按当前选中位置新增一个步骤。
  */
 function addStep(type: StepType) {
@@ -296,106 +260,6 @@ function deleteStep(index: number) {
   if (row?.id === selectedId.value) {
     selectedId.value = "";
   }
-}
-
-/**
- * 进入或退出批量操作模式。
- */
-function toggleBatchMode() {
-  isBatchMode.value = !isBatchMode.value;
-
-  if (!isBatchMode.value) {
-    clearBatch();
-  }
-}
-
-/**
- * 同步表格多选状态。
- */
-function updateBatch(rows: CaseStep[]) {
-  batchIds.value = rows.map((row) => row.id);
-}
-
-/**
- * 清空批量选择。
- */
-function clearBatch() {
-  batchIds.value = [];
-  stepTable.value?.clearSelection();
-}
-
-/**
- * 全选当前所有步骤。
- */
-async function selectAllSteps() {
-  if (!item.value) {
-    return;
-  }
-
-  await nextTick();
-  stepTable.value?.clearSelection();
-
-  for (const row of item.value.steps) {
-    stepTable.value?.toggleRowSelection(row, true);
-  }
-
-  batchIds.value = item.value.steps.map((row) => row.id);
-}
-
-/**
- * 批量删除选中的步骤。
- */
-async function deleteBatch() {
-  if (!item.value || !hasBatch.value) {
-    return;
-  }
-
-  try {
-    await ElMessageBox.confirm(`确认删除选中的 ${batchIds.value.length} 个步骤吗？`, "批量删除", {
-      type: "warning",
-    });
-    const removed = removeSteps(item.value.steps, batchIds.value);
-    for (const row of removed) {
-      clearStepReview(row.id);
-    }
-    clearBatch();
-
-    if (removed.some((row) => row.id === selectedId.value)) {
-      selectedId.value = "";
-    }
-  } catch (error) {
-    if (error !== "cancel") {
-      showError(error);
-    }
-  }
-}
-
-/**
- * 批量复制选中的步骤。
- */
-function duplicateBatch() {
-  if (!item.value || !hasBatch.value) {
-    return;
-  }
-
-  const rows = copySteps(item.value.steps, batchIds.value);
-  setActiveSteps(rows);
-  for (const row of rows) {
-    markStepReviewPending(row);
-  }
-  clearBatch();
-}
-
-/**
- * 批量调整步骤顺序。
- */
-function shiftBatch(offset: -1 | 1) {
-  if (!item.value || !hasBatch.value) {
-    return;
-  }
-
-  const rows = moveSteps(item.value.steps, batchIds.value, offset);
-  setActiveSteps(rows);
 }
 
 /**
@@ -630,107 +494,6 @@ function clearStepReviewPreview() {
 }
 
 /**
- * 执行当前用例的实测检查。
- */
-async function runPracticalCheck() {
-  if (!activeEnv.value) {
-    ElMessage.warning("请先配置项目环境");
-    return;
-  }
-
-  practicalReviewing.value = true;
-
-  try {
-    const record = await startPracticalReview(projectKey, caseKey, {
-      envKey: activeEnv.value.key,
-      mode: practicalMode.value,
-    });
-    activePracticalRecord.value = record;
-    item.value = await getCase(projectKey, caseKey);
-
-    if (record.status === "failed") {
-      failureDrawerOpen.value = true;
-      ElMessage.error(record.summary.failureMessage ?? "实测检查失败");
-    } else {
-      ElMessage.success("实测检查通过");
-    }
-  } catch (error) {
-    showError(error);
-  } finally {
-    practicalReviewing.value = false;
-  }
-}
-
-/**
- * 打开当前用例的实测检查历史。
- */
-async function openPracticalHistory() {
-  try {
-    practicalHistory.value = await listPracticalReviews(projectKey, caseKey);
-    practicalHistoryOpen.value = true;
-  } catch (error) {
-    showError(error);
-  }
-}
-
-/**
- * 清理当前用例的实测检查历史。
- */
-async function clearPracticalHistory() {
-  const confirmed = await ElMessageBox.confirm("确认清理当前用例的实测检查历史吗？", "清理历史", {
-    confirmButtonText: "清理",
-    cancelButtonText: "取消",
-    type: "warning",
-  }).catch(() => false);
-
-  if (!confirmed) {
-    return;
-  }
-
-  try {
-    await clearPracticalReviews(projectKey, caseKey);
-    practicalHistory.value = [];
-    ElMessage.success("实测检查历史已清理");
-  } catch (error) {
-    showError(error);
-  }
-}
-
-/**
- * 打开指定实测检查记录的失败分析。
- */
-function openFailureAnalysis(record: PracticalReviewRecord) {
-  activePracticalRecord.value = record;
-  failureDrawerOpen.value = true;
-}
-
-/**
- * 打开最近一次失败实测检查的分析。
- */
-async function openLatestFailureAnalysis() {
-  if (!item.value?.practicalReview?.reviewId) {
-    return;
-  }
-
-  try {
-    if (
-      !activePracticalRecord.value ||
-      activePracticalRecord.value.id !== item.value.practicalReview.reviewId
-    ) {
-      activePracticalRecord.value = await getPracticalReview(
-        projectKey,
-        caseKey,
-        item.value.practicalReview.reviewId,
-      );
-    }
-
-    failureDrawerOpen.value = true;
-  } catch (error) {
-    showError(error);
-  }
-}
-
-/**
  * 保存用例并重新生成测试文件。
  */
 async function saveCase() {
@@ -759,51 +522,6 @@ async function saveDraft() {
     item.value = await saveCaseDraft(projectKey, caseKey, item.value);
     clearStepReviewPreview();
     ElMessage.success("草稿已保存");
-  } catch (error) {
-    showError(error);
-  }
-}
-
-/**
- * 启动有头浏览器录制当前用例。
- */
-async function startRecordCase() {
-  try {
-    await ElMessageBox.confirm(
-      "停止录制后会用录制结果替换当前编辑页步骤，替换后仍需手动保存。",
-      "开始录制",
-      { type: "warning" },
-    );
-
-    const result = await startRecord(projectKey, caseKey);
-    recordId.value = result.sessionId;
-    isRecording.value = true;
-    ElMessage.success("录制窗口已打开，请在浏览器中完成操作和断言");
-  } catch (error) {
-    if (error !== "cancel") {
-      showError(error);
-    }
-  }
-}
-
-/**
- * 停止录制并把录制步骤导入当前编辑页。
- */
-async function stopRecordCase() {
-  if (!recordId.value) {
-    return;
-  }
-
-  try {
-    const result = await stopRecord(projectKey, caseKey, recordId.value);
-    if (item.value) {
-      item.value.steps = result.steps;
-      clearStepReviewPreview();
-      item.value.steps.forEach((step) => runStepReviewPreview(step));
-    }
-    recordId.value = "";
-    isRecording.value = false;
-    ElMessage.success("录制结果已导入当前编辑页，请保存草稿或生成测试文件");
   } catch (error) {
     showError(error);
   }
@@ -839,11 +557,15 @@ onMounted(loadCase);
         <h2>{{ item.name }}</h2>
       </div>
       <div class="toolbar-actions btn-shadow-md">
-        <el-button v-if="!isRecording" @click="startRecordCase">开始录制</el-button>
-        <el-button v-else type="warning" @click="stopRecordCase">停止录制</el-button>
-        <el-button :disabled="isRecording" @click="saveDraft">保存草稿</el-button>
-        <el-button type="primary" :disabled="isRecording" @click="saveCase"
-          >保存并生成测试文件</el-button
+        <el-button v-if="!isRecording" @click="startRecordCase">
+          <i style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background-color: #f56c6c; margin-right: 6px;"></i>开始录制
+        </el-button>
+        <el-button v-else type="danger" @click="stopRecordCase">
+          <i style="display: inline-block; width: 10px; height: 10px; background-color: currentColor; margin-right: 6px;"></i>停止录制
+        </el-button>
+        <el-button :disabled="isRecording" :icon="Document" @click="saveDraft">保存草稿</el-button>
+        <el-button type="primary" :disabled="isRecording" :icon="DocumentChecked" @click="saveCase"
+          >生成测试用例</el-button
         >
       </div>
     </div>
@@ -933,10 +655,15 @@ onMounted(loadCase);
               </label>
               <label class="practical-field">
                 <span>运行方式</span>
-                <el-radio-group v-model="practicalMode" class="practical-mode">
-                  <el-radio-button value="headless">无头运行</el-radio-button>
-                  <el-radio-button value="headed">可视调试</el-radio-button>
-                </el-radio-group>
+                <el-segmented
+                  v-model="practicalMode"
+                  class="practical-mode"
+                  block
+                  :options="[
+                    { label: '无头运行', value: 'headless' },
+                    { label: '可视调试', value: 'headed' }
+                  ]"
+                />
               </label>
             </div>
 
@@ -950,11 +677,12 @@ onMounted(loadCase);
               }}
             </p>
             <div class="panel-actions btn-shadow-md">
-              <el-button type="primary" :loading="practicalReviewing" @click="runPracticalCheck"
+              <el-button type="success" :loading="practicalReviewing" @click="runPracticalCheck"
                 >开始实测检查</el-button
               >
               <el-button @click="openPracticalHistory">查看历史</el-button>
-              <el-button @click="clearPracticalHistory">清理历史</el-button>
+              <span style="flex-grow: 1"></span>
+              <el-button :icon="Delete" type="danger" plain @click="clearPracticalHistory">清理历史</el-button>
             </div>
           </section>
         </div>
@@ -1125,14 +853,14 @@ onMounted(loadCase);
             <template #default="{ $index }">
               <div class="row-actions">
                 <el-tooltip content="上移" placement="top" :show-after="500" :hide-after="0">
-                  <el-button text circle :disabled="$index === 0" @click="shiftStep($index, -1)">
+                  <el-button text class="action-btn" :disabled="$index === 0" @click="shiftStep($index, -1)">
                     <el-icon><ArrowUp /></el-icon>
                   </el-button>
                 </el-tooltip>
                 <el-tooltip content="下移" placement="top" :show-after="500" :hide-after="0">
                   <el-button
                     text
-                    circle
+                    class="action-btn"
                     :disabled="$index === item.steps.length - 1"
                     @click="shiftStep($index, 1)"
                   >
@@ -1140,16 +868,17 @@ onMounted(loadCase);
                   </el-button>
                 </el-tooltip>
                 <el-tooltip content="复制" placement="top" :show-after="500" :hide-after="0">
-                  <el-button text circle @click="duplicateStep($index)">
+                  <el-button text class="action-btn" @click="duplicateStep($index)">
                     <el-icon><CopyDocument /></el-icon>
                   </el-button>
                 </el-tooltip>
                 <el-dropdown
                   trigger="click"
+                  placement="bottom-end"
                   popper-class="step-more-menu"
                   @command="(command) => command === 'delete' && deleteStep($index)"
                 >
-                  <el-button text circle title="更多" @click.stop>
+                  <el-button text class="action-btn" title="更多" @click.stop>
                     <el-icon><MoreFilled /></el-icon>
                   </el-button>
                   <template #dropdown>
@@ -1341,14 +1070,6 @@ onMounted(loadCase);
   width: 100%;
 }
 
-.practical-mode :deep(.el-radio-button) {
-  flex: 1;
-}
-
-.practical-mode :deep(.el-radio-button__inner) {
-  width: 100%;
-}
-
 .practical-result {
   align-items: center;
   color: #5f7188;
@@ -1372,6 +1093,7 @@ onMounted(loadCase);
   flex-wrap: wrap;
   margin-top: auto;
   padding-top: 14px;
+  width: 100%;
 }
 
 .failure-summary {
@@ -1487,11 +1209,14 @@ onMounted(loadCase);
   flex-wrap: nowrap;
 }
 
-.row-actions :deep(.el-button.is-circle) {
+.row-actions :deep(.el-button.action-btn) {
   width: 30px;
   height: 30px;
+  padding: 0;
+  margin-left: 8px;
   border: 1px solid transparent;
   color: #64748b;
+  border-radius: 4px; /* 统一的方形圆角 */
   transition:
     background-color 160ms ease,
     border-color 160ms ease,
@@ -1499,19 +1224,19 @@ onMounted(loadCase);
     color 160ms ease;
 }
 
-.row-actions :deep(.el-button.is-circle .el-icon) {
+.row-actions :deep(.el-button.action-btn .el-icon) {
   font-size: 17px;
 }
 
-.row-actions :deep(.el-button.is-circle:not(.is-disabled):hover),
-.row-actions :deep(.el-button.is-circle:not(.is-disabled):focus-visible) {
+.row-actions :deep(.el-button.action-btn:not(.is-disabled):hover),
+.row-actions :deep(.el-button.action-btn:not(.is-disabled):focus-visible) {
   color: #2563eb;
   border-color: #bfdbfe;
   background: #eff6ff;
   box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.2);
 }
 
-.row-actions :deep(.el-button.is-circle.is-disabled) {
+.row-actions :deep(.el-button.action-btn.is-disabled) {
   color: #cbd5e1;
 }
 
@@ -1667,5 +1392,14 @@ onMounted(loadCase);
 .step-more-menu .danger-action:hover .el-icon,
 .step-more-menu .danger-action:focus .el-icon {
   color: #c93535;
+}
+
+.danger-text-btn {
+  color: #d94747;
+}
+.danger-text-btn:hover {
+  color: #c93535;
+  border-color: #fbc4c4;
+  background-color: #fef0f0;
 }
 </style>

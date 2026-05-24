@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import request from 'supertest';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../../server/src/app';
 
 let root = '';
@@ -94,5 +94,30 @@ describe('登录接口', () => {
     expect(preState.body.exists).toBe(true);
     expect(defaultState.body.path).toContain('default.storageState.json');
     expect(preState.body.path).toContain('pre.storageState.json');
+  });
+
+  it('登录会话过期后不能继续保存', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-24T00:00:00.000Z'));
+
+    try {
+      const app = createApp();
+      await request(app).post('/api/projects').send({
+        name: 'CCTQ',
+        key: 'cctq',
+        baseUrl: 'https://www.cctq.ai'
+      });
+
+      const started = await request(app).post('/api/projects/cctq/auth/start').send({});
+      await vi.advanceTimersByTimeAsync(8 * 60 * 60 * 1000 + 1);
+      const saved = await request(app).post('/api/projects/cctq/auth/save').send({
+        sessionId: started.body.sessionId
+      });
+
+      expect(saved.status).toBe(400);
+      expect(saved.body.message).toBe('登录会话不存在或已过期');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

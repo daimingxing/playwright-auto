@@ -95,6 +95,19 @@ describe('运行报告接口', () => {
     expect(res.status).toBe(200);
   });
 
+  it('拒绝畸形编码的报告静态资源路径', async () => {
+    const app = createApp();
+    const run = await createRun('crm', 'default');
+    const reportDir = join(root, 'projects', 'crm', 'runs', run.id, 'html-report');
+    await mkdir(reportDir, { recursive: true });
+    await writeFile(join(reportDir, 'index.html'), '<html><body>报告</body></html>', 'utf8');
+
+    const res = await request(app).get(`/api/projects/crm/runs/${run.id}/report/%E0%A4%A`);
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe('报告路径不合法');
+  });
+
   it('可以下载单条测试报告压缩包', async () => {
     const app = createApp();
     const run = await createRun('crm', 'default');

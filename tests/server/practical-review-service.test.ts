@@ -259,6 +259,19 @@ describe('实测检查服务', () => {
     const options = spawnMock.mock.calls[0][2] as { env: Record<string, string> };
     expect(options.env).not.toHaveProperty('PLAYWRIGHT_STORAGE_STATE');
   });
+
+  it('浏览器进程启动失败时返回原始错误', async () => {
+    process.env.NODE_ENV = 'development';
+    await createProject({ name: 'CRM', key: 'crm', baseUrl: 'https://crm.test.local' });
+    const item = await createCase('crm', { name: '创建订单', startPath: '/orders/create' });
+    await updateCase('crm', item.key, {
+      ...item,
+      steps: [{ id: 's1', type: 'click', selector: "getByRole('button', { name: '保存' })" }]
+    });
+    spawnMock.mockImplementation(() => createSpawnError(new Error('spawn failed')));
+
+    await expect(runPracticalReview('crm', item.key, { envKey: 'default' })).rejects.toThrow('spawn failed');
+  });
 });
 
 function createSpawnResult(code: number, output: string, beforeExit?: () => Promise<void>) {
@@ -273,6 +286,21 @@ function createSpawnResult(code: number, output: string, beforeExit?: () => Prom
     await beforeExit?.();
     child.stderr.emit('data', Buffer.from(output));
     child.emit('exit', code);
+  }, 0);
+
+  return child;
+}
+
+function createSpawnError(error: Error) {
+  const child = new EventEmitter() as EventEmitter & {
+    stdout: EventEmitter;
+    stderr: EventEmitter;
+  };
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+
+  setTimeout(() => {
+    child.emit('error', error);
   }, 0);
 
   return child;

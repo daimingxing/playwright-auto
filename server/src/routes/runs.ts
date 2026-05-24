@@ -30,8 +30,16 @@ runsRouter.get('/config', (_req, res) => {
 });
 
 runsRouter.post<ProjectParams>('/', async (req, res, next) => {
+  const controller = new AbortController();
+
+  res.on('close', () => {
+    if (!res.writableEnded) {
+      controller.abort();
+    }
+  });
+
   try {
-    res.status(201).json(await runProject(req.params.projectKey, req.body));
+    res.status(201).json(await runProject(req.params.projectKey, { ...req.body, signal: controller.signal }));
   } catch (error) {
     next(error);
   }
@@ -131,7 +139,7 @@ async function assertReportRoot(reportPath: string) {
 function resolveReportFile(reportPath: string, url: string) {
   const marker = '/report/';
   const index = url.indexOf(marker);
-  const relPath = index >= 0 ? decodeURIComponent(url.slice(index + marker.length)) : '';
+  const relPath = index >= 0 ? decodeReportPath(url.slice(index + marker.length)) : '';
   const targetPath = relPath ? resolve(reportPath, relPath) : join(reportPath, 'index.html');
 
   const inside = relative(reportPath, targetPath);
@@ -140,4 +148,16 @@ function resolveReportFile(reportPath: string, url: string) {
   }
 
   return targetPath;
+}
+
+/**
+ * 解码报告资源路径，避免畸形 URL 被当成服务端异常。
+ */
+function decodeReportPath(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    // 百分号编码不完整属于客户端路径问题，应返回 400 而不是兜底 500。
+    throw badRequest('报告路径不合法');
+  }
 }

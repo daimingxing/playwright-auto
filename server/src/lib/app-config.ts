@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type { StepTimeoutConfig } from '../../../shared/types';
+import type { FullAppConfig, StepTimeoutConfig } from '../../../shared/types';
 
 interface FileConfig {
   server?: {
@@ -53,7 +53,7 @@ const DEFAULT_CONFIG = {
 /**
  * 获取当前应用配置。
  */
-export function getAppConfig() {
+export function getAppConfig(): FullAppConfig {
   const fileConfig = readFileConfig();
   const web = {
     origin: readText(undefined, fileConfig.web?.origin, DEFAULT_CONFIG.web.origin),
@@ -150,9 +150,17 @@ function readFileConfig(): FileConfig {
   }
 
   try {
-    return JSON.parse(readFileSync(configPath, 'utf8')) as FileConfig;
-  } catch {
-    return {};
+    const parsed = JSON.parse(readFileSync(configPath, 'utf8'));
+
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('配置文件必须是对象');
+    }
+
+    return parsed as FileConfig;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    throw new Error(`配置文件解析失败：${configPath}（${message}）`);
   }
 }
 

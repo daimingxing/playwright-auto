@@ -271,4 +271,24 @@ describe('用例生成器', () => {
     expect(code).toContain('await page.locator("#user-name").fill("O\'Reilly");');
     expect(code).toContain('await expect(page.locator(".message")).toContainText("You\'re logged in");');
   });
+
+  it('遇到未知步骤类型时中止生成测试文件', () => {
+    const item: CaseMeta = {
+      name: '未知步骤',
+      key: 'case-unknown',
+      status: 'draft',
+      startPath: '/orders',
+      createdAt: '2026-05-24T00:00:00.000Z',
+      updatedAt: '2026-05-24T00:00:00.000Z',
+      steps: [
+        {
+          id: 's1',
+          type: 'drag' as CaseMeta['steps'][number]['type'],
+          selector: '#source'
+        }
+      ]
+    };
+
+    expect(() => generateSpec(item)).toThrow('暂不支持的步骤类型：drag');
+  });
 });

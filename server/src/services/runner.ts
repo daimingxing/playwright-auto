@@ -7,12 +7,13 @@ import type { CaseMeta, RunConfig, RunInput } from '../../../shared/types';
 import { getProjectAuthPath, hasProjectAuth } from './auth-session';
 import { assertVendorBrowser, getVendorEnv } from './vendor-browser';
 import { getAppConfig } from '../lib/app-config';
-import { spawnPlaywrightCli } from './playwright-cli';
+import { runPlaywrightTask } from './playwright-cli';
 import { badRequest, notFound } from '../lib/http-error';
 import { isReviewPassed } from './case-review';
 
 interface RunProjectInput extends RunInput {
   storageState?: string;
+  signal?: AbortSignal;
 }
 
 export class RunError extends Error {
@@ -68,9 +69,7 @@ export async function runProject(projectKey: string, input: RunProjectInput = {}
   };
 
   try {
-    await new Promise<void>((resolve, reject) => {
-    let output = '';
-    const child = spawnPlaywrightCli([
+    const result = await runPlaywrightTask([
       'test',
       '--config',
       'playwright.config.ts',
@@ -80,26 +79,13 @@ export async function runProject(projectKey: string, input: RunProjectInput = {}
     ], {
       cwd: process.cwd(),
       env,
-      stdio: ['ignore', 'pipe', 'pipe']
+      signal: input.signal,
+      allowedExitCodes: [0, 1]
     });
 
-    child.stdout?.on('data', (data) => {
-      output += data.toString();
-    });
-
-    child.stderr?.on('data', (data) => {
-      output += data.toString();
-    });
-
-    child.on('exit', (code) => {
-      if (code === 0) {
-        resolve();
-        return;
-      }
-
-      reject(new RunError(createRunErrorMessage(code, output), reportPath, reportUrl));
-    });
-    });
+    if (result.code !== 0) {
+      throw new RunError(createRunErrorMessage(result.code, result.output), reportPath, reportUrl);
+    }
   } catch (error) {
     await updateRun(projectKey, run.id, { status: 'failed' });
     throw error;

@@ -4,8 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "concurrently -k \"npm:dev:server\" \"npm:dev:web\" ",
+    "dev": "concurrently -k \"npm:dev:server\" \"npm:dev:web:wait\"",
     "dev:web": "vite --config web/vite.config.ts",
+    "dev:web:wait": "tsx scripts/wait-for-server.ts && npm run dev:web",
     "dev:server": "tsx server/src/index.ts",
     "dev:server:watch": "tsx watch server/src/index.ts",
     "build:web": "vite build --config web/vite.config.ts",
