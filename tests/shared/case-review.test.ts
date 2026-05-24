@@ -118,6 +118,39 @@ describe('共享基础检查规则', () => {
     ]);
   });
 
+  it('会把空字符串首参标记为错误', () => {
+    const result = reviewCaseStep(makeStep({ selector: "getByText('')" }), 0);
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        level: 'error',
+        ruleCode: 'empty-locator-argument'
+      })
+    ]);
+  });
+
+  it('会把非布尔 exact 标记为错误', () => {
+    const result = reviewCaseStep(makeStep({ selector: "getByText('保存', { exact: 'yes' })" }), 0);
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        level: 'error',
+        ruleCode: 'invalid-locator-option'
+      })
+    ]);
+  });
+
+  it('会把非法 nth 参数标记为错误', () => {
+    const result = reviewCaseStep(makeStep({ selector: "locator('button').nth(-1)" }), 0);
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        level: 'error',
+        ruleCode: 'invalid-locator-argument'
+      })
+    ]);
+  });
+
   it('会把尾逗号 role 定位标记为弱选择器', () => {
     const result = reviewCaseStep(makeStep({ selector: "getByRole('button',)" }), 0);
 
@@ -232,6 +265,45 @@ describe('共享基础检查规则', () => {
     const result = reviewCaseStep(makeStep({ selector: "locator('article').filter({ hasText: '订单', visible: true })" }), 0);
 
     expect(result).toEqual([]);
+  });
+
+  it('会接受合法正则和 has 子定位器', () => {
+    const result = reviewCaseStep(makeStep({ selector: "locator('tr').filter({ hasText: /订单\\d+/i, has: getByRole('button', { name: /编辑|修改/ }) })" }), 0);
+
+    expect(result).toEqual([]);
+  });
+
+  it('会把非法正则标记为错误', () => {
+    const result = reviewCaseStep(makeStep({ selector: "getByText(/订单[/)" }), 0);
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        level: 'error',
+        ruleCode: 'invalid-locator-regex'
+      })
+    ]);
+  });
+
+  it('会把非法 visible 参数标记为错误', () => {
+    const result = reviewCaseStep(makeStep({ selector: "locator('button').filter({ visible: 'yes' })" }), 0);
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        level: 'error',
+        ruleCode: 'invalid-locator-option'
+      })
+    ]);
+  });
+
+  it('会把复杂 has 子定位器标记为错误', () => {
+    const result = reviewCaseStep(makeStep({ selector: "locator('tr').filter({ has: getByRole('button', { name: '编辑' }).filter({ hasText: '更多' }) })" }), 0);
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        level: 'error',
+        ruleCode: 'complex-filter-locator'
+      })
+    ]);
   });
 
   it('会把空文本过滤加 nth 的定位链标记为高危', () => {

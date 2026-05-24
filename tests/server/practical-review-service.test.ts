@@ -124,6 +124,32 @@ describe('实测检查服务', () => {
     expect(code).not.toContain("selector: 'locator('div')");
   });
 
+  it('生成脚本时会用 selectorDraft 渲染内部 Locator', () => {
+    const code = generatePracticalReviewSpec({
+      startUrl: 'https://crm.test.local/orders',
+      resultPath: 'D:/tmp/review-result.json',
+      screenshotDir: 'D:/tmp/screenshots',
+      steps: [
+        {
+          id: 's1',
+          type: 'click',
+          selector: "locator('tr').filter({ has: getByRole('button', { name: '编辑' }) })",
+          selectorDraft: {
+            mode: 'css',
+            value: 'tr',
+            has: {
+              mode: 'role',
+              role: 'button',
+              value: '编辑'
+            }
+          }
+        }
+      ]
+    });
+
+    expect(code).toContain("page.locator('tr').filter({ has: page.getByRole('button', { name: '编辑' }) }).click()");
+  });
+
   it('浏览器执行未生成结果文件时返回清晰错误', async () => {
     process.env.NODE_ENV = 'development';
     await createProject({ name: 'CRM', key: 'crm', baseUrl: 'https://crm.test.local' });
@@ -184,6 +210,38 @@ describe('实测检查服务', () => {
     expect(options.env.PLAYWRIGHT_TEST_DIR).toContain('reviews\\work\\');
     expect(options.env.PLAYWRIGHT_TEST_MATCH).toBe('practical-review.spec.ts');
     expect(options.env.PLAYWRIGHT_AUTO_OUTPUT).toContain('playwright-output');
+  });
+
+  it('浏览器执行时默认使用无头运行', async () => {
+    process.env.NODE_ENV = 'development';
+    await createProject({ name: 'CRM', key: 'crm', baseUrl: 'https://crm.test.local' });
+    const item = await createCase('crm', { name: '创建订单', startPath: '/orders/create' });
+    await updateCase('crm', item.key, {
+      ...item,
+      steps: [{ id: 's1', type: 'click', selector: "getByRole('button', { name: '保存' })" }]
+    });
+    spawnMock.mockImplementation(() => createSpawnResult(1, 'Error: No tests found.'));
+
+    await runPracticalReview('crm', item.key, { envKey: 'default' }).catch(() => undefined);
+
+    const options = spawnMock.mock.calls[0][2] as { env: Record<string, string> };
+    expect(options.env.PLAYWRIGHT_HEADLESS).toBe('true');
+  });
+
+  it('浏览器执行时可切换为可视调试', async () => {
+    process.env.NODE_ENV = 'development';
+    await createProject({ name: 'CRM', key: 'crm', baseUrl: 'https://crm.test.local' });
+    const item = await createCase('crm', { name: '创建订单', startPath: '/orders/create' });
+    await updateCase('crm', item.key, {
+      ...item,
+      steps: [{ id: 's1', type: 'click', selector: "getByRole('button', { name: '保存' })" }]
+    });
+    spawnMock.mockImplementation(() => createSpawnResult(1, 'Error: No tests found.'));
+
+    await runPracticalReview('crm', item.key, { envKey: 'default', mode: 'headed' }).catch(() => undefined);
+
+    const options = spawnMock.mock.calls[0][2] as { env: Record<string, string> };
+    expect(options.env.PLAYWRIGHT_HEADLESS).toBe('false');
   });
 
   it('未保存登录态时不会传递空的 storageState 路径', async () => {

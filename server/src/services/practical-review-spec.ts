@@ -1,4 +1,5 @@
 import type { CaseStep } from '../../../shared/types';
+import { renderLocatorExpression } from '../../../shared/locator-builder';
 import { quoteText } from './code-literal';
 import { renderPracticalLocator } from './practical-review-locator';
 
@@ -78,23 +79,23 @@ function renderStep(step: CaseStep, index: number) {
 
   switch (step.type) {
     case 'click':
-      return [`  await recordStep(${meta}, async () => ${renderPracticalLocator(step.selector)}.click(${renderTimeoutArg(step)}));`];
+      return [`  await recordStep(${meta}, async () => ${renderStepLocator(step)}.click(${renderTimeoutArg(step)}));`];
     case 'rightClick':
-      return [`  await recordStep(${meta}, async () => ${renderPracticalLocator(step.selector)}.click(${renderRightClickArg(step)}));`];
+      return [`  await recordStep(${meta}, async () => ${renderStepLocator(step)}.click(${renderRightClickArg(step)}));`];
     case 'doubleClick':
-      return [`  await recordStep(${meta}, async () => ${renderPracticalLocator(step.selector)}.dblclick(${renderTimeoutArg(step)}));`];
+      return [`  await recordStep(${meta}, async () => ${renderStepLocator(step)}.dblclick(${renderTimeoutArg(step)}));`];
     case 'hover':
-      return [`  await recordStep(${meta}, async () => ${renderPracticalLocator(step.selector)}.hover(${renderTimeoutArg(step)}));`];
+      return [`  await recordStep(${meta}, async () => ${renderStepLocator(step)}.hover(${renderTimeoutArg(step)}));`];
     case 'fill':
-      return [`  await recordStep(${meta}, async () => ${renderPracticalLocator(step.selector)}.fill(${quote(step.value ?? '')}${renderTimeoutOption(step)}));`];
+      return [`  await recordStep(${meta}, async () => ${renderStepLocator(step)}.fill(${quote(step.value ?? '')}${renderTimeoutOption(step)}));`];
     case 'select':
-      return [`  await recordStep(${meta}, async () => ${renderPracticalLocator(step.selector)}.selectOption(${quote(step.value ?? '')}${renderTimeoutOption(step)}));`];
+      return [`  await recordStep(${meta}, async () => ${renderStepLocator(step)}.selectOption(${quote(step.value ?? '')}${renderTimeoutOption(step)}));`];
     case 'assertVisible':
-      return [`  await recordStep(${meta}, async () => expect(${renderPracticalLocator(step.selector)}).toBeVisible());`];
+      return [`  await recordStep(${meta}, async () => expect(${renderStepLocator(step)}).toBeVisible());`];
     case 'assertText':
-      return [`  await recordStep(${meta}, async () => expect(${renderPracticalLocator(step.selector)}).toContainText(${quote(step.value ?? '')}));`];
+      return [`  await recordStep(${meta}, async () => expect(${renderStepLocator(step)}).toContainText(${quote(step.value ?? '')}));`];
     case 'assertValue':
-      return [`  await recordStep(${meta}, async () => expect(${renderPracticalLocator(step.selector)}).toHaveValue(${quote(step.value ?? '')}));`];
+      return [`  await recordStep(${meta}, async () => expect(${renderStepLocator(step)}).toHaveValue(${quote(step.value ?? '')}));`];
     case 'goto':
       return [`  await recordStep(${meta}, async () => page.goto(${quote(step.value ?? '/')}${renderTimeoutOption(step)}));`];
     case 'wait':
@@ -106,6 +107,17 @@ function renderStep(step: CaseStep, index: number) {
     default:
       return [`  await recordStep(${meta}, async () => undefined);`];
   }
+}
+
+/**
+ * 根据结构化草稿或历史 selector 生成实测检查定位表达式。
+ */
+function renderStepLocator(step: CaseStep) {
+  if (step.selectorDraft) {
+    return renderLocatorExpression(step.selectorDraft, 'page');
+  }
+
+  return renderPracticalLocator(step.selector);
 }
 
 function renderTimeoutArg(step: CaseStep) {

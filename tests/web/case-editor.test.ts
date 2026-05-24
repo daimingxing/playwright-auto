@@ -6,6 +6,7 @@ import {
   copySteps,
   createStep,
   formatCaseStatus,
+  formatCaseCreatedTime,
   formatCheckStatus,
   formatLocatorCheckPass,
   formatStepReviewState,
@@ -249,6 +250,35 @@ describe('用例编辑器步骤工具', () => {
     expect(steps.map((row) => row.id)).toEqual(['b', 'c', 'a']);
   });
 
+  it('会按秒显示用例创建时间', () => {
+    expect(formatCaseCreatedTime(undefined)).toBe('-');
+    expect(formatCaseCreatedTime('2026-05-24T07:50:01.648Z')).toBe('2026-05-24 07:50:01');
+  });
+
+  it('复制步骤时会深拷贝 selectorDraft', () => {
+    const steps = [
+      {
+        ...makeStep('a'),
+        selectorDraft: {
+          mode: 'css',
+          value: 'tr',
+          has: {
+            mode: 'role',
+            role: 'button',
+            value: '编辑'
+          }
+        }
+      } satisfies CaseStep
+    ];
+
+    const copied = copyStep(steps, 0);
+
+    expect(copied?.selectorDraft).toEqual(steps[0].selectorDraft);
+    expect(copied?.selectorDraft).not.toBe(steps[0].selectorDraft);
+    copied!.selectorDraft!.has!.value = '查看';
+    expect(steps[0].selectorDraft!.has!.value).toBe('编辑');
+  });
+
   it('可以批量删除选中的步骤并保留未选中顺序', () => {
     const steps = [makeStep('a'), makeStep('b', 'fill'), makeStep('c', 'wait'), makeStep('d')];
 
@@ -259,7 +289,19 @@ describe('用例编辑器步骤工具', () => {
   });
 
   it('可以批量复制选中的步骤到选中块后方', () => {
-    const steps = [makeStep('a'), makeStep('b', 'fill'), makeStep('c', 'wait'), makeStep('d')];
+    const steps = [
+      makeStep('a'),
+      {
+        ...makeStep('b', 'fill'),
+        selectorDraft: {
+          mode: 'role',
+          role: 'textbox',
+          value: '用户名'
+        }
+      } satisfies CaseStep,
+      makeStep('c', 'wait'),
+      makeStep('d')
+    ];
 
     const copied = copySteps(steps, ['b', 'd']);
 
@@ -267,6 +309,8 @@ describe('用例编辑器步骤工具', () => {
     expect(copied.map((row) => row.type)).toEqual(['fill', 'click']);
     expect(copied[0].id).not.toBe('b');
     expect(copied[1].id).not.toBe('d');
+    expect(copied[0].selectorDraft).toEqual(steps[1].selectorDraft);
+    expect(copied[0].selectorDraft).not.toBe(steps[1].selectorDraft);
     expect(steps.map((row) => row.id)).toEqual(['a', 'b', 'c', 'd', copied[0].id, copied[1].id]);
   });
 

@@ -1,4 +1,4 @@
-import type { CaseMeta, CaseStatus, PracticalReviewRecord } from '../../../shared/types';
+import type { CaseMeta, CaseStatus, PracticalReviewRecord, RunMode } from '../../../shared/types';
 import { downloadFile } from './http';
 import { requestJson } from './http';
 
@@ -18,6 +18,7 @@ export interface RecordInput {
 
 export interface PracticalReviewInput {
   envKey?: string;
+  mode?: RunMode;
 }
 
 export interface BatchStatusInput {

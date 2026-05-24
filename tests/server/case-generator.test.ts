@@ -66,6 +66,69 @@ describe('用例生成器', () => {
     expect(code).toContain("await expect(page.getByText('保存成功')).toBeVisible();");
   });
 
+  it('优先使用 selectorDraft 生成带内部页面前缀的 Locator 表达式', () => {
+    const item: CaseMeta = {
+      name: '编辑订单行',
+      key: 'case-selector-draft',
+      status: 'draft',
+      startPath: '/orders',
+      createdAt: '2026-05-24T00:00:00.000Z',
+      updatedAt: '2026-05-24T00:00:00.000Z',
+      steps: [
+        {
+          id: 's1',
+          type: 'click',
+          selector: "locator('tr').filter({ has: getByRole('button', { name: '编辑' }) })",
+          selectorDraft: {
+            mode: 'css',
+            value: 'tr',
+            has: {
+              mode: 'role',
+              role: 'button',
+              value: { kind: 'text', text: '编辑' }
+            }
+          }
+        }
+      ]
+    };
+
+    const code = generateSpec(item);
+
+    expect(code).toContain("await page.locator('tr').filter({ has: page.getByRole('button', { name: '编辑' }) }).click();");
+  });
+
+  it('selectorDraft 会使用步骤页面别名渲染内部 Locator', () => {
+    const item: CaseMeta = {
+      name: '弹窗内编辑',
+      key: 'case-selector-draft-alias',
+      status: 'draft',
+      startPath: '/orders',
+      createdAt: '2026-05-24T00:00:00.000Z',
+      updatedAt: '2026-05-24T00:00:00.000Z',
+      steps: [
+        {
+          id: 's1',
+          type: 'click',
+          selector: "locator('tr').filter({ has: getByRole('button', { name: '编辑' }) })",
+          pageAlias: 'page1',
+          selectorDraft: {
+            mode: 'css',
+            value: 'tr',
+            has: {
+              mode: 'role',
+              role: 'button',
+              value: { kind: 'text', text: '编辑' }
+            }
+          }
+        }
+      ]
+    };
+
+    const code = generateSpec(item);
+
+    expect(code).toContain("await page1.locator('tr').filter({ has: page1.getByRole('button', { name: '编辑' }) }).click();");
+  });
+
   it('给带等待时间的动作步骤生成 Playwright timeout 参数', () => {
     const item: CaseMeta = {
       name: '等待点击',

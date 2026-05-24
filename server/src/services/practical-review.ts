@@ -6,6 +6,7 @@ import type {
   CaseMeta,
   PracticalFailureAnalysis,
   PracticalReviewRecord,
+  RunMode,
   PracticalStepReview
 } from '../../../shared/types';
 import { buildStartUrl } from '../../../shared/url';
@@ -27,6 +28,7 @@ import { notFound } from '../lib/http-error';
 
 interface PracticalReviewInput {
   envKey?: string;
+  mode?: RunMode;
   testFailure?: {
     stepId: string;
     code: PracticalFailureAnalysis['code'];
@@ -53,7 +55,7 @@ export async function runPracticalReview(projectKey: string, caseKey: string, in
   const steps =
     process.env.NODE_ENV === 'test'
       ? createTestStepResults(item, input.testFailure)
-      : await runBrowserReview(projectKey, item, envKey, env.baseUrl);
+      : await runBrowserReview(projectKey, item, envKey, env.baseUrl, input.mode ?? 'headless');
   const failedStep = steps.find((step) => step.status === 'failed');
   const finishedAt = new Date().toISOString();
   const status: PracticalReviewRecord['status'] = failedStep ? 'failed' : 'passed';
@@ -120,7 +122,13 @@ function createTestStepResults(item: CaseMeta, failure: PracticalReviewInput['te
   });
 }
 
-async function runBrowserReview(projectKey: string, item: CaseMeta, envKey: string, envBaseUrl: string): Promise<PracticalStepReview[]> {
+async function runBrowserReview(
+  projectKey: string,
+  item: CaseMeta,
+  envKey: string,
+  envBaseUrl: string,
+  mode: RunMode
+): Promise<PracticalStepReview[]> {
   await assertVendorBrowser();
 
   const workDir = getPracticalReviewWorkPath(projectKey, randomUUID());
@@ -144,7 +152,7 @@ async function runBrowserReview(projectKey: string, item: CaseMeta, envKey: stri
   );
 
   const storageState = (await hasProjectAuth(projectKey, envKey)) ? getProjectAuthPath(projectKey, envKey) : '';
-  const output = await runReviewProcess(specDir, join(workDir, 'playwright-output'), storageState);
+  const output = await runReviewProcess(specDir, join(workDir, 'playwright-output'), storageState, mode);
 
   try {
     if (!existsSync(resultPath)) {
@@ -172,7 +180,7 @@ async function readReviewResult(resultPath: string) {
   }
 }
 
-async function runReviewProcess(testDir: string, outputDir: string, storageState: string) {
+async function runReviewProcess(testDir: string, outputDir: string, storageState: string, mode: RunMode) {
   return new Promise<string>((resolve, reject) => {
     let output = '';
     const reviewEnv = {
@@ -181,7 +189,8 @@ async function runReviewProcess(testDir: string, outputDir: string, storageState
       PLAYWRIGHT_TEST_DIR: testDir,
       PLAYWRIGHT_TEST_MATCH: 'practical-review.spec.ts',
       PLAYWRIGHT_AUTO_OUTPUT: outputDir,
-      PLAYWRIGHT_HEADLESS: 'true',
+      // Playwright 配置只读取字符串环境变量，headed 模式需要显式写 false。
+      PLAYWRIGHT_HEADLESS: mode === 'headless' ? 'true' : 'false',
       ...(storageState ? { PLAYWRIGHT_STORAGE_STATE: storageState } : {})
     };
     const child = spawnPlaywrightCli(['test', '--config', 'playwright.config.ts'], {

@@ -1,5 +1,6 @@
 import type { CaseMeta, PracticalReviewSummary } from '../../../shared/types';
 import { resolveApiUrl } from '../api/http';
+import { formatDateTime } from '../utils/time';
 import { getCaseCheckStatus } from './case-editor';
 
 /**
@@ -96,7 +97,14 @@ export function getPracticalReviewTagType(summary: PracticalReviewSummary | unde
  * 显示最近一次实测检查时间。
  */
 export function formatPracticalReviewTime(summary: PracticalReviewSummary | undefined) {
-  return summary?.checkedAt ?? '-';
+  return formatDateTime(summary?.checkedAt);
+}
+
+/**
+ * 显示测试报告创建时间。
+ */
+export function formatRunCreatedTime(value?: string) {
+  return formatDateTime(value);
 }
 
 /**
