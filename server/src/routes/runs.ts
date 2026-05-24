@@ -30,8 +30,16 @@ runsRouter.get('/config', (_req, res) => {
 });
 
 runsRouter.post<ProjectParams>('/', async (req, res, next) => {
+  const controller = new AbortController();
+
+  res.on('close', () => {
+    if (!res.writableEnded) {
+      controller.abort();
+    }
+  });
+
   try {
-    res.status(201).json(await runProject(req.params.projectKey, req.body));
+    res.status(201).json(await runProject(req.params.projectKey, { ...req.body, signal: controller.signal }));
   } catch (error) {
     next(error);
   }

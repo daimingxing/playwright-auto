@@ -76,7 +76,7 @@ function renderStepAction(step: CaseStep) {
     case 'assertTitle':
       return `  await expect(${pageName}).toHaveTitle(${quote(step.value ?? '')});`;
     default:
-      return `  // 暂不支持的步骤类型：${String(step.type)}`;
+      throw new Error(`暂不支持的步骤类型：${String(step.type)}`);
   }
 }
 

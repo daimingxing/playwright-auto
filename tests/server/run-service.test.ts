@@ -1,4 +1,5 @@
 import { mkdtemp, rm, stat } from 'node:fs/promises';
+import { EventEmitter } from 'node:events';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -426,6 +427,36 @@ describe('运行服务', () => {
       message: '用例“创建订单”在断言可见阶段失败：expect(locator).toBeVisible() failed'
     } satisfies Partial<RunError>);
   });
+
+  it('Playwright 进程启动失败时不会挂起运行请求', async () => {
+    await createProject({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    await createRunnableCase('crm', '创建订单', '/orders/create');
+    spawnMock.mockImplementation(() => createSpawnError(new Error('spawn failed')));
+
+    await expect(runProject('crm')).rejects.toThrow('spawn failed');
+  });
+
+  it('取消运行时会结束 Playwright 子进程', async () => {
+    await createProject({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    await createRunnableCase('crm', '创建订单', '/orders/create');
+    const controller = new AbortController();
+    const killMock = vi.fn(() => true);
+    spawnMock.mockReturnValue(createLongRunningChild(killMock));
+
+    const task = runProject('crm', { signal: controller.signal });
+    controller.abort();
+
+    await expect(task).rejects.toThrow('测试运行已取消');
+    expect(killMock).toHaveBeenCalledWith('SIGTERM');
+  });
 });
 
 /**
@@ -452,4 +483,42 @@ async function createRunnableCase(projectKey: string, name: string, startPath: s
   });
 
   return updateCaseStatus(projectKey, saved.key, 'active');
+}
+
+/**
+ * 创建触发 spawn error 的模拟子进程。
+ */
+function createSpawnError(error: Error) {
+  const child = new EventEmitter() as EventEmitter & {
+    stdout: EventEmitter;
+    stderr: EventEmitter;
+  };
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+
+  setTimeout(() => {
+    child.emit('error', error);
+  }, 0);
+
+  return child;
+}
+
+/**
+ * 创建不会自行退出的模拟子进程。
+ */
+function createLongRunningChild(killMock: (signal?: NodeJS.Signals) => boolean) {
+  const child = new EventEmitter() as EventEmitter & {
+    stdout: EventEmitter;
+    stderr: EventEmitter;
+    killed: boolean;
+    exitCode: number | null;
+    kill: (signal?: NodeJS.Signals) => boolean;
+  };
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  child.killed = false;
+  child.exitCode = null;
+  child.kill = killMock;
+
+  return child;
 }

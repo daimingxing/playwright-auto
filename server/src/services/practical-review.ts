@@ -205,6 +205,9 @@ async function runReviewProcess(testDir: string, outputDir: string, storageState
     child.stderr?.on('data', (data) => {
       output += data.toString();
     });
+    child.on('error', (error) => {
+      reject(error);
+    });
     child.on('exit', (code) => {
       if (code === 0 || code === 1) {
         resolve(output);
