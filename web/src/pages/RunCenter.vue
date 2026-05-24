@@ -1,17 +1,15 @@
 <script setup lang="ts">
 import { Back, Delete, RefreshRight } from '@element-plus/icons-vue';
-import { ElMessage, ElMessageBox } from 'element-plus';
 import type { TableInstance } from 'element-plus';
 import { nextTick, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { CaseMeta, EnvMeta, RunConfig, RunMeta, RunMode } from '../../../shared/types';
-import { getAuthState, saveLogin, startLogin } from '../api/auth';
 import { listCases } from '../api/cases';
 import { getProject } from '../api/projects';
-import { deleteRun, exportRun, getRunConfig, listRuns, runProject } from '../api/runs';
-import { getProjectEnv, setProjectEnv } from '../state/project-env';
+import { getRunConfig } from '../api/runs';
+import { getProjectEnv } from '../state/project-env';
 import { useProjectUiStore } from '../state/project-ui';
-import { getErrorMessage } from '../utils/error';
+import { useRunAuth, useRunReports, useRunStart } from './run-center-composables';
 import {
   canStartRun,
   formatPracticalReviewStatus,
@@ -29,12 +27,6 @@ const route = useRoute();
 const router = useRouter();
 const projectKey = String(route.params.projectKey);
 const projectUi = useProjectUiStore();
-const loading = ref(false);
-const saving = ref(false);
-const running = ref(false);
-const authPath = ref('');
-const hasAuth = ref(false);
-const sessionId = ref('');
 const envs = ref<EnvMeta[]>([]);
 const selectedEnv = ref('default');
 const runMode = ref<RunMode>('headless');
@@ -44,15 +36,51 @@ const runConfig = ref<RunConfig>({
   maxWorkers: 8
 });
 const workers = ref(runConfig.value.headlessWorkers);
-const reportPath = ref('');
-const reportUrl = ref('');
-const runError = ref('');
-const reports = ref<RunMeta[]>([]);
 const cases = ref<CaseMeta[]>([]);
 const selectedCaseKeys = ref<string[]>(projectUi.getRunCaseKeys(projectKey));
 const caseTable = ref<TableInstance>();
 const syncingSelection = ref(false);
-const refreshingReports = ref(false);
+const {
+  reports,
+  refreshingReports,
+  loadReports,
+  refreshReports,
+  openReportUrl,
+  openRunReport,
+  exportReport,
+  removeReport
+} = useRunReports({ projectKey });
+const {
+  loading,
+  saving,
+  authPath,
+  hasAuth,
+  sessionId,
+  loadAuthState,
+  changeEnv,
+  openLogin,
+  saveAuth
+} = useRunAuth({
+  projectKey,
+  selectedEnv,
+  reloadReports: loadReports
+});
+const {
+  running,
+  reportPath,
+  reportUrl,
+  runError,
+  startRun
+} = useRunStart({
+  projectKey,
+  selectedEnv,
+  runMode,
+  workers,
+  selectedCaseKeys,
+  hasAuth,
+  loadReports,
+  openReportUrl
+});
 
 /**
  * 加载项目环境配置。
@@ -68,32 +96,6 @@ async function loadProject() {
   selectedCaseKeys.value = mergeSelectedCaseKeys(items, selectedCaseKeys.value);
   projectUi.setRunCaseKeys(projectKey, selectedCaseKeys.value);
   await syncSelection();
-}
-
-/**
- * 加载项目下的测试报告列表。
- */
-async function loadReports() {
-  reports.value = await listRuns(projectKey);
-}
-
-/**
- * 刷新测试报告列表，并触发刷新图标旋转动画。
- */
-async function refreshReports() {
-  if (refreshingReports.value) {
-    return;
-  }
-
-  refreshingReports.value = true;
-
-  try {
-    await loadReports();
-  } finally {
-    window.setTimeout(() => {
-      refreshingReports.value = false;
-    }, 480);
-  }
 }
 
 /**
@@ -129,24 +131,6 @@ async function syncSelection() {
 }
 
 /**
- * 加载项目登录态状态。
- */
-async function loadAuthState() {
-  const [state] = await Promise.all([getAuthState(projectKey, selectedEnv.value), loadReports()]);
-  hasAuth.value = state.exists;
-  authPath.value = state.path;
-}
-
-/**
- * 切换运行环境后刷新登录态状态。
- */
-async function changeEnv() {
-  setProjectEnv(projectKey, selectedEnv.value);
-  sessionId.value = '';
-  await loadAuthState();
-}
-
-/**
  * 切换运行模式时使用推荐并发数。
  */
 function changeRunMode(mode: RunMode) {
@@ -155,156 +139,10 @@ function changeRunMode(mode: RunMode) {
 }
 
 /**
- * 打开浏览器让用户自行登录。
- */
-async function openLogin() {
-  loading.value = true;
-
-  try {
-    const session = await startLogin(projectKey, { envKey: selectedEnv.value });
-    sessionId.value = session.sessionId;
-    ElMessage.success('已打开浏览器，请完成登录后返回本页面保存登录态');
-  } catch (error) {
-    ElMessage.error(getErrorMessage(error));
-  } finally {
-    loading.value = false;
-  }
-}
-
-/**
- * 保存用户手动登录后的登录态。
- */
-async function saveAuth() {
-  if (!sessionId.value) {
-    ElMessage.warning('请先打开浏览器完成登录');
-    return;
-  }
-
-  saving.value = true;
-
-  try {
-    const auth = await saveLogin(projectKey, sessionId.value);
-    authPath.value = auth.path;
-    hasAuth.value = true;
-    sessionId.value = '';
-    ElMessage.success('登录态已保存，后续运行测试会自动复用');
-  } catch (error) {
-    ElMessage.error(getErrorMessage(error));
-  } finally {
-    saving.value = false;
-  }
-}
-
-/**
  * 打开本次测试的 HTML 报告。
  */
 function openReport() {
-  if (!reportUrl.value) {
-    return;
-  }
-
-  window.open(getReportUrl(reportUrl.value), '_blank', 'noopener,noreferrer');
-}
-
-/**
- * 打开指定测试报告。
- */
-function openRunReport(item: RunMeta) {
-  if (!item.reportUrl) {
-    return;
-  }
-
-  window.open(getReportUrl(item.reportUrl), '_blank', 'noopener,noreferrer');
-}
-
-/**
- * 导出指定测试报告。
- */
-async function exportReport(item: RunMeta) {
-  try {
-    await exportRun(projectKey, item.id);
-    ElMessage.success('已开始下载测试报告');
-  } catch (error) {
-    ElMessage.error(getErrorMessage(error));
-  }
-}
-
-/**
- * 删除指定测试报告目录。
- */
-async function removeReport(item: RunMeta) {
-  const confirmed = await ElMessageBox.confirm(`确认删除测试报告「${item.id}」吗？删除后不可恢复。`, '删除测试报告', {
-    confirmButtonText: '删除',
-    cancelButtonText: '取消',
-    type: 'warning'
-  }).catch(() => false);
-
-  if (!confirmed) {
-    return;
-  }
-
-  try {
-    await deleteRun(projectKey, item.id);
-    await loadReports();
-    ElMessage.success('已删除测试报告');
-  } catch (error) {
-    ElMessage.error(getErrorMessage(error));
-  }
-}
-
-/**
- * 使用已保存登录态运行测试。
- */
-async function startRun() {
-  if (selectedCaseKeys.value.length === 0) {
-    ElMessage.warning('请选择至少一条测试用例');
-    return;
-  }
-
-  if (!hasAuth.value) {
-    ElMessage.warning('当前环境没有保存登录态，将直接运行测试');
-  }
-
-  running.value = true;
-  reportPath.value = '';
-  reportUrl.value = '';
-  runError.value = '';
-
-  try {
-    const run = await runProject(projectKey, {
-      envKey: selectedEnv.value,
-      mode: runMode.value,
-      workers: workers.value,
-      caseKeys: selectedCaseKeys.value
-    });
-    reportPath.value = run.reportPath;
-    reportUrl.value = run.reportUrl ?? '';
-    await loadReports();
-    ElMessage.success('测试运行完成');
-    openReport();
-  } catch (error) {
-    runError.value = getErrorMessage(error);
-    reportPath.value = getErrorInfo(error, 'reportPath');
-    reportUrl.value = getErrorInfo(error, 'reportUrl');
-    await loadReports();
-    openReport();
-    ElMessage.error(runError.value);
-  } finally {
-    running.value = false;
-  }
-}
-
-/**
- * 从接口错误中读取附加字段。
- */
-function getErrorInfo(error: unknown, key: 'reportPath' | 'reportUrl') {
-  if (error && typeof error === 'object' && key in error) {
-    const value = error[key as keyof typeof error];
-
-    return typeof value === 'string' ? value : '';
-  }
-
-  return '';
+  openReportUrl(reportUrl.value);
 }
 
 /**
