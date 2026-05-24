@@ -12,6 +12,10 @@ export interface RecordSessionResult {
   url: string;
 }
 
+export interface RecordStopResult {
+  steps: CaseMeta['steps'];
+}
+
 export interface RecordInput {
   envKey?: string;
 }
@@ -213,11 +217,11 @@ export function startRecord(projectKey: string, caseKey: string, input: RecordIn
 }
 
 /**
- * 停止录制并导入当前测试用例。
+ * 停止录制并返回录制步骤。
  */
 export function stopRecord(projectKey: string, caseKey: string, sessionId: string) {
-  return requestJson<CaseMeta>(`/api/projects/${projectKey}/cases/${caseKey}/record/stop`, {
+  return requestJson<RecordStopResult>(`/api/projects/${projectKey}/cases/${caseKey}/record/stop`, {
     method: 'POST',
     body: JSON.stringify({ sessionId })
-  }).then(normalizeCase);
+  });
 }

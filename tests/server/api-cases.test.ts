@@ -198,7 +198,7 @@ describe('用例接口', () => {
     expect(detail.body.review.items[0].ruleCode).toBe('dynamic-id');
   });
 
-  it('通过接口开始和停止录制并覆盖用例步骤', async () => {
+  it('通过接口开始和停止录制后只返回步骤且不保存用例', async () => {
     process.env.NODE_ENV = 'test';
     const app = createApp();
     await request(app).post('/api/projects').send({
@@ -221,7 +221,11 @@ describe('用例接口', () => {
 
     expect(stopped.status).toBe(200);
     expect(stopped.body.steps.length).toBeGreaterThan(0);
-    expect(stopped.body.review.summary.level).toBe('pass');
+    expect(stopped.body.steps.some((step: { type: string }) => step.type === 'assertVisible')).toBe(true);
+
+    const detail = await request(app).get(`/api/projects/crm/cases/${created.body.key}`);
+    expect(detail.body.steps).toEqual([]);
+    await expect(stat(join(root, 'projects', 'crm', 'cases', created.body.key, 'case.spec.ts'))).rejects.toThrow();
   });
 
   it('保存草稿时执行基础检查但不生成测试文件', async () => {
