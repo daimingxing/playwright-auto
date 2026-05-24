@@ -1,4 +1,4 @@
-import type { EnvMeta, ProjectMeta } from '../../../shared/types';
+import type { EnvMeta, ProjectMeta, PublicAppConfig } from '../../../shared/types';
 import { downloadFile } from './http';
 import { requestJson } from './http';
 
@@ -12,16 +12,6 @@ export interface CreateProjectInput {
 export interface EnvList {
   envs: EnvMeta[];
   defaultEnv: string;
-}
-
-export interface AppStepConfig {
-  steps: {
-    timeouts: {
-      navigation: number;
-      action: number;
-      wait: number;
-    };
-  };
 }
 
 export interface UpdateEnvInput {
@@ -109,5 +99,5 @@ export function deleteProject(projectKey: string) {
  * 获取全局步骤配置。
  */
 export function getAppStepConfig() {
-  return requestJson<AppStepConfig>('/api/app-config');
+  return requestJson<PublicAppConfig>('/api/app-config');
 }

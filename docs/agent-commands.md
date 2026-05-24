@@ -25,6 +25,7 @@ npm run test:e2e
 
 - 配置文件：`playwright-auto.config.json`
 - `server.corsOrigins` 是配置文件中 `server` 对象下的字段，不是单独文件
+- 完整配置类型定义在 `shared/types.ts`，后端读取完整配置，`/api/app-config` 只返回前端需要的安全子集
 - 默认允许来源：`http://localhost:5173`、`http://127.0.0.1:5173`
 - 临时追加允许来源：`$env:PLAYWRIGHT_AUTO_CORS_ORIGINS='https://tool.example,http://localhost:5174'`
 - 改服务端配置后需要重启已有 Node 服务
@@ -37,4 +38,5 @@ npm run test:e2e
 - 服务端代码变更后，提醒开发人员重启已有服务
 - 摘要类命令优先使用 `rtk`
 - Playwright 命令不要用 `rtk` 包裹
+- Playwright 运行和实测检查的子进程输出、退出码、启动错误和取消信号由 `server/src/services/playwright-cli.ts` 统一处理
 - 需要原样读取中文文档时使用 `pwsh`

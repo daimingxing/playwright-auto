@@ -23,7 +23,7 @@ import { getPracticalReviewWorkPath } from '../lib/path';
 import { getProjectAuthPath, hasProjectAuth } from './auth-session';
 import { generatePracticalReviewSpec } from './practical-review-spec';
 import { assertVendorBrowser, getVendorEnv } from './vendor-browser';
-import { spawnPlaywrightCli } from './playwright-cli';
+import { runPlaywrightTask } from './playwright-cli';
 import { notFound } from '../lib/http-error';
 
 interface PracticalReviewInput {
@@ -181,40 +181,21 @@ async function readReviewResult(resultPath: string) {
 }
 
 async function runReviewProcess(testDir: string, outputDir: string, storageState: string, mode: RunMode) {
-  return new Promise<string>((resolve, reject) => {
-    let output = '';
-    const reviewEnv = {
-      ...process.env,
-      ...getVendorEnv(),
-      PLAYWRIGHT_TEST_DIR: testDir,
-      PLAYWRIGHT_TEST_MATCH: 'practical-review.spec.ts',
-      PLAYWRIGHT_AUTO_OUTPUT: outputDir,
-      // Playwright 配置只读取字符串环境变量，headed 模式需要显式写 false。
-      PLAYWRIGHT_HEADLESS: mode === 'headless' ? 'true' : 'false',
-      ...(storageState ? { PLAYWRIGHT_STORAGE_STATE: storageState } : {})
-    };
-    const child = spawnPlaywrightCli(['test', '--config', 'playwright.config.ts'], {
-      cwd: process.cwd(),
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: reviewEnv
-    });
-
-    child.stdout?.on('data', (data) => {
-      output += data.toString();
-    });
-    child.stderr?.on('data', (data) => {
-      output += data.toString();
-    });
-    child.on('error', (error) => {
-      reject(error);
-    });
-    child.on('exit', (code) => {
-      if (code === 0 || code === 1) {
-        resolve(output);
-        return;
-      }
-
-      reject(new Error(output || `实测检查进程退出：${code}`));
-    });
+  const reviewEnv = {
+    ...process.env,
+    ...getVendorEnv(),
+    PLAYWRIGHT_TEST_DIR: testDir,
+    PLAYWRIGHT_TEST_MATCH: 'practical-review.spec.ts',
+    PLAYWRIGHT_AUTO_OUTPUT: outputDir,
+    // Playwright 配置只读取字符串环境变量，headed 模式需要显式写 false。
+    PLAYWRIGHT_HEADLESS: mode === 'headless' ? 'true' : 'false',
+    ...(storageState ? { PLAYWRIGHT_STORAGE_STATE: storageState } : {})
+  };
+  const result = await runPlaywrightTask(['test', '--config', 'playwright.config.ts'], {
+    cwd: process.cwd(),
+    env: reviewEnv,
+    allowedExitCodes: [0, 1]
   });
+
+  return result.output;
 }

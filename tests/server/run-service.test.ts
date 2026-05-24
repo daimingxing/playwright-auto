@@ -454,7 +454,7 @@ describe('运行服务', () => {
     const task = runProject('crm', { signal: controller.signal });
     controller.abort();
 
-    await expect(task).rejects.toThrow('测试运行已取消');
+    await expect(task).rejects.toThrow('Playwright 任务已取消');
     expect(killMock).toHaveBeenCalledWith('SIGTERM');
   });
 });

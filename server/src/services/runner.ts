@@ -7,7 +7,7 @@ import type { CaseMeta, RunConfig, RunInput } from '../../../shared/types';
 import { getProjectAuthPath, hasProjectAuth } from './auth-session';
 import { assertVendorBrowser, getVendorEnv } from './vendor-browser';
 import { getAppConfig } from '../lib/app-config';
-import { spawnPlaywrightCli, terminatePlaywrightChild } from './playwright-cli';
+import { runPlaywrightTask } from './playwright-cli';
 import { badRequest, notFound } from '../lib/http-error';
 import { isReviewPassed } from './case-review';
 
@@ -69,56 +69,23 @@ export async function runProject(projectKey: string, input: RunProjectInput = {}
   };
 
   try {
-    await new Promise<void>((resolve, reject) => {
-      let output = '';
-      const child = spawnPlaywrightCli([
-        'test',
-        '--config',
-        'playwright.config.ts',
-        '--workers',
-        String(options.workers),
-        ...files
-      ], {
-        cwd: process.cwd(),
-        env,
-        stdio: ['ignore', 'pipe', 'pipe']
-      });
-      const abortRun = () => {
-        terminatePlaywrightChild(child).catch(() => {});
-        reject(new Error('测试运行已取消'));
-      };
-
-      if (input.signal?.aborted) {
-        abortRun();
-        return;
-      }
-
-      input.signal?.addEventListener('abort', abortRun, { once: true });
-
-      child.stdout?.on('data', (data) => {
-        output += data.toString();
-      });
-
-      child.stderr?.on('data', (data) => {
-        output += data.toString();
-      });
-
-      child.on('error', (error) => {
-        input.signal?.removeEventListener('abort', abortRun);
-        reject(error);
-      });
-
-      child.on('exit', (code) => {
-        input.signal?.removeEventListener('abort', abortRun);
-
-        if (code === 0) {
-          resolve();
-          return;
-        }
-
-        reject(new RunError(createRunErrorMessage(code, output), reportPath, reportUrl));
-      });
+    const result = await runPlaywrightTask([
+      'test',
+      '--config',
+      'playwright.config.ts',
+      '--workers',
+      String(options.workers),
+      ...files
+    ], {
+      cwd: process.cwd(),
+      env,
+      signal: input.signal,
+      allowedExitCodes: [0, 1]
     });
+
+    if (result.code !== 0) {
+      throw new RunError(createRunErrorMessage(result.code, result.output), reportPath, reportUrl);
+    }
   } catch (error) {
     await updateRun(projectKey, run.id, { status: 'failed' });
     throw error;
