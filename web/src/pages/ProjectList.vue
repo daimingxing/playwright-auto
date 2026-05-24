@@ -48,13 +48,20 @@ async function loadProjects() {
 }
 
 /**
+ * 归一化路径标识输入。
+ */
+function normalizeKey(value: string) {
+  return value.trim().toLowerCase();
+}
+
+/**
  * 提交新建项目表单。
  */
 async function submitProject() {
   try {
     const item = await createProject({
       name: form.name,
-      key: form.key,
+      key: normalizeKey(form.key),
       envName: form.envName,
       baseUrl: form.baseUrl
     });
@@ -360,7 +367,7 @@ onMounted(loadProjects);
 
     <el-dialog v-model="envDialogOpen" title="环境配置" width="760px" @closed="resetEnvForm">
       <div v-if="activeProject" class="env-layout">
-        <el-table :data="activeProject.envs" border>
+        <el-table :data="activeProject.envs" border stripe>
           <el-table-column label="环境" min-width="170">
             <template #default="{ row }">
               <div class="env-name">

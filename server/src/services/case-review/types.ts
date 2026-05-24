@@ -1,4 +1,4 @@
-import type { CaseReviewItem, CaseStep, ReviewLevel } from '../../../../shared/types';
+import type { CaseReviewItem, CaseStep, ReviewGroup, ReviewLevel } from '../../../../shared/types';
 
 export interface ReviewContext {
   step: CaseStep;
@@ -9,6 +9,7 @@ export interface ReviewContext {
 export interface ReviewRule {
   code: string;
   level: ReviewLevel;
+  group?: ReviewGroup;
   title: string;
   review(context: ReviewContext): CaseReviewItem[];
 }
@@ -29,6 +30,7 @@ export function createReviewItem(
     stepType: context.step.type,
     selector: context.selector,
     level: rule.level,
+    group: rule.group ?? 'locator',
     ruleCode: rule.code,
     message,
     suggestion

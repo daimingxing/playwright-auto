@@ -7,6 +7,7 @@ describe('用例生成器', () => {
     const item: CaseMeta = {
       name: '创建订单',
       key: 'case-1',
+      status: 'draft',
       startPath: '/orders/create',
       createdAt: '2026-05-19T00:00:00.000Z',
       updatedAt: '2026-05-19T00:00:00.000Z',
@@ -29,6 +30,7 @@ describe('用例生成器', () => {
     const item: CaseMeta = {
       name: '检查编辑结果',
       key: 'case-assert',
+      status: 'draft',
       startPath: '/profile',
       createdAt: '2026-05-20T00:00:00.000Z',
       updatedAt: '2026-05-20T00:00:00.000Z',
@@ -48,6 +50,7 @@ describe('用例生成器', () => {
     const item: CaseMeta = {
       name: '保存订单',
       key: 'case-locator',
+      status: 'draft',
       startPath: '/orders',
       createdAt: '2026-05-20T00:00:00.000Z',
       updatedAt: '2026-05-20T00:00:00.000Z',
@@ -67,6 +70,7 @@ describe('用例生成器', () => {
     const item: CaseMeta = {
       name: '等待点击',
       key: 'case-timeout',
+      status: 'draft',
       startPath: '/orders',
       createdAt: '2026-05-20T00:00:00.000Z',
       updatedAt: '2026-05-20T00:00:00.000Z',
@@ -88,6 +92,7 @@ describe('用例生成器', () => {
     const item: CaseMeta = {
       name: '页面跳转和选择',
       key: 'case-nav-select',
+      status: 'draft',
       startPath: '/orders',
       createdAt: '2026-05-20T00:00:00.000Z',
       updatedAt: '2026-05-20T00:00:00.000Z',
@@ -107,6 +112,7 @@ describe('用例生成器', () => {
     const item: CaseMeta = {
       name: '鼠标操作',
       key: 'case-mouse',
+      status: 'draft',
       startPath: '/orders',
       createdAt: '2026-05-20T00:00:00.000Z',
       updatedAt: '2026-05-20T00:00:00.000Z',
@@ -128,6 +134,7 @@ describe('用例生成器', () => {
     const item: CaseMeta = {
       name: '历史录制',
       key: 'case-page-alias',
+      status: 'draft',
       startPath: '/dashboard',
       createdAt: '2026-05-20T00:00:00.000Z',
       updatedAt: '2026-05-20T00:00:00.000Z',
@@ -151,6 +158,7 @@ describe('用例生成器', () => {
     const item: CaseMeta = {
       name: '新标签页',
       key: 'case-popup',
+      status: 'draft',
       startPath: '/dashboard',
       createdAt: '2026-05-20T00:00:00.000Z',
       updatedAt: '2026-05-20T00:00:00.000Z',
@@ -184,6 +192,7 @@ describe('用例生成器', () => {
     const item: CaseMeta = {
       name: "O'Reilly 登录",
       key: 'case-quote',
+      status: 'draft',
       startPath: '/login',
       createdAt: '2026-05-23T00:00:00.000Z',
       updatedAt: '2026-05-23T00:00:00.000Z',

@@ -2,11 +2,18 @@ import { z } from 'zod';
 
 export const projectKeySchema = z.string().regex(/^[a-z][a-z0-9-]{1,40}$/);
 
+/**
+ * 归一化路径标识输入。
+ */
+function normalizeKey(value: unknown) {
+  return typeof value === 'string' ? value.trim().toLowerCase() : value;
+}
+
 export const urlSchema = z.string().url();
 
 export const createProjectSchema = z.object({
   name: z.string().min(1).max(80),
-  key: projectKeySchema,
+  key: z.preprocess(normalizeKey, projectKeySchema),
   envName: z.string().max(80).optional(),
   baseUrl: urlSchema
 });

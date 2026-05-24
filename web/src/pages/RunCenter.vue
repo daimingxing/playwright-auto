@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ArrowRight, Delete, InfoFilled, Back, RefreshRight } from '@element-plus/icons-vue';
+import { Back, Delete, RefreshRight } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { onMounted, ref } from 'vue';
+import type { TableInstance } from 'element-plus';
+import { nextTick, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { CaseMeta, EnvMeta, RunConfig, RunMeta, RunMode } from '../../../shared/types';
 import { getAuthState, saveLogin, startLogin } from '../api/auth';
@@ -9,20 +10,24 @@ import { listCases } from '../api/cases';
 import { getProject } from '../api/projects';
 import { deleteRun, exportRun, getRunConfig, listRuns, runProject } from '../api/runs';
 import { getProjectEnv, setProjectEnv } from '../state/project-env';
+import { useProjectUiStore } from '../state/project-ui';
 import { getErrorMessage } from '../utils/error';
 import {
   canStartRun,
   formatPracticalReviewStatus,
   formatPracticalReviewTime,
+  getSelectedKeys,
   getPracticalReviewTagType,
   getReportUrl,
   getRunButtonText,
+  isRunnableCase,
   mergeSelectedCaseKeys
 } from './run-center';
 
 const route = useRoute();
 const router = useRouter();
 const projectKey = String(route.params.projectKey);
+const projectUi = useProjectUiStore();
 const loading = ref(false);
 const saving = ref(false);
 const running = ref(false);
@@ -43,7 +48,9 @@ const reportUrl = ref('');
 const runError = ref('');
 const reports = ref<RunMeta[]>([]);
 const cases = ref<CaseMeta[]>([]);
-const selectedCaseKeys = ref<string[]>([]);
+const selectedCaseKeys = ref<string[]>(projectUi.getRunCaseKeys(projectKey));
+const caseTable = ref<TableInstance>();
+const syncingSelection = ref(false);
 const refreshingReports = ref(false);
 
 /**
@@ -56,8 +63,10 @@ async function loadProject() {
   selectedEnv.value = getProjectEnv(project)?.key ?? '';
   runConfig.value = config;
   workers.value = config.headlessWorkers;
-  cases.value = items;
+  cases.value = items.filter(isRunnableCase);
   selectedCaseKeys.value = mergeSelectedCaseKeys(items, selectedCaseKeys.value);
+  projectUi.setRunCaseKeys(projectKey, selectedCaseKeys.value);
+  await syncSelection();
 }
 
 /**
@@ -87,34 +96,35 @@ async function refreshReports() {
 }
 
 /**
- * 全选当前项目可用测试用例。
+ * 同步表格多选用例。
  */
-function selectAllCases() {
-  selectedCaseKeys.value = cases.value.map((item) => item.key);
-}
-
-/**
- * 清空本次测试用例选择。
- */
-function clearCases() {
-  selectedCaseKeys.value = [];
-}
-
-/**
- * 切换单条测试用例的勾选状态。
- */
-function toggleCaseSelection(caseKey: string, checked: boolean | string | number) {
-  const nextChecked = Boolean(checked);
-
-  if (nextChecked) {
-    if (!selectedCaseKeys.value.includes(caseKey)) {
-      selectedCaseKeys.value = [...selectedCaseKeys.value, caseKey];
-    }
-
+function updateSelection(rows: CaseMeta[]) {
+  if (syncingSelection.value) {
     return;
   }
 
-  selectedCaseKeys.value = selectedCaseKeys.value.filter((item) => item !== caseKey);
+  selectedCaseKeys.value = getSelectedKeys(rows);
+  projectUi.setRunCaseKeys(projectKey, selectedCaseKeys.value);
+}
+
+/**
+ * 将已保存的用例选择同步到表格原生多选列。
+ */
+async function syncSelection() {
+  await nextTick();
+
+  if (!caseTable.value) {
+    return;
+  }
+
+  const selectedSet = new Set(selectedCaseKeys.value);
+  syncingSelection.value = true;
+  // Element Plus 程序化勾选会触发 selection-change，需要避免覆盖已保存选择。
+  caseTable.value.clearSelection();
+  cases.value.forEach((row) => {
+    caseTable.value?.toggleRowSelection(row, selectedSet.has(row.key));
+  });
+  syncingSelection.value = false;
 }
 
 /**
@@ -438,20 +448,9 @@ onMounted(async () => {
               <span class="case-count">已选择 {{ selectedCaseKeys.length }} / {{ cases.length }} 条</span>
             </div>
           </template>
-          <div class="case-tools">
-            <el-button size="small" @click="selectAllCases">全选</el-button>
-            <el-button size="small" @click="clearCases">全不选</el-button>
-          </div>
           <div class="table-wrap">
-            <el-table :data="cases" border height="100%" empty-text="暂无可运行用例" row-key="key">
-              <el-table-column width="54">
-                <template #default="{ row }">
-                  <el-checkbox
-                    :model-value="selectedCaseKeys.includes(row.key)"
-                    @change="(checked) => toggleCaseSelection(row.key, checked)"
-                  />
-                </template>
-              </el-table-column>
+            <el-table ref="caseTable" :data="cases" border stripe height="100%" empty-text="暂无可运行用例" row-key="key" @selection-change="updateSelection">
+              <el-table-column type="selection" width="44" reserve-selection />
               <el-table-column prop="name" label="用例名称" min-width="150" show-overflow-tooltip />
               <el-table-column prop="startPath" label="起始路径" min-width="130" show-overflow-tooltip />
               <el-table-column label="实测检查" min-width="120">
@@ -482,7 +481,7 @@ onMounted(async () => {
           </div>
         </template>
         <div class="table-wrap">
-          <el-table :data="reports" border height="100%" empty-text="暂无测试报告">
+          <el-table :data="reports" border stripe height="100%" empty-text="暂无测试报告">
             <el-table-column prop="id" label="报告编号" min-width="180" />
             <el-table-column label="环境" min-width="170">
               <template #default="{ row }">
@@ -614,12 +613,6 @@ onMounted(async () => {
 .case-count {
   color: #606266;
   font-size: 13px;
-}
-
-.case-tools {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
 }
 
 .report-row {

@@ -1,0 +1,14 @@
+.el-table {
+  --el-table-row-hover-bg-color: #e8f2ff;
+}
+
+.el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell {
+  background: #f7f9fc;
+}
+
+.el-table__body tr.hover-row > td.el-table__cell,
+.el-table__body tr.hover-row.el-table__row--striped > td.el-table__cell,
+.el-table--enable-row-hover .el-table__body tr:hover > td.el-table__cell,
+.el-table--enable-row-hover .el-table__body tr.el-table__row--striped:hover > td.el-table__cell {
+  background: var(--el-table-row-hover-bg-color);
+}

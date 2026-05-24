@@ -2,7 +2,7 @@ import { mkdtemp, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createCase } from '../../server/src/lib/case-store';
+import { createCase, updateCase, updateCaseStatus } from '../../server/src/lib/case-store';
 import { createRun } from '../../server/src/lib/run-store';
 import { getRunPath } from '../../server/src/lib/path';
 import { getProjectPath } from '../../server/src/lib/path';
@@ -79,10 +79,7 @@ describe('运行服务', () => {
       key: 'crm',
       baseUrl: 'https://crm.test.local'
     });
-    await createCase('crm', {
-      name: '创建订单',
-      startPath: '/orders/create'
-    });
+    await createRunnableCase('crm', '创建订单', '/orders/create');
     await addProjectEnv('crm', {
       name: '预发环境',
       key: 'pre',
@@ -120,10 +117,7 @@ describe('运行服务', () => {
       key: 'crm',
       baseUrl: 'https://crm.test.local'
     });
-    await createCase('crm', {
-      name: '创建订单',
-      startPath: '/orders/create'
-    });
+    await createRunnableCase('crm', '创建订单', '/orders/create');
     await addProjectEnv('crm', {
       name: '预发环境',
       key: 'pre',
@@ -159,10 +153,7 @@ describe('运行服务', () => {
       key: 'crm',
       baseUrl: 'https://crm.test.local'
     });
-    const item = await createCase('crm', {
-      name: '创建订单',
-      startPath: '/orders/create'
-    });
+    const item = await createRunnableCase('crm', '创建订单', '/orders/create');
 
     const files = await getProjectRunFiles('crm');
 
@@ -175,14 +166,8 @@ describe('运行服务', () => {
       key: 'crm',
       baseUrl: 'https://crm.test.local'
     });
-    const first = await createCase('crm', {
-      name: '创建订单',
-      startPath: '/orders/create'
-    });
-    const second = await createCase('crm', {
-      name: '查询订单',
-      startPath: '/orders'
-    });
+    const first = await createRunnableCase('crm', '创建订单', '/orders/create');
+    const second = await createRunnableCase('crm', '查询订单', '/orders');
 
     const files = await getProjectRunFiles('crm', [second.key]);
 
@@ -206,12 +191,41 @@ describe('运行服务', () => {
       key: 'crm',
       baseUrl: 'https://crm.test.local'
     });
-    await createCase('crm', {
-      name: '创建订单',
-      startPath: '/orders/create'
-    });
+    await createRunnableCase('crm', '创建订单', '/orders/create');
 
     await expect(getProjectRunFiles('crm', ['missing-case'])).rejects.toThrow('选择的测试用例不存在或已被删除');
+  });
+
+  it('只生成启用且基础检查通过的用例文件', async () => {
+    await createProject({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    const draft = await createCase('crm', {
+      name: '草稿用例',
+      startPath: '/draft'
+    });
+    const active = await createRunnableCase('crm', '启用用例', '/active');
+
+    const files = await getProjectRunFiles('crm');
+
+    expect(files).toEqual([`.*crm.*cases.*${active.key}.*case\\.spec\\.ts`]);
+    expect(files[0]).not.toContain(draft.key);
+  });
+
+  it('显式选择不可运行用例时返回明确错误', async () => {
+    await createProject({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    const draft = await createCase('crm', {
+      name: '草稿用例',
+      startPath: '/draft'
+    });
+
+    await expect(getProjectRunFiles('crm', [draft.key])).rejects.toThrow('选择的测试用例未启用或基础检查不通过');
   });
 
   it('运行项目时显式传入 Playwright 配置文件', async () => {
@@ -220,10 +234,7 @@ describe('运行服务', () => {
       key: 'crm',
       baseUrl: 'https://crm.test.local'
     });
-    const item = await createCase('crm', {
-      name: '创建订单',
-      startPath: '/orders/create'
-    });
+    const item = await createRunnableCase('crm', '创建订单', '/orders/create');
     spawnMock.mockReturnValue({
       on(event: string, callback: (code: number) => void) {
         if (event === 'exit') {
@@ -254,10 +265,7 @@ describe('运行服务', () => {
       key: 'crm',
       baseUrl: 'https://crm.test.local'
     });
-    const item = await createCase('crm', {
-      name: '创建订单',
-      startPath: '/orders/create'
-    });
+    const item = await createRunnableCase('crm', '创建订单', '/orders/create');
     spawnMock.mockReturnValue({
       on(event: string, callback: (code: number) => void) {
         if (event === 'exit') {
@@ -298,10 +306,7 @@ describe('运行服务', () => {
       key: 'crm',
       baseUrl: 'https://crm.test.local'
     });
-    const item = await createCase('crm', {
-      name: '创建订单',
-      startPath: '/orders/create'
-    });
+    const item = await createRunnableCase('crm', '创建订单', '/orders/create');
     spawnMock.mockReturnValue({
       on(event: string, callback: (code: number) => void) {
         if (event === 'exit') {
@@ -334,10 +339,7 @@ describe('运行服务', () => {
       key: 'crm',
       baseUrl: 'https://crm.test.local'
     });
-    await createCase('crm', {
-      name: '创建订单',
-      startPath: '/orders/create'
-    });
+    await createRunnableCase('crm', '创建订单', '/orders/create');
     spawnMock.mockReturnValue({
       on(event: string, callback: (code: number) => void) {
         if (event === 'exit') {
@@ -359,10 +361,7 @@ describe('运行服务', () => {
       key: 'crm',
       baseUrl: 'https://crm.test.local'
     });
-    await createCase('crm', {
-      name: '创建订单',
-      startPath: '/orders/create'
-    });
+    await createRunnableCase('crm', '创建订单', '/orders/create');
     spawnMock.mockReturnValue({
       stdout: {
         on(event: string, callback: (data: Buffer) => void) {
@@ -403,10 +402,7 @@ describe('运行服务', () => {
       key: 'crm',
       baseUrl: 'https://crm.test.local'
     });
-    await createCase('crm', {
-      name: '创建订单',
-      startPath: '/orders/create'
-    });
+    await createRunnableCase('crm', '创建订单', '/orders/create');
     spawnMock.mockReturnValue({
       stdout: {
         on(event: string, callback: (data: Buffer) => void) {
@@ -443,4 +439,17 @@ async function setProjectDefaultEnv(projectKey: string, envKey: string) {
     ...project,
     defaultEnv: envKey
   });
+}
+
+/**
+ * 创建基础检查通过且已启用的测试用例。
+ */
+async function createRunnableCase(projectKey: string, name: string, startPath: string) {
+  const item = await createCase(projectKey, { name, startPath });
+  const saved = await updateCase(projectKey, item.key, {
+    ...item,
+    steps: [{ id: 's1', type: 'wait', timeout: 1000 }]
+  });
+
+  return updateCaseStatus(projectKey, saved.key, 'active');
 }

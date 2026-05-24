@@ -1,26 +1,14 @@
-import type { CaseMeta, CaseReview, CaseReviewItem, CaseStep, StepType } from '../../../../shared/types';
+import type { CaseMeta, CaseReview, CheckStatus } from '../../../../shared/types';
+import { reviewCaseIntegrity } from '../../../../shared/case-review';
 import { createReviewSummary, formatReviewSummary } from './summary';
-import { reviewRules } from './rules';
-
-const reviewStepTypes = new Set<StepType>([
-  'click',
-  'rightClick',
-  'doubleClick',
-  'hover',
-  'fill',
-  'select',
-  'assertVisible',
-  'assertText',
-  'assertValue'
-]);
 
 export { createReviewSummary, formatReviewSummary };
 
 /**
- * 静态审查用例中的元素定位步骤。
+ * 基础检查用例结构和元素定位质量。
  */
 export function reviewCase(item: CaseMeta): CaseReview {
-  const items = item.steps.flatMap((step, index) => reviewStep(step, index));
+  const items = reviewCaseIntegrity(item);
 
   return {
     summary: createReviewSummary(items),
@@ -30,25 +18,35 @@ export function reviewCase(item: CaseMeta): CaseReview {
 }
 
 /**
- * 静态审查单个步骤的元素定位质量。
+ * 判断基础检查结果是否允许待启用或启用。
  */
-function reviewStep(step: CaseStep, stepIndex: number): CaseReviewItem[] {
-  if (!shouldReviewStep(step) || !step.selector) {
-    return [];
+export function isReviewPassed(review: CaseReview | undefined) {
+  if (!review) {
+    return false;
   }
 
-  return reviewRules.flatMap((rule) =>
-    rule.review({
-      step,
-      stepIndex,
-      selector: step.selector ?? ''
-    })
-  );
+  return review.summary.error === 0 && review.summary.danger === 0;
 }
 
 /**
- * 判断步骤是否依赖元素定位。
+ * 合成列表页展示的检查状态。
  */
-function shouldReviewStep(step: CaseStep) {
-  return reviewStepTypes.has(step.type);
+export function getCaseCheckStatus(item: Pick<CaseMeta, 'review' | 'practicalReview'>): CheckStatus {
+  if (!item.review) {
+    return 'unchecked';
+  }
+
+  if (!isReviewPassed(item.review)) {
+    return 'review-failed';
+  }
+
+  if (item.practicalReview?.status === 'passed') {
+    return 'practical-passed';
+  }
+
+  if (item.practicalReview?.status === 'failed') {
+    return 'practical-failed';
+  }
+
+  return 'pending-practical';
 }

@@ -1,4 +1,4 @@
-import type { CaseMeta, CaseStep, EnvMeta, PracticalReviewSummary, StepTimeoutConfig, StepType } from '../../../shared/types';
+import type { CaseMeta, CaseReviewItem, CaseStatus, CaseStep, CheckStatus, EnvMeta, PracticalReviewSummary, StepTimeoutConfig, StepType } from '../../../shared/types';
 import { buildStartUrl } from '../../../shared/url';
 
 export const stepTypes: StepType[] = [
@@ -44,6 +44,27 @@ export const stepTimeouts: StepTimeoutConfig = {
   action: 2000,
   wait: 1000
 };
+
+const caseStatusMap: Record<CaseStatus, { label: string; type: 'info' | 'warning' | 'success' }> = {
+  draft: { label: '草稿', type: 'info' },
+  ready: { label: '待启用', type: 'warning' },
+  active: { label: '启用', type: 'success' }
+};
+
+const checkStatusMap: Record<CheckStatus, { label: string; type: 'info' | 'warning' | 'success' | 'danger' }> = {
+  unchecked: { label: '未审查', type: 'info' },
+  'review-failed': { label: '审查不通过', type: 'danger' },
+  'pending-practical': { label: '待实测', type: 'warning' },
+  'practical-failed': { label: '实测失败', type: 'danger' },
+  'practical-passed': { label: '实测通过', type: 'success' }
+};
+
+export type StepReviewPreview = CaseReviewItem[] | 'pending';
+
+export interface StepReviewState {
+  status: 'pending' | 'passed' | 'failed';
+  reviews: CaseReviewItem[];
+}
 
 /**
  * 计算当前用例的实际打开地址。
@@ -101,10 +122,96 @@ export function formatStepType(type: StepType) {
 }
 
 /**
+ * 显示步骤在列表中的序号。
+ */
+export function getStepIndexLabel(index: number) {
+  return index + 1;
+}
+
+/**
+ * 显示用例状态。
+ */
+export function formatCaseStatus(status: CaseStatus | undefined) {
+  return status ? caseStatusMap[status] : caseStatusMap.draft;
+}
+
+/**
+ * 显示合成检查状态。
+ */
+export function formatCheckStatus(item: CaseMeta) {
+  return checkStatusMap[getCaseCheckStatus(item)];
+}
+
+/**
+ * 读取用例合成检查状态。
+ */
+export function getCaseCheckStatus(item: CaseMeta): CheckStatus {
+  if (!item.review) {
+    return 'unchecked';
+  }
+
+  if (item.review.summary.error > 0 || item.review.summary.danger > 0) {
+    return 'review-failed';
+  }
+
+  if (item.practicalReview?.status === 'passed') {
+    return 'practical-passed';
+  }
+
+  if (item.practicalReview?.status === 'failed') {
+    return 'practical-failed';
+  }
+
+  return 'pending-practical';
+}
+
+/**
  * 显示静态定位检查通过文案。
  */
 export function formatLocatorCheckPass() {
   return '定位通过';
+}
+
+/**
+ * 合并已保存基础检查和编辑中预览检查。
+ */
+export function mergeStepReviewState(
+  stepId: string,
+  savedReviews: CaseReviewItem[],
+  previewMap: Map<string, StepReviewPreview>
+): StepReviewState {
+  if (previewMap.get(stepId) === 'pending') {
+    return { status: 'pending', reviews: [] };
+  }
+
+  const preview = previewMap.get(stepId);
+
+  if (Array.isArray(preview)) {
+    return {
+      status: preview.length > 0 ? 'failed' : 'passed',
+      reviews: preview
+    };
+  }
+
+  return {
+    status: savedReviews.length > 0 ? 'failed' : 'passed',
+    reviews: savedReviews
+  };
+}
+
+/**
+ * 显示步骤基础检查状态。
+ */
+export function formatStepReviewState(state: StepReviewState) {
+  if (state.status === 'pending') {
+    return { label: '待检查', type: 'info' as const };
+  }
+
+  if (state.status === 'failed') {
+    return { label: '审查不通过', type: 'danger' as const };
+  }
+
+  return { label: formatLocatorCheckPass(), type: 'success' as const };
 }
 
 /**

@@ -15,6 +15,8 @@ export type StepType =
 
 export type MatchType = 'contains' | 'equals' | 'regex';
 
+export type CaseStatus = 'draft' | 'ready' | 'active';
+
 export interface EnvMeta {
   name: string;
   key: string;
@@ -43,6 +45,10 @@ export interface CaseStep {
 
 export type ReviewLevel = 'error' | 'danger' | 'warning' | 'info';
 
+export type ReviewGroup = 'integrity' | 'locator' | 'assertion' | 'timeout';
+
+export type CheckStatus = 'unchecked' | 'review-failed' | 'pending-practical' | 'practical-failed' | 'practical-passed';
+
 export interface CaseReviewItem {
   id: string;
   stepId: string;
@@ -50,6 +56,7 @@ export interface CaseReviewItem {
   stepType: StepType;
   selector: string;
   level: ReviewLevel;
+  group: ReviewGroup;
   ruleCode: string;
   message: string;
   suggestion: string;
@@ -149,6 +156,7 @@ export interface PracticalReviewRecord {
 export interface CaseMeta {
   name: string;
   key: string;
+  status: CaseStatus;
   startPath: string;
   steps: CaseStep[];
   review?: CaseReview;

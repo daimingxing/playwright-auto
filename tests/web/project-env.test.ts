@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ProjectMeta } from '../../shared/types';
 import { getProjectEnv, setProjectEnv } from '../../web/src/state/project-env';
+import { createProjectUiState } from '../../web/src/state/project-ui';
 
 describe('项目级环境选择状态', () => {
   it('没有本地选择时使用项目默认环境', () => {
@@ -26,6 +27,20 @@ describe('项目级环境选择状态', () => {
     setProjectEnv('crm', 'missing', storage);
 
     expect(getProjectEnv(project, storage)?.key).toBe('default');
+  });
+
+  it('使用项目 UI 状态保存环境、筛选和运行选择', () => {
+    const storage = makeStorage();
+    const state = createProjectUiState(storage);
+
+    state.setProjectEnv('crm', 'pre');
+    state.setCaseStatusFilter('crm', 'active');
+    state.setRunCaseKeys('crm', ['case-a', 'case-b']);
+
+    const nextState = createProjectUiState(storage);
+    expect(nextState.getProjectEnvKey('crm')).toBe('pre');
+    expect(nextState.getCaseStatusFilter('crm')).toBe('active');
+    expect(nextState.getRunCaseKeys('crm')).toEqual(['case-a', 'case-b']);
   });
 });
 

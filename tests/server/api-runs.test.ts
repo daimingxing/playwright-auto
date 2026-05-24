@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../../server/src/app';
-import { createCase } from '../../server/src/lib/case-store';
+import { createCase, updateCase, updateCaseStatus } from '../../server/src/lib/case-store';
 import { writeJson } from '../../server/src/lib/fs';
 import { createProject } from '../../server/src/lib/project-store';
 import { createRun } from '../../server/src/lib/run-store';
@@ -147,10 +147,7 @@ describe('运行报告接口', () => {
       key: 'crm',
       baseUrl: 'https://crm.test.local'
     });
-    await createCase('crm', {
-      name: '创建订单',
-      startPath: '/orders/create'
-    });
+    await createRunnableCase('crm', '创建订单', '/orders/create');
     spawnMock.mockReturnValue({
       stdout: {
         on(event: string, callback: (data: Buffer) => void) {
@@ -181,3 +178,16 @@ describe('运行报告接口', () => {
     expect(res.body.reportUrl).toMatch(/^\/api\/projects\/crm\/runs\/\d+\/report\/$/);
   });
 });
+
+/**
+ * 创建基础检查通过且已启用的测试用例。
+ */
+async function createRunnableCase(projectKey: string, name: string, startPath: string) {
+  const item = await createCase(projectKey, { name, startPath });
+  const saved = await updateCase(projectKey, item.key, {
+    ...item,
+    steps: [{ id: 's1', type: 'wait', timeout: 1000 }]
+  });
+
+  return updateCaseStatus(projectKey, saved.key, 'active');
+}

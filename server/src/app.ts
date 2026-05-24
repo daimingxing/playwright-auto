@@ -59,7 +59,7 @@ export function createApp() {
     }
 
     if (error instanceof HttpError) {
-      res.status(error.status).json({ message });
+      res.status(error.status).json(error.details ? { message, ...formatHttpDetails(error.details) } : { message });
       return;
     }
 
@@ -72,6 +72,13 @@ export function createApp() {
   });
 
   return app;
+}
+
+/**
+ * 格式化业务错误详情，供前端展示阻断原因。
+ */
+function formatHttpDetails(details: unknown) {
+  return typeof details === 'object' && details !== null ? details : { details };
 }
 
 /**
