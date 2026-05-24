@@ -33,10 +33,12 @@
 | --- | --- | --- |
 | `invalid-selector` | `error` | 括号、方括号、花括号或引号不成对；定位方法缺少必要首参；`getByRole` 或 `filter` 的 options 对象结构无法解析。 |
 | `empty-locator-argument` | `error` | 出现 `locator()`、`filter()`、`filter({})`、`nth()` 这类缺少关键参数的链路，或 `locator`、`getByText`、`getByLabel`、`getByPlaceholder`、`getByTestId`、`getByTitle`、`getByAltText` 的首参是空字符串。 |
-| `invalid-locator-option` | `error` | 定位器 options 的基础类型不符合规则，例如 `exact` 不是布尔值。 |
+| `invalid-locator-option` | `error` | 定位器 options 的基础类型不符合规则，例如 `exact`、`visible` 或 role 布尔状态不是布尔值，`level` 不是 `1` 到 `6` 的整数，文本类 option 不是文本或正则。 |
 | `invalid-locator-argument` | `error` | 定位器链式参数不符合规则，例如 `nth` 不是非负整数。 |
 | `empty-locator-option` | `error` | options 字段有冒号但没有值，或字符串值为空白。 |
 | `external-locator-variable` | `error` | options 使用对象简写，例如 `{ name }`、`{ checked }`、`{ hasText }`，会依赖外部变量。 |
+| `invalid-locator-regex` | `error` | selector 中的正则字面量不是合法 `/pattern/flags` 形态、pattern 为空、flags 非法或重复，或无法被 JavaScript 解析。 |
+| `complex-filter-locator` | `error` | `filter({ has })` 或 `filter({ hasNot })` 使用了复杂子定位器，例如继续 `.filter()`、`.nth()`、`.first()`、`.last()`、链式 `.locator()` 或页面变量前缀。 |
 
 当前语法检查是轻量规则，不是完整 JavaScript AST 解析。它会检查已覆盖的常见错误，但不会保证任意 JavaScript 表达式都被完整解析。
 
@@ -128,6 +130,49 @@ locator('div').filter(asdada{ hasText: /^文本$/ }) // invalid-selector
 locator('div').filter({ z hasText: /^文本$/ }) // invalid-selector
 ```
 
+## 正则规则
+
+基础检查会扫描 selector 中的正则字面量，并要求正则满足以下条件：
+
+- 必须是 `/pattern/flags` 形态。
+- pattern 不能为空或空白。
+- flags 只允许 `d`、`g`、`i`、`m`、`s`、`u`、`v`、`y`。
+- flags 不能重复。
+- 正则必须能被 JavaScript `RegExp` 解析。
+
+示例：
+
+```ts
+getByText(/订单\d+/i) // 通过
+locator('tr').filter({ hasText: /订单\d+/, has: getByRole('button', { name: /编辑|修改/ }) }) // 通过
+getByText(/订单[/) // invalid-locator-regex
+getByText(//) // invalid-locator-regex
+getByText(/订单/ii) // invalid-locator-regex
+```
+
+## has 和 hasNot 子定位器规则
+
+`filter({ has })` 和 `filter({ hasNot })` 只允许简单单层定位器：
+
+- `locator(...)`
+- `getByRole(...)`
+- `getByText(...)`
+- `getByLabel(...)`
+- `getByPlaceholder(...)`
+- `getByTestId(...)`
+- `getByTitle(...)`
+- `getByAltText(...)`
+
+子定位器不能继续包含 `.filter()`、`.nth()`、`.first()`、`.last()`、链式 `.locator()` 或 `page.` / `page1.` 页面变量前缀。
+
+示例：
+
+```ts
+locator('tr').filter({ has: getByRole('button', { name: '编辑' }) }) // 通过
+locator('.card').filter({ hasNot: getByText(/已删除|停用/) }) // 通过
+locator('tr').filter({ has: getByRole('button', { name: '编辑' }).filter({ hasText: '更多' }) }) // complex-filter-locator
+```
+
 ## 选择器质量规则
 
 | 规则码 | 级别 | 触发条件 |
@@ -148,5 +193,7 @@ locator('div').filter({ z hasText: /^文本$/ }) // invalid-selector
 后续可以继续增强：
 
 1. 为 `locator`、`getByText`、`getByLabel`、`getByPlaceholder`、`getByTestId`、`getByTitle`、`getByAltText` 增加更完整的参数类型规则，例如拦截 `locator(123)`。
-2. 为 `has`、`hasNot` 增加 Locator 参数形态检查。
+2. 为 `locator(selector, options)` 增加 options 白名单和参数形态检查。
 3. 如后续支持更多 Playwright 定位方法，同步扩展方法白名单和 options 白名单。
+
+定位器构建器的当前能力和后续候选项见 `docs/locator-builder-development.md`。

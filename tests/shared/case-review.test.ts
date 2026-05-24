@@ -267,6 +267,45 @@ describe('共享基础检查规则', () => {
     expect(result).toEqual([]);
   });
 
+  it('会接受合法正则和 has 子定位器', () => {
+    const result = reviewCaseStep(makeStep({ selector: "locator('tr').filter({ hasText: /订单\\d+/i, has: getByRole('button', { name: /编辑|修改/ }) })" }), 0);
+
+    expect(result).toEqual([]);
+  });
+
+  it('会把非法正则标记为错误', () => {
+    const result = reviewCaseStep(makeStep({ selector: "getByText(/订单[/)" }), 0);
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        level: 'error',
+        ruleCode: 'invalid-locator-regex'
+      })
+    ]);
+  });
+
+  it('会把非法 visible 参数标记为错误', () => {
+    const result = reviewCaseStep(makeStep({ selector: "locator('button').filter({ visible: 'yes' })" }), 0);
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        level: 'error',
+        ruleCode: 'invalid-locator-option'
+      })
+    ]);
+  });
+
+  it('会把复杂 has 子定位器标记为错误', () => {
+    const result = reviewCaseStep(makeStep({ selector: "locator('tr').filter({ has: getByRole('button', { name: '编辑' }).filter({ hasText: '更多' }) })" }), 0);
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        level: 'error',
+        ruleCode: 'complex-filter-locator'
+      })
+    ]);
+  });
+
   it('会把空文本过滤加 nth 的定位链标记为高危', () => {
     const result = reviewCaseStep(makeStep({ selector: "locator('div').filter({ hasText: ' ' }).nth(2)" }), 0);
 

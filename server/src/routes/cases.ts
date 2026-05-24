@@ -187,7 +187,7 @@ function parsePracticalReviewInput(body: unknown) {
   const result = practicalReviewInputSchema.safeParse(body);
 
   if (!result.success) {
-    throw badRequest('请求参数不合法：请检查 envKey 和 testFailure');
+    throw badRequest('请求参数不合法：请检查 envKey、mode 和 testFailure');
   }
 
   return result.data;

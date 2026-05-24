@@ -9,6 +9,15 @@
 
 ---
 
+## 2026-05-24 实测检查卡片高度回归
+
+- 状态：已解决
+- 问题：实测检查卡片为了让按钮贴到底部，使用 `min-height: 100%` 后没有同步处理盒模型，卡片的 padding 和 border 让实际高度超过父级 `.meta`，导致右侧卡片出现内部滚动，按钮需要滚动才能完整看到。
+- 处理：把 `web/src/pages/CaseEditor.vue` 中的 `.practical-panel` 改为 `box-sizing: border-box` 和 `height: 100%`，保留纵向 flex 与按钮栏 `margin-top: auto`，让卡片贴合父级高度但不溢出。
+- 经验：在已有 `max-height` 和 `overflow` 的容器内撑满子卡片时，优先确认 `scrollHeight` 与 `clientHeight`，并用边框盒计算高度，避免把内容底部固定变成滚动底部固定。
+
+---
+
 ## 2026-05-23 后端结构性边界加固
 
 - 状态：已解决

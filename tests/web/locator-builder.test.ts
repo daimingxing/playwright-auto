@@ -3,7 +3,9 @@ import {
   buildLocatorSelector,
   createDefaultLocatorState,
   formatLocatorSummary,
+  locatorModes,
   parseLocatorSelector,
+  renderLocatorExpression,
   roleOptions
 } from '../../web/src/pages/locator-builder';
 
@@ -78,10 +80,71 @@ describe('定位器构建器', () => {
       indexMode: 'none',
       advancedSelector: "locator('div').findByText('保存')"
     });
-    expect(formatLocatorSummary("locator('div').findByText('保存')")).toBe('高级选择器');
+    expect(formatLocatorSummary("locator('div').findByText('保存')")).toBe('手写定位');
   });
 
   it('会提供常用角色选项', () => {
     expect(roleOptions.slice(0, 4).map((item) => item.value)).toEqual(['button', 'textbox', 'checkbox', 'radio']);
+  });
+
+  it('会生成正则、description 和过滤条件', () => {
+    const selector = buildLocatorSelector({
+      mode: 'role',
+      role: 'button',
+      value: { kind: 'regex', text: '保存|提交', flags: 'i' },
+      description: { kind: 'text', text: '订单操作' },
+      hasText: { kind: 'regexLiteral', text: '/订单\\d+/' },
+      hasNotText: { kind: 'text', text: '已删除' },
+      visible: true,
+      indexMode: 'first'
+    });
+
+    expect(selector).toBe("getByRole('button', { name: /保存|提交/i, description: '订单操作' }).filter({ hasText: /订单\\d+/, hasNotText: '已删除', visible: true }).first()");
+  });
+
+  it('会生成 has 和 hasNot 简单子定位器', () => {
+    const selector = buildLocatorSelector({
+      mode: 'css',
+      value: 'tr',
+      has: {
+        mode: 'role',
+        role: 'button',
+        value: { kind: 'text', text: '编辑' }
+      },
+      hasNot: {
+        mode: 'text',
+        value: { kind: 'regexLiteral', text: '/已删除|停用/' }
+      }
+    });
+
+    expect(selector).toBe("locator('tr').filter({ has: getByRole('button', { name: '编辑' }), hasNot: getByText(/已删除|停用/) })");
+  });
+
+  it('会为测试文件渲染带页面变量的嵌套 Locator 表达式', () => {
+    const expression = renderLocatorExpression(
+      {
+        mode: 'css',
+        value: 'tr',
+        has: {
+          mode: 'role',
+          role: 'button',
+          value: { kind: 'text', text: '编辑' }
+        }
+      },
+      'page1'
+    );
+
+    expect(expression).toBe("page1.locator('tr').filter({ has: page1.getByRole('button', { name: '编辑' }) })");
+  });
+
+  it('会把全量 role 放入下拉并保持常用 role 置顶', () => {
+    expect(roleOptions.slice(0, 4).map((item) => item.value)).toEqual(['button', 'textbox', 'checkbox', 'radio']);
+    expect(roleOptions.map((item) => item.value)).toContain('navigation');
+    expect(roleOptions.map((item) => item.value)).toContain('treeitem');
+  });
+
+  it('会把技术定位方式标成更易理解的文案', () => {
+    expect(locatorModes.find((item) => item.value === 'css')?.label).toBe('CSS（高级）');
+    expect(locatorModes.find((item) => item.value === 'advanced')?.label).toBe('手写定位');
   });
 });

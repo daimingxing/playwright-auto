@@ -22,7 +22,7 @@
 - 用例管理、回收站、导出：`web/src/api/cases.ts`、`server/src/routes/cases.ts`、`server/src/lib/case-store.ts`、`server/src/services/export.ts`
 - 用例状态、批量状态切换：`shared/types.ts`、`web/src/pages/ProjectDetail.vue`、`web/src/api/cases.ts`、`server/src/routes/cases.ts`、`server/src/lib/case-store.ts`
 - 基础检查和定位质量检查：`shared/case-review.ts`、`server/src/services/case-review/index.ts`、`web/src/pages/case-editor.ts`、`web/src/pages/CaseEditor.vue`，规则文档见 `docs/case-review-rules.md`
-- 定位器构建器设计：`docs/locator-builder-development.md`
+- 定位器构建器：`shared/locator-builder.ts`、`web/src/pages/locator-builder.ts`、`web/src/components/LocatorBuilderDrawer.vue`、`server/src/services/case-generator.ts`、`server/src/services/practical-review-spec.ts`，设计和能力矩阵见 `docs/locator-builder-development.md`
 - 用例步骤编辑和批量操作：`web/src/pages/CaseEditor.vue`、`web/src/pages/case-editor.ts`、`tests/web/case-editor.test.ts`
 - 用例步骤生成 Playwright spec：`server/src/services/case-generator.ts`
 - Playwright codegen 录制导入：`server/src/routes/record.ts`、`server/src/services/record-session.ts`、`server/src/services/codegen-parser.ts`
@@ -47,6 +47,7 @@
 - `case.json` 是用例源数据，`case.spec.ts` 是由 `case.json` 生成的运行文件
 - `case.json.status` 控制用例生命周期，只有 `active` 且基础检查通过的用例能进入运行中心
 - `case.json.review` 是基础检查结果，包含完整性、定位、断言和等待时间问题
+- `case.json.steps[].selector` 保存最终定位表达式，`case.json.steps[].selectorDraft` 保存定位器构建器结构化状态；生成正式测试文件和实测检查脚本时优先用 `selectorDraft` 渲染内部 Locator 的页面变量前缀
 - 保存草稿只写 `case.json`，保存并生成测试文件、切换到待启用或启用时会刷新 `case.spec.ts`
 - `web/src/state/project-ui.ts` 保存项目环境选择、项目页状态筛选和运行中心用例选择
 
@@ -55,7 +56,7 @@
 - 改共享类型时，同步检查前端页面、前端 API、后端存储和测试
 - 改用例状态或基础检查规则时，同步检查 `shared/types.ts`、`shared/case-review.ts`、`server/src/services/case-review/index.ts`、`case-store.ts`、`routes/cases.ts`、`runner.ts`、`ProjectDetail.vue`、`CaseEditor.vue`、`RunCenter.vue` 和相关测试
 - 改 API 路径或响应结构时，同步检查 `web/src/api/*`、`server/src/routes/*` 和对应 `tests/server/*`
-- 改用例步骤类型时，同步检查 `shared/types.ts`、`CaseEditor.vue`、`case-editor.ts`、`case-generator.ts`、`codegen-parser.ts` 和相关测试
+- 改用例步骤类型或定位器草稿结构时，同步检查 `shared/types.ts`、`shared/locator-builder.ts`、`CaseEditor.vue`、`LocatorBuilderDrawer.vue`、`case-editor.ts`、`case-generator.ts`、`practical-review-spec.ts`、`codegen-parser.ts` 和相关测试
 - 改用例步骤编辑交互或批量操作时，同步检查 `CaseEditor.vue`、`case-editor.ts` 和 `tests/web/case-editor.test.ts`
 - 改步骤默认等待时间配置时，同步检查 `playwright-auto.config.json`、`app-config.ts`、`web/src/api/projects.ts`、`CaseEditor.vue`、`codegen-parser.ts` 和相关测试
 - 改 `server.corsOrigins` 或本地服务来源限制时，同步检查 `playwright-auto.config.json`、`app-config.ts`、`app.ts`、`README.md` 和 `tests/server/api-projects.test.ts`

@@ -25,6 +25,7 @@ import {
 import { useProjectUiStore, type CaseStatusFilter } from "../state/project-ui";
 import { getErrorIssues, getErrorMessage } from "../utils/error";
 import {
+  formatCaseCreatedTime,
   formatCaseStatus,
   formatCheckStatus,
 } from "./case-editor";
@@ -335,7 +336,7 @@ onMounted(loadData);
                 </el-select>
               </template>
             </el-table-column>
-            <el-table-column label="检查状态" min-width="140">
+            <el-table-column label="检查状态" width="130">
               <template #default="{ row }">
                 <el-tag
                   :type="formatCheckStatus(row).type"
@@ -346,15 +347,24 @@ onMounted(loadData);
               </template>
             </el-table-column>
             <el-table-column
-              label="最后检查时间"
-              min-width="190"
+              label="创建时间"
+              min-width="130"
+              show-overflow-tooltip
+            >
+              <template #default="{ row }">
+                {{ formatCaseCreatedTime(row.createdAt) }}
+              </template>
+            </el-table-column>
+            <el-table-column
+              label="最后实测时间"
+              min-width="130"
               show-overflow-tooltip
             >
               <template #default="{ row }">
                 {{ formatPracticalReviewTime(row.practicalReview) }}
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="180">
+            <el-table-column label="操作" width="220">
               <template #default="{ row }">
                 <div class="row-actions btn-shadow-sm">
                   <el-button
@@ -413,6 +423,15 @@ onMounted(loadData);
           >
             <el-table-column prop="name" label="用例名称" min-width="260" />
             <el-table-column prop="key" label="目录编号" min-width="160" />
+            <el-table-column
+              label="创建时间"
+              min-width="170"
+              show-overflow-tooltip
+            >
+              <template #default="{ row }">
+                {{ formatCaseCreatedTime(row.createdAt) }}
+              </template>
+            </el-table-column>
             <el-table-column label="操作" width="260">
               <template #default="{ row }">
                 <div class="trash-actions btn-shadow-sm">

@@ -1,5 +1,6 @@
 import type { CaseMeta, CaseReviewItem, CaseStatus, CaseStep, CheckStatus, EnvMeta, PracticalReviewSummary, StepTimeoutConfig, StepType } from '../../../shared/types';
 import { buildStartUrl } from '../../../shared/url';
+import { formatDateTime } from '../utils/time';
 
 export const stepTypes: StepType[] = [
   'goto',
@@ -140,6 +141,13 @@ export function formatCaseStatus(status: CaseStatus | undefined) {
  */
 export function formatCheckStatus(item: CaseMeta) {
   return checkStatusMap[getCaseCheckStatus(item)];
+}
+
+/**
+ * 显示用例创建时间。
+ */
+export function formatCaseCreatedTime(value?: string) {
+  return formatDateTime(value);
 }
 
 /**
@@ -328,7 +336,7 @@ export function copyStep(steps: CaseStep[], index: number) {
   }
 
   const next = {
-    ...row,
+    ...cloneStep(row),
     id: crypto.randomUUID()
   };
 
@@ -395,12 +403,19 @@ export function copySteps(steps: CaseStep[], ids: string[]) {
   const rows = steps
     .filter((row) => selected.has(row.id))
     .map((row) => ({
-      ...row,
+      ...cloneStep(row),
       id: crypto.randomUUID()
     }));
 
   steps.splice(indexes[indexes.length - 1] + 1, 0, ...rows);
   return rows;
+}
+
+/**
+ * 深拷贝步骤，避免复制后的 selectorDraft 与原步骤共享嵌套对象。
+ */
+function cloneStep(step: CaseStep): CaseStep {
+  return JSON.parse(JSON.stringify(step)) as CaseStep;
 }
 
 /**

@@ -4,6 +4,7 @@ import {
   canStartRun,
   formatPracticalReviewStatus,
   formatPracticalReviewTime,
+  formatRunCreatedTime,
   getPracticalReviewTagType,
   getReportUrl,
   getRunButtonText,
@@ -102,10 +103,15 @@ function makeCase(
 }
 
 describe('运行中心实测检查展示工具', () => {
-  it('最后检查时间只显示实测检查时间', () => {
+  it('最后实测时间按秒显示', () => {
     expect(formatPracticalReviewTime(undefined)).toBe('-');
-    expect(formatPracticalReviewTime(makeRunCenterSummary('passed'))).toBe('2026-05-22T00:00:00.000Z');
+    expect(formatPracticalReviewTime(makeRunCenterSummary('passed'))).toBe('2026-05-22 00:00:00');
     expect(formatPracticalReviewTime(makeRunCenterSummary('expired'))).toBe('-');
+  });
+
+  it('测试报告创建时间按秒显示', () => {
+    expect(formatRunCreatedTime(undefined)).toBe('-');
+    expect(formatRunCreatedTime('2026-05-24T07:50:01.648Z')).toBe('2026-05-24 07:50:01');
   });
 
   it('运行中心显示实测检查状态', () => {

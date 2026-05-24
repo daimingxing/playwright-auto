@@ -16,6 +16,7 @@ import {
   canStartRun,
   formatPracticalReviewStatus,
   formatPracticalReviewTime,
+  formatRunCreatedTime,
   getSelectedKeys,
   getPracticalReviewTagType,
   getReportUrl,
@@ -460,7 +461,7 @@ onMounted(async () => {
                   </el-tag>
                 </template>
               </el-table-column>
-              <el-table-column label="最后检查时间" min-width="180" show-overflow-tooltip>
+              <el-table-column label="最后实测时间" min-width="180" show-overflow-tooltip>
                 <template #default="{ row }">
                   {{ formatPracticalReviewTime(row.practicalReview) }}
                 </template>
@@ -493,7 +494,11 @@ onMounted(async () => {
                 <el-tag :type="getStatusType(row.status)">{{ getStatusLabel(row.status) }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="createdAt" label="创建时间" min-width="190" />
+            <el-table-column label="创建时间" min-width="190">
+              <template #default="{ row }">
+                {{ formatRunCreatedTime(row.createdAt) }}
+              </template>
+            </el-table-column>
             <el-table-column label="操作" width="260">
               <template #default="{ row }">
                 <div class="report-actions btn-shadow-sm">

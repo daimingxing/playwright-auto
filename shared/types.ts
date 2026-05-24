@@ -1,3 +1,5 @@
+import type { LocatorBuilderState } from './locator-builder';
+
 export type StepType =
   | 'goto'
   | 'click'
@@ -36,6 +38,7 @@ export interface CaseStep {
   id: string;
   type: StepType;
   selector?: string;
+  selectorDraft?: LocatorBuilderState;
   value?: string;
   timeout?: number;
   match?: MatchType;

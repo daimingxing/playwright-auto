@@ -22,6 +22,7 @@ import type {
   EnvMeta,
   PracticalReviewRecord,
   CaseStatus,
+  RunMode,
   StepType,
 } from "../../../shared/types";
 import {
@@ -40,6 +41,7 @@ import { getAuthState, saveLogin, startLogin } from "../api/auth";
 import { getAppStepConfig, getProject } from "../api/projects";
 import { getProjectEnv, setProjectEnv } from "../state/project-env";
 import { getErrorIssues, getErrorMessage } from "../utils/error";
+import { formatDateTime } from "../utils/time";
 import { reviewCaseStep } from "../../../shared/case-review";
 import {
   canMoveSteps,
@@ -69,7 +71,7 @@ import {
   stepLabels,
   stepTimeouts,
 } from "./case-editor";
-import { formatLocatorSummary } from "./locator-builder";
+import { formatLocatorSummary, type LocatorBuilderState } from "./locator-builder";
 
 const route = useRoute();
 const router = useRouter();
@@ -79,6 +81,7 @@ const item = ref<CaseMeta | null>(null);
 const envs = ref<EnvMeta[]>([]);
 const activeEnv = ref<EnvMeta | null>(null);
 const selectedEnv = ref("");
+const practicalMode = ref<RunMode>("headless");
 const stepConfig = ref(stepTimeouts);
 const stepTable = ref<TableInstance>();
 const recordId = ref("");
@@ -144,6 +147,7 @@ const canBatchDown = computed(() =>
 const startPreview = computed(() => getStartPreview(item.value, activeEnv.value));
 const activeLocatorStep = computed(() => item.value?.steps.find((row) => row.id === locatorStepId.value));
 const activeLocatorSelector = computed(() => activeLocatorStep.value?.selector ?? "");
+const activeLocatorDraft = computed(() => activeLocatorStep.value?.selectorDraft);
 
 /**
  * 切换当前用例状态。
@@ -403,6 +407,10 @@ function duplicateStep(index: number) {
   }
 
   const row = copyStep(item.value.steps, index);
+  if (!row) {
+    return;
+  }
+
   setActiveStep(row);
   markStepReviewPending(row);
 }
@@ -479,16 +487,17 @@ function openLocatorBuilder(step: CaseStep) {
 }
 
 /**
- * 把定位器构建器生成的 selector 写回当前步骤。
+ * 把定位器构建器生成的 selector 和结构化草稿写回当前步骤。
  */
-function applyLocatorSelector(selector: string) {
+function applyLocatorSelector(payload: { selector: string; draft: LocatorBuilderState }) {
   const step = activeLocatorStep.value;
 
   if (!step) {
     return;
   }
 
-  step.selector = selector;
+  step.selector = payload.selector;
+  step.selectorDraft = payload.draft;
   markStepReviewPending(step);
 }
 
@@ -632,7 +641,10 @@ async function runPracticalCheck() {
   practicalReviewing.value = true;
 
   try {
-    const record = await startPracticalReview(projectKey, caseKey, { envKey: activeEnv.value.key });
+    const record = await startPracticalReview(projectKey, caseKey, {
+      envKey: activeEnv.value.key,
+      mode: practicalMode.value,
+    });
     activePracticalRecord.value = record;
     item.value = await getCase(projectKey, caseKey);
 
@@ -810,7 +822,12 @@ onMounted(loadCase);
 </script>
 
 <template>
-  <section class="page" v-if="item">
+  <section
+    v-if="item"
+    v-loading="practicalReviewing"
+    class="page"
+    element-loading-background="rgba(255, 255, 255, 0.2)"
+  >
     <div class="toolbar">
       <div>
         <el-button text :icon="Back" class="back-btn" @click="router.push(`/projects/${projectKey}`)">返回用例管理</el-button>
@@ -896,20 +913,31 @@ onMounted(loadCase);
                 {{ formatPracticalReviewStatus(item.practicalReview) }}
               </el-tag>
             </div>
-            <div class="panel-row env-row">
-              <span>检查环境</span>
-              <el-select v-model="selectedEnv" class="practical-env-select" @change="changeEnv">
-                <el-option
-                  v-for="env in envs"
-                  :key="env.key"
-                  :label="`${env.name}（${env.key}）`"
-                  :value="env.key"
-                />
-              </el-select>
+
+            <div class="practical-grid">
+              <label class="practical-field">
+                <span>检查环境</span>
+                <el-select v-model="selectedEnv" class="practical-env-select" @change="changeEnv">
+                  <el-option
+                    v-for="env in envs"
+                    :key="env.key"
+                    :label="`${env.name}（${env.key}）`"
+                    :value="env.key"
+                  />
+                </el-select>
+              </label>
+              <label class="practical-field">
+                <span>运行方式</span>
+                <el-radio-group v-model="practicalMode" class="practical-mode">
+                  <el-radio-button value="headless">无头运行</el-radio-button>
+                  <el-radio-button value="headed">可视调试</el-radio-button>
+                </el-radio-group>
+              </label>
             </div>
-            <div class="panel-row">
-              <span>最后检查时间</span>
-              <strong>{{ item.practicalReview?.checkedAt ?? "-" }}</strong>
+
+            <div class="practical-result">
+              <span>最后实测时间</span>
+              <strong>{{ formatDateTime(item.practicalReview?.checkedAt) }}</strong>
             </div>
             <p v-if="item.practicalReview?.status === 'failed'" class="failure-summary">
               第 {{ (item.practicalReview.failedStepIndex ?? 0) + 1 }} 步：{{
@@ -1183,6 +1211,7 @@ onMounted(loadCase);
       <LocatorBuilderDrawer
         v-model="locatorDrawerOpen"
         :selector="activeLocatorSelector"
+        :draft="activeLocatorDraft"
         @apply="applyLocatorSelector"
       />
     </div>
@@ -1199,6 +1228,16 @@ onMounted(loadCase);
   box-sizing: border-box;
   overflow: hidden;
   background: #f4f8fc;
+}
+
+.page :deep(.el-loading-spinner .circular) {
+  height: 56px;
+  width: 56px;
+}
+
+.page :deep(.el-loading-spinner .el-loading-text) {
+  font-size: 18px;
+  font-weight: 600;
 }
 
 .toolbar {
@@ -1260,11 +1299,14 @@ onMounted(loadCase);
   border: 1px solid #d8e2ed;
   border-radius: 8px;
   background: #fff;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
   padding: 14px;
 }
 
 .panel-head,
-.panel-row,
 .panel-actions {
   align-items: center;
   display: flex;
@@ -1272,28 +1314,59 @@ onMounted(loadCase);
   gap: 10px;
 }
 
-.panel-row {
+.practical-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.practical-field {
+  align-items: flex-start;
   color: #5f7188;
+  display: flex;
+  flex-direction: column;
   font-size: 13px;
-  margin-top: 10px;
+  gap: 6px;
+  min-width: 0;
 }
 
-.env-row {
+.practical-field :deep(.el-select),
+.practical-field :deep(.el-radio-group) {
+  width: 100%;
+}
+
+.practical-mode :deep(.el-radio-button) {
+  flex: 1;
+}
+
+.practical-mode :deep(.el-radio-button__inner) {
+  width: 100%;
+}
+
+.practical-result {
   align-items: center;
+  color: #5f7188;
+  display: flex;
+  font-size: 13px;
+  gap: 10px;
+  justify-content: space-between;
+  margin-top: 12px;
 }
 
-.panel-row strong {
+.practical-result strong {
   color: #1f2937;
 }
 
 .practical-env-select {
-  width: 260px;
+  width: 100%;
 }
 
 .panel-actions {
   justify-content: flex-start;
   flex-wrap: wrap;
-  margin-top: 14px;
+  margin-top: auto;
+  padding-top: 14px;
 }
 
 .failure-summary {
@@ -1430,7 +1503,7 @@ onMounted(loadCase);
   color: #2563eb;
   border-color: #bfdbfe;
   background: #eff6ff;
-  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.2);
 }
 
 .row-actions :deep(.el-button.is-circle.is-disabled) {

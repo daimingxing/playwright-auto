@@ -1,4 +1,5 @@
 import type { CaseMeta, CaseStep } from '../../../shared/types';
+import { renderLocatorExpression } from '../../../shared/locator-builder';
 import { quoteText } from './code-literal';
 
 /**
@@ -50,26 +51,26 @@ function renderStepAction(step: CaseStep) {
     case 'goto':
       return `  await ${pageName}.goto(${quote(step.value ?? '/')}${renderTimeoutOption(step)});`;
     case 'click':
-      return `  await ${renderLocator(step.selector, '点击选择器', pageName)}.click(${renderTimeoutArg(step)});`;
+      return `  await ${renderStepLocator(step, '点击选择器', pageName)}.click(${renderTimeoutArg(step)});`;
     case 'rightClick':
-      return `  await ${renderLocator(step.selector, '右键点击选择器', pageName)}.click(${renderRightClickArg(step)});`;
+      return `  await ${renderStepLocator(step, '右键点击选择器', pageName)}.click(${renderRightClickArg(step)});`;
     case 'doubleClick':
-      return `  await ${renderLocator(step.selector, '双击选择器', pageName)}.dblclick(${renderTimeoutArg(step)});`;
+      return `  await ${renderStepLocator(step, '双击选择器', pageName)}.dblclick(${renderTimeoutArg(step)});`;
     case 'hover':
-      return `  await ${renderLocator(step.selector, '悬停选择器', pageName)}.hover(${renderTimeoutArg(step)});`;
+      return `  await ${renderStepLocator(step, '悬停选择器', pageName)}.hover(${renderTimeoutArg(step)});`;
     case 'fill':
-      return `  await ${renderLocator(step.selector, '输入选择器', pageName)}.fill(${quote(step.value ?? '')}${renderTimeoutOption(step)});`;
+      return `  await ${renderStepLocator(step, '输入选择器', pageName)}.fill(${quote(step.value ?? '')}${renderTimeoutOption(step)});`;
     case 'select':
-      return `  await ${renderLocator(step.selector, '下拉选择器', pageName)}.selectOption(${quote(step.value ?? '')}${renderTimeoutOption(step)});`;
+      return `  await ${renderStepLocator(step, '下拉选择器', pageName)}.selectOption(${quote(step.value ?? '')}${renderTimeoutOption(step)});`;
     case 'wait':
       // 等待时间单位是毫秒，Playwright 的 waitForTimeout 也使用毫秒。
       return `  await ${pageName}.waitForTimeout(${step.timeout ?? 1000});`;
     case 'assertText':
       return renderTextAssert(step, pageName);
     case 'assertVisible':
-      return `  await expect(${renderLocator(step.selector, '可见断言选择器', pageName)}).toBeVisible();`;
+      return `  await expect(${renderStepLocator(step, '可见断言选择器', pageName)}).toBeVisible();`;
     case 'assertValue':
-      return `  await expect(${renderLocator(step.selector, '输入值断言选择器', pageName)}).toHaveValue(${quote(step.value ?? '')});`;
+      return `  await expect(${renderStepLocator(step, '输入值断言选择器', pageName)}).toHaveValue(${quote(step.value ?? '')});`;
     case 'assertUrl':
       return `  await expect(${pageName}).toHaveURL(${quote(step.value ?? '')});`;
     case 'assertTitle':
@@ -116,7 +117,7 @@ function renderTimeoutOption(step: CaseStep) {
  * 生成文本断言代码。
  */
 function renderTextAssert(step: CaseStep, pageName: string) {
-  const target = renderLocator(step.selector, '文本断言选择器', pageName);
+  const target = renderStepLocator(step, '文本断言选择器', pageName);
   const value = step.value ?? '';
 
   if (step.match === 'equals') {
@@ -141,6 +142,17 @@ function renderLocator(selector: string | undefined, name: string, pageName = 'p
   }
 
   return `${pageName}.locator(${quote(value)})`;
+}
+
+/**
+ * 根据 selectorDraft 或历史 selector 生成 Playwright locator 表达式。
+ */
+function renderStepLocator(step: CaseStep, name: string, pageName = 'page') {
+  if (step.selectorDraft) {
+    return renderLocatorExpression(step.selectorDraft, pageName);
+  }
+
+  return renderLocator(step.selector, name, pageName);
 }
 
 /**

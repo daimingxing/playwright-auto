@@ -54,6 +54,7 @@ export const practicalFailureCodeSchema = z.enum([
 export const practicalReviewInputSchema = z
   .object({
     envKey: envKeySchema.optional(),
+    mode: z.enum(['headless', 'headed']).optional(),
     testFailure: z
       .object({
         stepId: z.string().min(1).max(120),

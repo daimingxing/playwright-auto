@@ -49,6 +49,7 @@ const locatorMethodNames = new Set([
 
 interface LocatorOption {
   key: string;
+  value: string;
   hasValue: boolean;
   blankText: boolean;
   shorthand: boolean;
@@ -172,6 +173,12 @@ function reviewStepIntegrity(step: CaseStep, stepIndex: number): CaseReviewItem[
  * 检查 selector 是否有明显语法问题。
  */
 function validateSelectorSyntax(step: CaseStep, stepIndex: number, selector: string) {
+  const regexIssue = reviewRegexLiterals(step, stepIndex, selector);
+
+  if (regexIssue) {
+    return regexIssue;
+  }
+
   if (!hasBalancedPairs(selector)) {
     return createStepReviewItem(
       { ...step, selector },
@@ -518,6 +525,70 @@ function reviewOption(
     );
   }
 
+  const valueIssue = reviewOptionValue(step, stepIndex, option, owner);
+
+  if (valueIssue) {
+    return valueIssue;
+  }
+
+  return undefined;
+}
+
+/**
+ * 检查 options 字段值是否符合当前支持的 Playwright 参数形态。
+ */
+function reviewOptionValue(step: CaseStep, stepIndex: number, option: LocatorOption, owner: 'role' | 'filter') {
+  const booleanRoleKeys = new Set(['checked', 'disabled', 'expanded', 'includeHidden', 'pressed', 'selected']);
+  const textKeys = new Set(['name', 'description', 'hasText', 'hasNotText']);
+
+  if ((option.key === 'visible' || booleanRoleKeys.has(option.key)) && !isBooleanValue(option.value)) {
+    return createStepReviewItem(
+      step,
+      stepIndex,
+      'invalid-locator-option',
+      'error',
+      'locator',
+      `${option.key} 配置必须是布尔值。`,
+      `请把 ${option.key} 设置为 true 或 false，或删除该配置。`
+    );
+  }
+
+  if (option.key === 'level' && !/^[1-6]$/.test(option.value)) {
+    return createStepReviewItem(
+      step,
+      stepIndex,
+      'invalid-locator-option',
+      'error',
+      'locator',
+      'level 配置必须是 1 到 6 的标题级别。',
+      '请把 level 设置为 1 到 6 之间的整数，或删除该配置。'
+    );
+  }
+
+  if (owner === 'filter' && (option.key === 'has' || option.key === 'hasNot') && !isSimpleFilterLocator(option.value)) {
+    return createStepReviewItem(
+      step,
+      stepIndex,
+      'complex-filter-locator',
+      'error',
+      'locator',
+      'has 或 hasNot 只能使用简单子定位器。',
+      '请在 has/hasNot 中使用 getByRole、getByText、getByLabel、getByPlaceholder、getByTestId、getByTitle、getByAltText 或 locator 的单层定位。'
+    );
+  }
+
+  if (textKeys.has(option.key) && !isTextLikeValue(option.value)) {
+    return createStepReviewItem(
+      step,
+      stepIndex,
+      'invalid-locator-option',
+      'error',
+      'locator',
+      `${option.key} 配置必须是文本或正则。`,
+      `请把 ${option.key} 设置为非空字符串或合法正则字面量。`
+    );
+  }
+
   return undefined;
 }
 
@@ -657,6 +728,8 @@ function findPairEnd(value: string, startIndex: number, openChar: string, closeC
   let depth = 0;
   let quote = '';
   let escaped = false;
+  let inRegex = false;
+  let inRegexClass = false;
 
   for (let index = startIndex; index < value.length; index += 1) {
     const char = value[index];
@@ -671,6 +744,24 @@ function findPairEnd(value: string, startIndex: number, openChar: string, closeC
       continue;
     }
 
+    if (inRegex) {
+      if (char === '[') {
+        inRegexClass = true;
+        continue;
+      }
+
+      if (char === ']') {
+        inRegexClass = false;
+        continue;
+      }
+
+      if (char === '/' && !inRegexClass) {
+        inRegex = false;
+      }
+
+      continue;
+    }
+
     if (quote) {
       if (char === quote) {
         quote = '';
@@ -680,6 +771,12 @@ function findPairEnd(value: string, startIndex: number, openChar: string, closeC
 
     if (char === '\'' || char === '"' || char === '`') {
       quote = char;
+      continue;
+    }
+
+    if (char === '/' && canStartRegex(value, index)) {
+      inRegex = true;
+      inRegexClass = false;
       continue;
     }
 
@@ -795,7 +892,7 @@ function parseOptionItem(item: string): LocatorOption | undefined {
   const separatorIndex = findTopLevelColon(text);
 
   if (separatorIndex < 0) {
-    return /^[A-Za-z_$][\w$]*$/.test(text) ? { key: text, hasValue: false, blankText: false, shorthand: true } : undefined;
+    return /^[A-Za-z_$][\w$]*$/.test(text) ? { key: text, value: '', hasValue: false, blankText: false, shorthand: true } : undefined;
   }
 
   const key = text.slice(0, separatorIndex).trim();
@@ -807,10 +904,223 @@ function parseOptionItem(item: string): LocatorOption | undefined {
 
   return {
     key,
+    value,
     hasValue: Boolean(value),
     blankText: isBlankTextValue(value),
     shorthand: false
   };
+}
+
+/**
+ * 检查 selector 内的正则字面量是否能被 JavaScript 解析。
+ */
+function reviewRegexLiterals(step: CaseStep, stepIndex: number, selector: string) {
+  for (const regexText of findRegexLiterals(selector)) {
+    const parsed = parseRegexLiteral(regexText);
+
+    if (!parsed) {
+      return createStepReviewItem(
+        { ...step, selector },
+        stepIndex,
+        'invalid-locator-regex',
+        'error',
+        'locator',
+        '定位器中的正则表达式不合法。',
+        '请检查正则内容、结束斜杠和 flags，或改用普通文本。'
+      );
+    }
+
+    try {
+      new RegExp(parsed.body, parsed.flags);
+    } catch {
+      return createStepReviewItem(
+        { ...step, selector },
+        stepIndex,
+        'invalid-locator-regex',
+        'error',
+        'locator',
+        '定位器中的正则表达式不合法。',
+        '请检查正则内容、结束斜杠和 flags，或改用普通文本。'
+      );
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * 从定位表达式中提取正则字面量候选。
+ */
+function findRegexLiterals(value: string) {
+  const items: string[] = [];
+  let quote = '';
+  let escaped = false;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+
+    if (char === '\\') {
+      escaped = true;
+      continue;
+    }
+
+    if (quote) {
+      if (char === quote) {
+        quote = '';
+      }
+      continue;
+    }
+
+    if (char === '\'' || char === '"' || char === '`') {
+      quote = char;
+      continue;
+    }
+
+    if (char === '/' && canStartRegex(value, index)) {
+      const end = findRegexEnd(value, index);
+
+      if (end < 0) {
+        items.push(value.slice(index));
+        continue;
+      }
+
+      let flagsEnd = end + 1;
+
+      while (/[A-Za-z]/.test(value[flagsEnd] ?? '')) {
+        flagsEnd += 1;
+      }
+
+      items.push(value.slice(index, flagsEnd));
+      index = flagsEnd - 1;
+    }
+  }
+
+  return items;
+}
+
+/**
+ * 判断当前位置的斜杠是否像正则字面量起点。
+ */
+function canStartRegex(value: string, index: number) {
+  const previous = value.slice(0, index).trimEnd().at(-1);
+
+  return !previous || ['(', ',', ':', '[', '{', '='].includes(previous);
+}
+
+/**
+ * 查找正则字面量的结束斜杠。
+ */
+function findRegexEnd(value: string, start: number) {
+  let escaped = false;
+  let inClass = false;
+
+  for (let index = start + 1; index < value.length; index += 1) {
+    const char = value[index];
+
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+
+    if (char === '\\') {
+      escaped = true;
+      continue;
+    }
+
+    if (char === '[') {
+      inClass = true;
+      continue;
+    }
+
+    if (char === ']') {
+      inClass = false;
+      continue;
+    }
+
+    if (char === '/' && !inClass) {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
+/**
+ * 拆分正则字面量内容和 flags。
+ */
+function parseRegexLiteral(value: string) {
+  if (!value.startsWith('/')) {
+    return undefined;
+  }
+
+  const end = findRegexEnd(value, 0);
+
+  if (end <= 0) {
+    return undefined;
+  }
+
+  const body = value.slice(1, end);
+  const flags = value.slice(end + 1);
+  const validFlags = new Set(['d', 'g', 'i', 'm', 's', 'u', 'v', 'y']);
+
+  // 空正则可执行但语义过宽，这里按基础检查错误处理。
+  if (!body.trim()) {
+    return undefined;
+  }
+
+  if ([...flags].some((flag) => !validFlags.has(flag)) || new Set(flags).size !== flags.length) {
+    return undefined;
+  }
+
+  return { body, flags };
+}
+
+/**
+ * 判断值是否为布尔字面量。
+ */
+function isBooleanValue(value: string) {
+  return value === 'true' || value === 'false';
+}
+
+/**
+ * 判断值是否为基础检查认可的文本或正则。
+ */
+function isTextLikeValue(value: string) {
+  if (isBlankTextValue(value)) {
+    return false;
+  }
+
+  if (/^(['"`])[\s\S]*\1$/.test(value)) {
+    return true;
+  }
+
+  return Boolean(parseRegexLiteral(value));
+}
+
+/**
+ * 判断 has/hasNot 中是否为简单单层定位器。
+ */
+function isSimpleFilterLocator(value: string) {
+  const text = value.trim();
+
+  if (!text) {
+    return false;
+  }
+
+  if (/\.filter\s*\(|\.nth\s*\(|\.first\s*\(|\.last\s*\(|\.locator\s*\(/.test(text)) {
+    return false;
+  }
+
+  if (/^(?:page\d?\.)/.test(text)) {
+    return false;
+  }
+
+  return /^(?:locator|getByRole|getByText|getByLabel|getByPlaceholder|getByTestId|getByTitle|getByAltText)\s*\(/.test(text);
 }
 
 /**
