@@ -27,6 +27,9 @@ const roleWithoutNameOptionPattern = /getByRole\(\s*['"`][^'"`]+['"`]\s*,\s*\{\s
 const roleTrailingCommaPattern = /getByRole\(\s*['"`][^'"`]+['"`]\s*,\s*\)/;
 const roleWithNamePattern = /getByRole\(\s*['"`][^'"`]+['"`]\s*,\s*\{[^}]*name\s*:/;
 const locatorMethodNamePattern = /(?:^|\.)([A-Za-z_$][\w$]*)\s*\(/g;
+const blankFirstArgumentPattern = /\b(?:locator|getByText|getByLabel|getByPlaceholder|getByTestId|getByTitle|getByAltText)\(\s*(['"`])\s*\1/;
+const exactOptionPattern = /\bexact\s*:\s*([^,}]+)/;
+const nthArgumentPattern = /\.nth\(\s*([^)]+)\s*\)/;
 const roleOptionNames = new Set(['checked', 'description', 'disabled', 'exact', 'expanded', 'includeHidden', 'level', 'name', 'pressed', 'selected']);
 const filterOptionNames = new Set(['has', 'hasNot', 'hasText', 'hasNotText', 'visible']);
 const locatorMethodNames = new Set([
@@ -181,6 +184,12 @@ function validateSelectorSyntax(step: CaseStep, stepIndex: number, selector: str
     );
   }
 
+  const argumentIssue = reviewLocatorArguments(step, stepIndex, selector);
+
+  if (argumentIssue) {
+    return argumentIssue;
+  }
+
   if (locatorMethodPattern.test(selector) && !hasLocatorArgument(selector)) {
     return createStepReviewItem(
       { ...step, selector },
@@ -310,6 +319,55 @@ function reviewSelectorQuality(step: CaseStep, stepIndex: number, selector: stri
   }
 
   return items;
+}
+
+/**
+ * 检查定位器参数的基础类型和空值问题。
+ */
+function reviewLocatorArguments(step: CaseStep, stepIndex: number, selector: string) {
+  const context = { ...step, selector };
+
+  if (blankFirstArgumentPattern.test(selector)) {
+    return createStepReviewItem(
+      context,
+      stepIndex,
+      'empty-locator-argument',
+      'error',
+      'locator',
+      '定位器缺少有效目标参数。',
+      '请为 locator、getByText、getByLabel 等方法补充非空文本、测试标识或 CSS 选择器。'
+    );
+  }
+
+  const exactMatch = selector.match(exactOptionPattern);
+
+  if (exactMatch && !['true', 'false'].includes(exactMatch[1].trim())) {
+    return createStepReviewItem(
+      context,
+      stepIndex,
+      'invalid-locator-option',
+      'error',
+      'locator',
+      'exact 配置必须是布尔值。',
+      '请把 exact 设置为 true 或 false，或删除该配置。'
+    );
+  }
+
+  const nthMatch = selector.match(nthArgumentPattern);
+
+  if (nthMatch && !/^(0|[1-9]\d*)$/.test(nthMatch[1].trim())) {
+    return createStepReviewItem(
+      context,
+      stepIndex,
+      'invalid-locator-argument',
+      'error',
+      'locator',
+      'nth 参数必须是非负整数。',
+      '请把 nth 参数改为 0 或更大的整数。'
+    );
+  }
+
+  return undefined;
 }
 
 /**

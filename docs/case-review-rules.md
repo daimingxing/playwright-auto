@@ -32,7 +32,9 @@
 | 规则码 | 级别 | 触发条件 |
 | --- | --- | --- |
 | `invalid-selector` | `error` | 括号、方括号、花括号或引号不成对；定位方法缺少必要首参；`getByRole` 或 `filter` 的 options 对象结构无法解析。 |
-| `empty-locator-argument` | `error` | 出现 `locator()`、`filter()`、`filter({})` 或 `nth()` 这类缺少关键参数的链路。 |
+| `empty-locator-argument` | `error` | 出现 `locator()`、`filter()`、`filter({})`、`nth()` 这类缺少关键参数的链路，或 `locator`、`getByText`、`getByLabel`、`getByPlaceholder`、`getByTestId`、`getByTitle`、`getByAltText` 的首参是空字符串。 |
+| `invalid-locator-option` | `error` | 定位器 options 的基础类型不符合规则，例如 `exact` 不是布尔值。 |
+| `invalid-locator-argument` | `error` | 定位器链式参数不符合规则，例如 `nth` 不是非负整数。 |
 | `empty-locator-option` | `error` | options 字段有冒号但没有值，或字符串值为空白。 |
 | `external-locator-variable` | `error` | options 使用对象简写，例如 `{ name }`、`{ checked }`、`{ hasText }`，会依赖外部变量。 |
 
@@ -141,8 +143,10 @@ locator('div').filter({ z hasText: /^文本$/ }) // invalid-selector
 
 当前检查仍是轻量规则，不是完整 Playwright 或 TypeScript 解析器。它会检查已支持方法的方法名、部分参数结构和 options 白名单，但不会完整验证所有链式调用的参数类型。例如 `locator(123)` 这类参数类型问题目前不一定能被识别。
 
+定位器构建器上线后，基础检查仍需要继续作为兜底能力。构建器可以减少手写错误，但不能覆盖录制导入、旧数据和高级手写 selector。
+
 后续可以继续增强：
 
-1. 为 `locator`、`getByText`、`getByLabel`、`getByPlaceholder`、`getByTestId`、`getByTitle`、`getByAltText` 增加参数类型与空值规则。
-2. 为 `nth` 增加非负整数规则。
-3. 为 `has`、`hasNot` 增加 Locator 参数形态检查。
+1. 为 `locator`、`getByText`、`getByLabel`、`getByPlaceholder`、`getByTestId`、`getByTitle`、`getByAltText` 增加更完整的参数类型规则，例如拦截 `locator(123)`。
+2. 为 `has`、`hasNot` 增加 Locator 参数形态检查。
+3. 如后续支持更多 Playwright 定位方法，同步扩展方法白名单和 options 白名单。

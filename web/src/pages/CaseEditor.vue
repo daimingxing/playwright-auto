@@ -15,6 +15,7 @@ import {
   Plus,
   Select,
 } from "@element-plus/icons-vue";
+import LocatorBuilderDrawer from "../components/LocatorBuilderDrawer.vue";
 import type {
   CaseMeta,
   CaseStep,
@@ -68,6 +69,7 @@ import {
   stepLabels,
   stepTimeouts,
 } from "./case-editor";
+import { formatLocatorSummary } from "./locator-builder";
 
 const route = useRoute();
 const router = useRouter();
@@ -88,6 +90,8 @@ const highlightId = ref("");
 const practicalReviewing = ref(false);
 const practicalHistoryOpen = ref(false);
 const failureDrawerOpen = ref(false);
+const locatorDrawerOpen = ref(false);
+const locatorStepId = ref("");
 const practicalHistory = ref<PracticalReviewRecord[]>([]);
 const activePracticalRecord = ref<PracticalReviewRecord | null>(null);
 const stepReviewPreview = ref(new Map<string, StepReviewPreview>());
@@ -138,6 +142,8 @@ const canBatchDown = computed(() =>
   item.value ? canMoveSteps(item.value.steps, batchIds.value, 1) : false,
 );
 const startPreview = computed(() => getStartPreview(item.value, activeEnv.value));
+const activeLocatorStep = computed(() => item.value?.steps.find((row) => row.id === locatorStepId.value));
+const activeLocatorSelector = computed(() => activeLocatorStep.value?.selector ?? "");
 
 /**
  * 切换当前用例状态。
@@ -462,6 +468,28 @@ function setActiveSteps(steps: CaseStep[]) {
  */
 function selectStep(row: CaseStep) {
   selectedId.value = row.id;
+}
+
+/**
+ * 打开指定步骤的定位器构建器。
+ */
+function openLocatorBuilder(step: CaseStep) {
+  locatorStepId.value = step.id;
+  locatorDrawerOpen.value = true;
+}
+
+/**
+ * 把定位器构建器生成的 selector 写回当前步骤。
+ */
+function applyLocatorSelector(selector: string) {
+  const step = activeLocatorStep.value;
+
+  if (!step) {
+    return;
+  }
+
+  step.selector = selector;
+  markStepReviewPending(step);
 }
 
 /**
@@ -1025,13 +1053,13 @@ onMounted(loadCase);
           </el-table-column>
           <el-table-column label="选择器">
             <template #default="{ row }">
-              <el-input
-                v-if="hasSelector(row.type)"
-                v-model="row.selector"
-                placeholder="例如：#username"
-                @input="markStepReviewPending(row)"
-                @blur="flushStepReview(row)"
-              />
+              <div v-if="hasSelector(row.type)" class="locator-cell">
+                <div class="locator-summary">
+                  <strong>{{ formatLocatorSummary(row.selector) }}</strong>
+                  <span>{{ row.selector || "未设置 selector" }}</span>
+                </div>
+                <el-button size="small" @click.stop="openLocatorBuilder(row)">编辑定位</el-button>
+              </div>
               <span v-else class="field-empty">-</span>
             </template>
           </el-table-column>
@@ -1151,6 +1179,12 @@ onMounted(loadCase);
           </el-table-column>
         </el-table>
       </el-drawer>
+
+      <LocatorBuilderDrawer
+        v-model="locatorDrawerOpen"
+        :selector="activeLocatorSelector"
+        @apply="applyLocatorSelector"
+      />
     </div>
   </section>
 </template>
@@ -1405,6 +1439,40 @@ onMounted(loadCase);
 
 .field-empty {
   color: #c0c4cc;
+}
+
+.locator-cell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.locator-summary {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.locator-summary strong,
+.locator-summary span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.locator-summary strong {
+  color: #1f2937;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.locator-summary span {
+  color: #8796aa;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 12px;
 }
 
 .step-index {

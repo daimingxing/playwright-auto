@@ -118,6 +118,39 @@ describe('共享基础检查规则', () => {
     ]);
   });
 
+  it('会把空字符串首参标记为错误', () => {
+    const result = reviewCaseStep(makeStep({ selector: "getByText('')" }), 0);
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        level: 'error',
+        ruleCode: 'empty-locator-argument'
+      })
+    ]);
+  });
+
+  it('会把非布尔 exact 标记为错误', () => {
+    const result = reviewCaseStep(makeStep({ selector: "getByText('保存', { exact: 'yes' })" }), 0);
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        level: 'error',
+        ruleCode: 'invalid-locator-option'
+      })
+    ]);
+  });
+
+  it('会把非法 nth 参数标记为错误', () => {
+    const result = reviewCaseStep(makeStep({ selector: "locator('button').nth(-1)" }), 0);
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        level: 'error',
+        ruleCode: 'invalid-locator-argument'
+      })
+    ]);
+  });
+
   it('会把尾逗号 role 定位标记为弱选择器', () => {
     const result = reviewCaseStep(makeStep({ selector: "getByRole('button',)" }), 0);
 
