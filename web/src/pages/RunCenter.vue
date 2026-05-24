@@ -239,10 +239,14 @@ onMounted(async () => {
               </el-select>
             </el-form-item>
             <el-form-item label="运行模式">
-              <el-radio-group v-model="runMode" @change="changeRunMode">
-                <el-radio-button value="headless">无头运行</el-radio-button>
-                <el-radio-button value="headed">可视调试</el-radio-button>
-              </el-radio-group>
+              <el-segmented
+                v-model="runMode"
+                @change="changeRunMode"
+                :options="[
+                  { label: '无头运行', value: 'headless' },
+                  { label: '可视调试', value: 'headed' }
+                ]"
+              />
             </el-form-item>
             <el-form-item label="并发数">
               <el-input-number v-model="workers" :min="1" :max="runConfig.maxWorkers" :step="1" controls-position="right" />

@@ -94,6 +94,33 @@ describe('用例编辑器登录态组合函数', () => {
 });
 
 describe('用例编辑器录制组合函数', () => {
+  it('开始录制时使用当前实测环境并在确认框展示环境', async () => {
+    const item = ref(makeCase());
+    const activeEnv = ref(makeEnv('pre'));
+    const record = useCaseRecord({
+      projectKey: 'crm',
+      caseKey: 'case-a',
+      item,
+      activeEnv,
+      clearStepReviewPreview: vi.fn(),
+      runStepReviewPreview: vi.fn(),
+      showError: vi.fn()
+    });
+    mocks.confirm.mockResolvedValue(true);
+    mocks.startRecord.mockResolvedValue({ sessionId: 'record-pre', url: 'https://pre.example.test/' });
+
+    await record.startRecordCase();
+
+    expect(mocks.confirm).toHaveBeenCalledWith(
+      expect.stringContaining('pre环境（pre）'),
+      '开始录制',
+      { type: 'warning' }
+    );
+    expect(mocks.startRecord).toHaveBeenCalledWith('crm', 'case-a', { envKey: 'pre' });
+    expect(record.recordId.value).toBe('record-pre');
+    expect(record.isRecording.value).toBe(true);
+  });
+
   it('停止录制后导入步骤并触发基础检查', async () => {
     const item = ref(makeCase());
     const clearStepReviewPreview = vi.fn();
@@ -102,6 +129,7 @@ describe('用例编辑器录制组合函数', () => {
       projectKey: 'crm',
       caseKey: 'case-a',
       item,
+      activeEnv: ref(makeEnv('default')),
       clearStepReviewPreview,
       runStepReviewPreview,
       showError: vi.fn()

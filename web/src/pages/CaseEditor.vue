@@ -14,6 +14,8 @@ import {
   MoreFilled,
   Plus,
   Select,
+  Document,
+  DocumentChecked
 } from "@element-plus/icons-vue";
 import LocatorBuilderDrawer from "../components/LocatorBuilderDrawer.vue";
 import type {
@@ -181,6 +183,7 @@ const {
   projectKey,
   caseKey,
   item,
+  activeEnv,
   clearStepReviewPreview,
   runStepReviewPreview,
   showError,
@@ -554,11 +557,15 @@ onMounted(loadCase);
         <h2>{{ item.name }}</h2>
       </div>
       <div class="toolbar-actions btn-shadow-md">
-        <el-button v-if="!isRecording" @click="startRecordCase">开始录制</el-button>
-        <el-button v-else type="warning" @click="stopRecordCase">停止录制</el-button>
-        <el-button :disabled="isRecording" @click="saveDraft">保存草稿</el-button>
-        <el-button type="primary" :disabled="isRecording" @click="saveCase"
-          >保存并生成测试文件</el-button
+        <el-button v-if="!isRecording" @click="startRecordCase">
+          <i style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background-color: #f56c6c; margin-right: 6px;"></i>开始录制
+        </el-button>
+        <el-button v-else type="danger" @click="stopRecordCase">
+          <i style="display: inline-block; width: 10px; height: 10px; background-color: currentColor; margin-right: 6px;"></i>停止录制
+        </el-button>
+        <el-button :disabled="isRecording" :icon="Document" @click="saveDraft">保存草稿</el-button>
+        <el-button type="primary" :disabled="isRecording" :icon="DocumentChecked" @click="saveCase"
+          >生成测试用例</el-button
         >
       </div>
     </div>
@@ -648,10 +655,15 @@ onMounted(loadCase);
               </label>
               <label class="practical-field">
                 <span>运行方式</span>
-                <el-radio-group v-model="practicalMode" class="practical-mode">
-                  <el-radio-button value="headless">无头运行</el-radio-button>
-                  <el-radio-button value="headed">可视调试</el-radio-button>
-                </el-radio-group>
+                <el-segmented
+                  v-model="practicalMode"
+                  class="practical-mode"
+                  block
+                  :options="[
+                    { label: '无头运行', value: 'headless' },
+                    { label: '可视调试', value: 'headed' }
+                  ]"
+                />
               </label>
             </div>
 
@@ -665,11 +677,12 @@ onMounted(loadCase);
               }}
             </p>
             <div class="panel-actions btn-shadow-md">
-              <el-button type="primary" :loading="practicalReviewing" @click="runPracticalCheck"
+              <el-button type="success" :loading="practicalReviewing" @click="runPracticalCheck"
                 >开始实测检查</el-button
               >
               <el-button @click="openPracticalHistory">查看历史</el-button>
-              <el-button @click="clearPracticalHistory">清理历史</el-button>
+              <span style="flex-grow: 1"></span>
+              <el-button :icon="Delete" type="danger" plain @click="clearPracticalHistory">清理历史</el-button>
             </div>
           </section>
         </div>
@@ -840,14 +853,14 @@ onMounted(loadCase);
             <template #default="{ $index }">
               <div class="row-actions">
                 <el-tooltip content="上移" placement="top" :show-after="500" :hide-after="0">
-                  <el-button text circle :disabled="$index === 0" @click="shiftStep($index, -1)">
+                  <el-button text class="action-btn" :disabled="$index === 0" @click="shiftStep($index, -1)">
                     <el-icon><ArrowUp /></el-icon>
                   </el-button>
                 </el-tooltip>
                 <el-tooltip content="下移" placement="top" :show-after="500" :hide-after="0">
                   <el-button
                     text
-                    circle
+                    class="action-btn"
                     :disabled="$index === item.steps.length - 1"
                     @click="shiftStep($index, 1)"
                   >
@@ -855,16 +868,17 @@ onMounted(loadCase);
                   </el-button>
                 </el-tooltip>
                 <el-tooltip content="复制" placement="top" :show-after="500" :hide-after="0">
-                  <el-button text circle @click="duplicateStep($index)">
+                  <el-button text class="action-btn" @click="duplicateStep($index)">
                     <el-icon><CopyDocument /></el-icon>
                   </el-button>
                 </el-tooltip>
                 <el-dropdown
                   trigger="click"
+                  placement="bottom-end"
                   popper-class="step-more-menu"
                   @command="(command) => command === 'delete' && deleteStep($index)"
                 >
-                  <el-button text circle title="更多" @click.stop>
+                  <el-button text class="action-btn" title="更多" @click.stop>
                     <el-icon><MoreFilled /></el-icon>
                   </el-button>
                   <template #dropdown>
@@ -1056,14 +1070,6 @@ onMounted(loadCase);
   width: 100%;
 }
 
-.practical-mode :deep(.el-radio-button) {
-  flex: 1;
-}
-
-.practical-mode :deep(.el-radio-button__inner) {
-  width: 100%;
-}
-
 .practical-result {
   align-items: center;
   color: #5f7188;
@@ -1087,6 +1093,7 @@ onMounted(loadCase);
   flex-wrap: wrap;
   margin-top: auto;
   padding-top: 14px;
+  width: 100%;
 }
 
 .failure-summary {
@@ -1202,11 +1209,14 @@ onMounted(loadCase);
   flex-wrap: nowrap;
 }
 
-.row-actions :deep(.el-button.is-circle) {
+.row-actions :deep(.el-button.action-btn) {
   width: 30px;
   height: 30px;
+  padding: 0;
+  margin-left: 8px;
   border: 1px solid transparent;
   color: #64748b;
+  border-radius: 4px; /* 统一的方形圆角 */
   transition:
     background-color 160ms ease,
     border-color 160ms ease,
@@ -1214,19 +1224,19 @@ onMounted(loadCase);
     color 160ms ease;
 }
 
-.row-actions :deep(.el-button.is-circle .el-icon) {
+.row-actions :deep(.el-button.action-btn .el-icon) {
   font-size: 17px;
 }
 
-.row-actions :deep(.el-button.is-circle:not(.is-disabled):hover),
-.row-actions :deep(.el-button.is-circle:not(.is-disabled):focus-visible) {
+.row-actions :deep(.el-button.action-btn:not(.is-disabled):hover),
+.row-actions :deep(.el-button.action-btn:not(.is-disabled):focus-visible) {
   color: #2563eb;
   border-color: #bfdbfe;
   background: #eff6ff;
   box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.2);
 }
 
-.row-actions :deep(.el-button.is-circle.is-disabled) {
+.row-actions :deep(.el-button.action-btn.is-disabled) {
   color: #cbd5e1;
 }
 
@@ -1382,5 +1392,14 @@ onMounted(loadCase);
 .step-more-menu .danger-action:hover .el-icon,
 .step-more-menu .danger-action:focus .el-icon {
   color: #c93535;
+}
+
+.danger-text-btn {
+  color: #d94747;
+}
+.danger-text-btn:hover {
+  color: #c93535;
+  border-color: #fbc4c4;
+  background-color: #fef0f0;
 }
 </style>

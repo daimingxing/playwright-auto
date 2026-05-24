@@ -400,6 +400,7 @@ interface CaseRecordOptions {
   projectKey: string;
   caseKey: string;
   item: Ref<CaseMeta | null>;
+  activeEnv: Ref<EnvMeta | null>;
   clearStepReviewPreview: () => void;
   runStepReviewPreview: (step: CaseStep) => void;
   showError: (error: unknown) => void;
@@ -416,14 +417,21 @@ export function useCaseRecord(options: CaseRecordOptions) {
    * 启动有头浏览器录制当前用例。
    */
   async function startRecordCase() {
+    if (!options.activeEnv.value) {
+      ElMessage.warning('请先配置项目环境');
+      return;
+    }
+
+    const envLabel = `${options.activeEnv.value.name}（${options.activeEnv.value.key}）`;
+
     try {
       await ElMessageBox.confirm(
-        '停止录制后会用录制结果替换当前编辑页步骤，替换后仍需手动保存。',
+        `当前录制环境：${envLabel}。停止录制后会用录制结果替换当前编辑页步骤，替换后仍需手动保存。`,
         '开始录制',
         { type: 'warning' }
       );
 
-      const result = await startRecord(options.projectKey, options.caseKey);
+      const result = await startRecord(options.projectKey, options.caseKey, { envKey: options.activeEnv.value.key });
       recordId.value = result.sessionId;
       isRecording.value = true;
       ElMessage.success('录制窗口已打开，请在浏览器中完成操作和断言');
