@@ -12,7 +12,7 @@
     "apiBase": ""
   },
   "runner": {
-    "headlessWorkers": 8,
+    "headlessWorkers": 4,
     "headedWorkers": 1,
     "maxWorkers": 20
   },
