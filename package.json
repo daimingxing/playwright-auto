@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "concurrently -k \"npm:dev:web\" \"npm:dev:server\"",
+    "dev": "concurrently -k \"npm:dev:server\" \"npm:dev:web\" ",
     "dev:web": "vite --config web/vite.config.ts",
     "dev:server": "tsx server/src/index.ts",
     "dev:server:watch": "tsx watch server/src/index.ts",
