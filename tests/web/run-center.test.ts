@@ -35,6 +35,10 @@ describe('运行中心用例选择工具', () => {
     expect(canStartRun(true, [], false)).toBe(false);
   });
 
+  it('没有登录态但已选中用例时运行按钮可用', () => {
+    expect(canStartRun(false, ['case-a'], false)).toBe(true);
+  });
+
   it('有登录态且选中用例时运行按钮可用', () => {
     expect(canStartRun(true, ['case-a'], false)).toBe(true);
   });

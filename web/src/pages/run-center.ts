@@ -22,7 +22,9 @@ export function mergeSelectedCaseKeys(cases: CaseMeta[], selectedKeys: string[])
  * 判断当前是否可以开始运行测试。
  */
 export function canStartRun(hasAuth: boolean, selectedKeys: string[], running: boolean) {
-  return hasAuth && selectedKeys.length > 0 && !running;
+  void hasAuth;
+
+  return selectedKeys.length > 0 && !running;
 }
 
 /**

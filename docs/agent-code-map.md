@@ -30,6 +30,7 @@
 - 登录态：`web/src/api/auth.ts`、`server/src/routes/auth.ts`、`server/src/services/auth-session.ts`
 - 本地应用配置、CORS 来源和步骤默认等待时间：`playwright-auto.config.json`、`server/src/lib/app-config.ts`、`server/src/app.ts`、`web/src/api/projects.ts`
 - 离线浏览器依赖：`server/src/services/vendor-browser.ts`、`server/src/services/browser-path.ts`、`scripts/install-browsers.mjs`
+- 开发启动健康检查：`scripts/wait-for-server.ts`、`package.json`
 - 路径参数校验和 HTTP 错误：`server/src/lib/guard.ts`、`server/src/lib/http-error.ts`、`server/src/lib/path.ts`、`server/src/app.ts`
 - Playwright CLI 子进程启动：`server/src/services/playwright-cli.ts`、`server/src/services/runner.ts`、`server/src/services/practical-review.ts`、`server/src/services/record-session.ts`
 
@@ -37,6 +38,7 @@
 
 - 前端页面通过 `web/src/api/*` 调用 `/api/*`
 - Vite 开发代理在 `web/vite.config.ts` 中把 `/api` 转发到本地服务
+- `npm run dev` 通过 `scripts/wait-for-server.ts` 等待 `/health` 通过后再启动前端开发服务
 - 后端路由由 `server/src/app.ts` 统一挂载到 Express
 - `server/src/app.ts` 统一处理 CORS、Zod 参数错误、HTTP 错误状态码和兜底异常
 - 路由层只处理 HTTP 入参和响应，主要业务逻辑放在 `server/src/services/*` 或 `server/src/lib/*`
@@ -65,4 +67,5 @@
 - 改错误状态码时，同步检查 `http-error.ts`、`app.ts`、前端错误提示和相关 API 测试
 - 改 Playwright 子进程启动策略时，同步检查 `playwright-cli.ts`、`runner.ts`、`practical-review.ts`、`record-session.ts` 和相关服务测试
 - 改运行报告时，同步检查 `runner.ts`、`run-store.ts`、`routes/runs.ts` 和 `tests/server/api-runs.test.ts`
-- 改登录态时，同步检查 `auth-session.ts`、`routes/auth.ts`、`RunCenter.vue` 和 `tests/server/api-auth.test.ts`
+- 改登录态时，同步检查 `auth-session.ts`、`routes/auth.ts`、`RunCenter.vue`、`tests/web/run-center.test.ts` 和 `tests/server/api-auth.test.ts`
+- 改开发启动顺序时，同步检查 `package.json`、`scripts/wait-for-server.ts`、`docs/agent-commands.md` 和 `tests/scripts/wait-for-server.test.ts`

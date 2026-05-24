@@ -19,6 +19,7 @@ npm run test:e2e
 - 前端页面：http://localhost:5173
 - 本地服务：http://localhost:3001
 - 健康检查：http://localhost:3001/health
+- `npm run dev` 会先启动后端，再通过 `scripts/wait-for-server.ts` 等待健康检查通过后启动前端
 
 ## 本地配置
 
@@ -31,6 +32,7 @@ npm run test:e2e
 ## 命令约定
 
 - 默认不启动开发服务；只有用户明确要求时才运行 `npm run dev`
+- 如果只启动前端调试，需确认后端健康检查已通过，否则 Vite proxy 可能连接失败
 - 发现端口已占用时，不要换端口重复启动服务
 - 服务端代码变更后，提醒开发人员重启已有服务
 - 摘要类命令优先使用 `rtk`

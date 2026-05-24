@@ -256,14 +256,13 @@ async function removeReport(item: RunMeta) {
  * 使用已保存登录态运行测试。
  */
 async function startRun() {
-  if (!hasAuth.value) {
-    ElMessage.warning('请先保存项目登录态');
-    return;
-  }
-
   if (selectedCaseKeys.value.length === 0) {
     ElMessage.warning('请选择至少一条测试用例');
     return;
+  }
+
+  if (!hasAuth.value) {
+    ElMessage.warning('当前环境没有保存登录态，将直接运行测试');
   }
 
   running.value = true;
