@@ -114,7 +114,7 @@ export async function deleteCase(projectKey: string, caseKey: string) {
   item.key = trashKey;
   item.updatedAt = new Date().toISOString();
   await writeJson(join(getCasePath(projectKey, caseKey), 'case.json'), item);
-  await writeSpec(projectKey, item, caseKey);
+  // 删除草稿用例时不能重新生成 spec，否则基础检查不通过的草稿会被阻断删除。
   await movePath(getCasePath(projectKey, caseKey), getTrashPath(projectKey, trashKey));
 }
 
