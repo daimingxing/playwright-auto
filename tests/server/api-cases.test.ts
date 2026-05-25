@@ -259,6 +259,39 @@ describe('用例接口', () => {
     await expect(stat(join(root, 'projects', 'crm', 'cases', created.body.key, 'case.spec.ts'))).rejects.toThrow();
   });
 
+  it('基础检查不通过的草稿用例也能删除到回收站', async () => {
+    const app = createApp();
+    await request(app).post('/api/projects').send({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    const created = await request(app).post('/api/projects/crm/cases').send({
+      name: '创建订单',
+      startPath: '/orders/create'
+    });
+    await request(app)
+      .put(`/api/projects/crm/cases/${created.body.key}/draft`)
+      .send({
+        ...created.body,
+        steps: [
+          {
+            id: 's1',
+            type: 'click',
+            selector: ''
+          }
+        ]
+      });
+
+    const removed = await request(app).delete(`/api/projects/crm/cases/${created.body.key}`);
+    const list = await request(app).get('/api/projects/crm/cases');
+    const trash = await request(app).get('/api/projects/crm/trash');
+
+    expect(removed.status).toBe(204);
+    expect(list.body).toHaveLength(0);
+    expect(trash.body.map((item: { key: string }) => item.key)).toEqual([created.body.key]);
+  });
+
   it('保存并生成测试文件时基础检查不通过会返回具体问题', async () => {
     const app = createApp();
     await request(app).post('/api/projects').send({
