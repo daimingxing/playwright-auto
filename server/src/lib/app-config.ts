@@ -24,6 +24,16 @@ interface FileConfig {
       wait?: unknown;
     };
   };
+  ai?: {
+    enabled?: unknown;
+    baseUrl?: unknown;
+    apiKey?: unknown;
+    model?: unknown;
+    temperature?: unknown;
+    timeoutMs?: unknown;
+    maxRetries?: unknown;
+    concurrency?: unknown;
+  };
 }
 
 const DEFAULT_CONFIG = {
@@ -47,6 +57,16 @@ const DEFAULT_CONFIG = {
       action: 2000,
       wait: 1000
     }
+  },
+  ai: {
+    enabled: false,
+    baseUrl: '',
+    apiKey: '',
+    model: '',
+    temperature: 0.1,
+    timeoutMs: 60000,
+    maxRetries: 1,
+    concurrency: 1
   }
 };
 
@@ -94,7 +114,24 @@ export function getAppConfig(): FullAppConfig {
     },
     steps: {
       timeouts
-    }
+    },
+    ai: readAiConfig(fileConfig)
+  };
+}
+
+/**
+ * 读取 AI 导入配置。
+ */
+function readAiConfig(fileConfig: FileConfig) {
+  return {
+    enabled: readBool(undefined, fileConfig.ai?.enabled, DEFAULT_CONFIG.ai.enabled),
+    baseUrl: readText(process.env.PLAYWRIGHT_AUTO_AI_BASE_URL, fileConfig.ai?.baseUrl, DEFAULT_CONFIG.ai.baseUrl),
+    apiKey: readText(process.env.PLAYWRIGHT_AUTO_AI_API_KEY, fileConfig.ai?.apiKey, DEFAULT_CONFIG.ai.apiKey),
+    model: readText(process.env.PLAYWRIGHT_AUTO_AI_MODEL, fileConfig.ai?.model, DEFAULT_CONFIG.ai.model),
+    temperature: readFloat(process.env.PLAYWRIGHT_AUTO_AI_TEMPERATURE, fileConfig.ai?.temperature, DEFAULT_CONFIG.ai.temperature, 0, 2),
+    timeoutMs: readInt(process.env.PLAYWRIGHT_AUTO_AI_TIMEOUT_MS, fileConfig.ai?.timeoutMs, DEFAULT_CONFIG.ai.timeoutMs, 1000, 300000),
+    maxRetries: readInt(undefined, fileConfig.ai?.maxRetries, DEFAULT_CONFIG.ai.maxRetries, 0, 5),
+    concurrency: readInt(process.env.PLAYWRIGHT_AUTO_AI_CONCURRENCY, fileConfig.ai?.concurrency, DEFAULT_CONFIG.ai.concurrency, 1, 5)
   };
 }
 
@@ -199,6 +236,40 @@ function readText(envValue: unknown, fileValue: unknown, defaultValue: string) {
 }
 
 /**
+ * 读取布尔配置。
+ */
+function readBool(envValue: unknown, fileValue: unknown, defaultValue: boolean) {
+  const envBool = parseBoolValue(envValue);
+
+  if (envBool !== undefined) {
+    return envBool;
+  }
+
+  const fileBool = parseBoolValue(fileValue);
+
+  return fileBool ?? defaultValue;
+}
+
+/**
+ * 读取小数配置。
+ */
+function readFloat(envValue: unknown, fileValue: unknown, defaultValue: number, min: number, max: number) {
+  const envNumber = parseFloatValue(envValue);
+
+  if (envNumber !== undefined && envNumber >= min && envNumber <= max) {
+    return envNumber;
+  }
+
+  const fileNumber = parseFloatValue(fileValue);
+
+  if (fileNumber !== undefined && fileNumber >= min && fileNumber <= max) {
+    return fileNumber;
+  }
+
+  return defaultValue;
+}
+
+/**
  * 读取步骤默认等待时间配置。
  */
 function readStepTimeouts(fileConfig: FileConfig): StepTimeoutConfig {
@@ -218,4 +289,36 @@ function parseIntValue(value: unknown) {
   const numberValue = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
 
   return Number.isInteger(numberValue) ? numberValue : undefined;
+}
+
+/**
+ * 解析布尔配置值。
+ */
+function parseBoolValue(value: unknown) {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const text = value.trim().toLowerCase();
+
+    if (text === 'true') {
+      return true;
+    }
+
+    if (text === 'false') {
+      return false;
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * 解析小数配置值。
+ */
+function parseFloatValue(value: unknown) {
+  const numberValue = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
+
+  return Number.isFinite(numberValue) ? numberValue : undefined;
 }

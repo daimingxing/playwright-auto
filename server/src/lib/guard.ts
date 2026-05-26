@@ -6,6 +6,8 @@ const envKeyPattern = projectKeyPattern;
 const runIdPattern = /^(\d{14}|\d{17})$/;
 const reviewIdPattern = /^[a-z0-9-]{1,80}$/;
 const workIdPattern = /^[a-f0-9-]{36}$/;
+const importIdPattern = /^import-\d{8}-\d{6}-[a-f0-9]{4}$/;
+const importItemIdPattern = /^item-\d{8}-\d{6}-[a-f0-9]{4}$/;
 
 /**
  * 校验项目标识。
@@ -47,6 +49,20 @@ export function assertReviewId(value: string) {
  */
 export function assertWorkId(value: string) {
   assertText(value, workIdPattern, '实测检查临时目录标识不合法');
+}
+
+/**
+ * 校验导入任务标识。
+ */
+export function assertImportId(value: string) {
+  assertText(value, importIdPattern, '导入任务标识不合法');
+}
+
+/**
+ * 校验导入项标识。
+ */
+export function assertImportItemId(value: string) {
+  assertText(value, importItemIdPattern, '导入项标识不合法');
 }
 
 /**

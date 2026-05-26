@@ -46,6 +46,115 @@ export interface CaseStep {
   opensPageAlias?: string;
 }
 
+export interface AiConfig {
+  enabled: boolean;
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  temperature: number;
+  timeoutMs: number;
+  maxRetries: number;
+  concurrency: number;
+}
+
+export type ImportStatus = 'running' | 'pendingReview' | 'partialSaved' | 'completed' | 'failed';
+
+export type ImportItemStatus = 'pending' | 'generating' | 'pendingReview' | 'failed' | 'saved' | 'skipped';
+
+export type AiLevel = 'high' | 'medium' | 'low';
+
+export interface ImportStepSource {
+  caseNo: string;
+  stepNo: number;
+  actionText: string;
+  targetText: string;
+  dataKeys: string[];
+  note: string;
+}
+
+export interface ImportDataSource {
+  caseNo: string;
+  dataKey: string;
+  dataName: string;
+  dataValue: string;
+  note: string;
+}
+
+export interface ImportCaseSource {
+  caseNo: string;
+  caseName: string;
+  targetUrl: string;
+  precondition: string;
+  expectedResult: string;
+  note: string;
+}
+
+export interface AiDraftStep {
+  id: string;
+  type: StepType;
+  selector?: string;
+  value?: string;
+  timeout?: number;
+  match?: MatchType;
+  text: string;
+  confidence: AiLevel;
+  warnings: string[];
+}
+
+export interface AiCaseDraft {
+  name: string;
+  startPath: string;
+  steps: AiDraftStep[];
+  confidence: AiLevel;
+  warnings: string[];
+  missingInfo: string[];
+}
+
+export interface ImportJob {
+  importId: string;
+  fileName: string;
+  fileHash: string;
+  envKey: string;
+  status: ImportStatus;
+  totalCount: number;
+  generatedCount: number;
+  savedCount: number;
+  failedCount: number;
+  skippedCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ImportItem {
+  itemId: string;
+  caseNo: string;
+  caseName: string;
+  rowRefs: {
+    caseRow: number;
+    stepRows: number[];
+    dataRows: number[];
+  };
+  sourceHash: string;
+  source: {
+    caseInfo: ImportCaseSource;
+    steps: ImportStepSource[];
+    data: ImportDataSource[];
+  };
+  draft?: AiCaseDraft;
+  review?: CaseReview;
+  status: ImportItemStatus;
+  errorMessage?: string;
+  savedCaseKey?: string;
+  savedAt?: string;
+  retryCount: number;
+  updatedAt: string;
+}
+
+export interface ImportSaveResult {
+  saved: Array<{ itemId: string; caseKey: string }>;
+  failed: Array<{ itemId: string; message: string }>;
+}
+
 export type ReviewLevel = 'error' | 'danger' | 'warning' | 'info';
 
 export type ReviewGroup = 'integrity' | 'locator' | 'assertion' | 'timeout';
@@ -220,10 +329,12 @@ export interface FullAppConfig {
   web: WebConfig;
   runner: RunConfig;
   steps: StepConfig;
+  ai: AiConfig;
 }
 
 export interface PublicAppConfig {
   steps: StepConfig;
+  ai: Omit<AiConfig, 'apiKey'> & { configured: boolean };
 }
 
 export type AppConfig = PublicAppConfig;

@@ -47,6 +47,16 @@ describe('应用配置', () => {
           action: 2000,
           wait: 1000
         }
+      },
+      ai: {
+        enabled: false,
+        baseUrl: '',
+        apiKey: '',
+        model: '',
+        temperature: 0.1,
+        timeoutMs: 60000,
+        maxRetries: 1,
+        concurrency: 1
       }
     });
   });
@@ -98,6 +108,16 @@ describe('应用配置', () => {
           action: 3000,
           wait: 1500
         }
+      },
+      ai: {
+        enabled: false,
+        baseUrl: '',
+        apiKey: '',
+        model: '',
+        temperature: 0.1,
+        timeoutMs: 60000,
+        maxRetries: 1,
+        concurrency: 1
       }
     });
   });
@@ -151,6 +171,16 @@ describe('应用配置', () => {
           action: 3000,
           wait: 1500
         }
+      },
+      ai: {
+        enabled: false,
+        baseUrl: '',
+        apiKey: '',
+        model: '',
+        temperature: 0.1,
+        timeoutMs: 60000,
+        maxRetries: 1,
+        concurrency: 1
       }
     });
   });

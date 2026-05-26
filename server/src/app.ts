@@ -35,7 +35,21 @@ export function createApp() {
   });
 
   app.get('/api/app-config', (_req, res) => {
-    res.json({ steps: getAppConfig().steps });
+    const config = getAppConfig();
+
+    res.json({
+      steps: config.steps,
+      ai: {
+        enabled: config.ai.enabled,
+        baseUrl: config.ai.baseUrl,
+        model: config.ai.model,
+        temperature: config.ai.temperature,
+        timeoutMs: config.ai.timeoutMs,
+        maxRetries: config.ai.maxRetries,
+        concurrency: config.ai.concurrency,
+        configured: Boolean(config.ai.baseUrl && config.ai.model)
+      }
+    });
   });
 
   app.use('/api/projects', projectsRouter);

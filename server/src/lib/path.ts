@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 import { getAppConfig } from './app-config';
-import { assertCaseKey, assertProjectKey, assertReviewId, assertRunId, assertWorkId } from './guard';
+import { assertCaseKey, assertImportId, assertImportItemId, assertProjectKey, assertReviewId, assertRunId, assertWorkId } from './guard';
 
 /**
  * 获取数据根目录。
@@ -22,6 +22,29 @@ export function getProjectsRoot() {
 export function getProjectPath(projectKey: string) {
   assertProjectKey(projectKey);
   return resolve(getProjectsRoot(), projectKey);
+}
+
+/**
+ * 获取项目导入任务根目录。
+ */
+export function getImportsPath(projectKey: string) {
+  return resolve(getProjectPath(projectKey), 'imports');
+}
+
+/**
+ * 获取单个导入任务目录。
+ */
+export function getImportPath(projectKey: string, importId: string) {
+  assertImportId(importId);
+  return resolve(getImportsPath(projectKey), importId);
+}
+
+/**
+ * 获取单个导入项文件路径。
+ */
+export function getImportItemPath(projectKey: string, importId: string, itemId: string) {
+  assertImportItemId(itemId);
+  return resolve(getImportPath(projectKey, importId), 'items', `${itemId}.json`);
 }
 
 /**

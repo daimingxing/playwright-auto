@@ -18,10 +18,14 @@
     "postinstall": "node scripts/install-browsers.mjs"
   },
   "dependencies": {
+    "@ai-sdk/openai-compatible": "^2.0.48",
+    "ai": "^6.0.191",
     "archiver": "^7.0.1",
     "cors": "^2.8.5",
     "element-plus": "^2.8.8",
+    "exceljs": "^4.4.0",
     "express": "^4.19.2",
+    "multer": "^2.1.1",
     "pinia": "^2.3.0",
     "vue": "^3.5.13",
     "vue-router": "^4.5.0",
@@ -32,6 +36,7 @@
     "@types/archiver": "^6.0.3",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
+    "@types/multer": "^2.1.0",
     "@types/node": "^22.10.10",
     "@types/supertest": "^6.0.2",
     "@vitejs/plugin-vue": "^5.2.1",
