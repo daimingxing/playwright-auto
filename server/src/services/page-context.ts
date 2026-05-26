@@ -97,26 +97,27 @@ export async function collectPageContext(input: CollectInput): Promise<PageConte
  */
 async function readButtons(page: Page) {
   const items = await readTexts(page.locator('button,[role="button"],input[type="button"],input[type="submit"]'));
-
-  return items.map((text) => ({
+  const candidates = items.map((text) => ({
     text,
-    locator: `getByRole('button', { name: '${escapeText(text)}' })`,
-    unique: true
+    locator: `getByRole('button', { name: '${escapeText(text)}' })`
   }));
+  const counts = await Promise.all(items.map((text) => page.getByRole('button', { name: text }).count()));
+
+  return resolveUnique(candidates, counts);
 }
 
 /**
  * 读取输入框元素摘要。
  */
 async function readInputs(page: Page) {
-  return readAttrs(page.locator('input,textarea'), 'placeholder', 'getByPlaceholder');
+  return readAttrs(page, page.locator('input,textarea'), 'placeholder', 'getByPlaceholder');
 }
 
 /**
  * 读取下拉框元素摘要。
  */
 async function readSelects(page: Page) {
-  return readAttrs(page.locator('select'), 'aria-label', 'getByLabel');
+  return readAttrs(page, page.locator('select'), 'aria-label', 'getByLabel');
 }
 
 /**
@@ -124,12 +125,13 @@ async function readSelects(page: Page) {
  */
 async function readLinks(page: Page) {
   const items = await readTexts(page.locator('a'));
-
-  return items.map((text) => ({
+  const candidates = items.map((text) => ({
     text,
-    locator: `getByText('${escapeText(text)}')`,
-    unique: true
+    locator: `getByText('${escapeText(text)}')`
   }));
+  const counts = await Promise.all(items.map((text) => page.getByText(text).count()));
+
+  return resolveUnique(candidates, counts);
 }
 
 /**
@@ -173,8 +175,9 @@ async function readTexts(locator: Locator) {
 /**
  * 读取元素属性并生成语义定位候选。
  */
-async function readAttrs(locator: Locator, attrName: string, methodName: string): Promise<PageElement[]> {
-  const values: PageElement[] = [];
+async function readAttrs(page: Page, locator: Locator, attrName: string, methodName: 'getByPlaceholder' | 'getByLabel'): Promise<PageElement[]> {
+  const values: Array<Omit<PageElement, 'unique'>> = [];
+  const counts: number[] = [];
   const count = Math.min(await locator.count(), maxItems);
 
   for (let index = 0; index < count; index += 1) {
@@ -190,13 +193,23 @@ async function readAttrs(locator: Locator, attrName: string, methodName: string)
       values.push({
         placeholder: attrName === 'placeholder' ? text : undefined,
         label: attrName !== 'placeholder' ? text : undefined,
-        locator: `${methodName}('${escapeText(text)}')`,
-        unique: true
+        locator: `${methodName}('${escapeText(text)}')`
       });
+      counts.push(await countAttrLocator(page, methodName, text));
     }
   }
 
-  return values;
+  return resolveUnique(values, counts);
+}
+
+/**
+ * 根据现场匹配数量标记候选定位器唯一性。
+ */
+export function resolveUnique<T extends Omit<PageElement, 'unique'>>(items: T[], counts: number[]) {
+  return items.map((item, index) => ({
+    ...item,
+    unique: counts[index] === 1
+  }));
 }
 
 /**
@@ -225,6 +238,17 @@ function createTestContext(caseInfo: ImportCaseSource): PageContext {
  */
 function normalizeText(value: string | null | undefined) {
   return (value ?? '').replace(/\s+/g, ' ').trim().slice(0, maxText);
+}
+
+/**
+ * 统计属性语义定位器的现场匹配数量。
+ */
+function countAttrLocator(page: Page, methodName: 'getByPlaceholder' | 'getByLabel', text: string) {
+  if (methodName === 'getByPlaceholder') {
+    return page.getByPlaceholder(text).count();
+  }
+
+  return page.getByLabel(text).count();
 }
 
 /**

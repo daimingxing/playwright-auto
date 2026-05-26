@@ -18,6 +18,8 @@ import {
   updateImportItem
 } from '../lib/import-store';
 import { createCaseDraft } from '../lib/case-store';
+import { getProject } from '../lib/project-store';
+import { envKeySchema } from '../lib/schema';
 import { parseImportExcel } from '../services/import-excel';
 import { enqueueImportItem, enqueueImportJob } from '../services/import-worker';
 
@@ -48,6 +50,7 @@ importsRouter.post<ProjectParams>('/ai', upload.single('file') as RequestHandler
       throw badRequest('请上传 Excel 文件');
     }
 
+    const envKey = await readImportEnvKey(req.params.projectKey, req.body?.envKey);
     const fileHash = createHash('sha256').update(req.file.buffer).digest('hex');
     const existing = await findImportByHash(req.params.projectKey, fileHash);
 
@@ -57,7 +60,6 @@ importsRouter.post<ProjectParams>('/ai', upload.single('file') as RequestHandler
     }
 
     const cases = await parseImportExcel(req.file.buffer);
-    const envKey = typeof req.body?.envKey === 'string' && req.body.envKey.trim() ? req.body.envKey.trim() : 'default';
     const job = await createImportJob(req.params.projectKey, {
       fileName: req.file.originalname,
       fileHash,
@@ -74,6 +76,25 @@ importsRouter.post<ProjectParams>('/ai', upload.single('file') as RequestHandler
     next(error);
   }
 });
+
+/**
+ * 读取并校验导入使用的项目环境。
+ */
+async function readImportEnvKey(projectKey: string, value: unknown) {
+  const project = await getProject(projectKey);
+  const envKey = typeof value === 'string' && value.trim() ? value.trim() : project.defaultEnv || 'default';
+  const parsed = envKeySchema.safeParse(envKey);
+
+  if (!parsed.success) {
+    throw badRequest('导入环境标识不合法');
+  }
+
+  if (!project.envs.some((env) => env.key === parsed.data)) {
+    throw badRequest('导入环境不存在');
+  }
+
+  return parsed.data;
+}
 
 importsRouter.get<ProjectParams>('/', async (req, res, next) => {
   try {

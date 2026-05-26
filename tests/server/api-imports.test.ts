@@ -48,6 +48,25 @@ describe('AI 导入接口', () => {
     expect(saved.body.saved).toHaveLength(1);
     expect(cases.body[0].status).toBe('draft');
   });
+
+  it('上传时拒绝不存在的环境且不创建导入任务', async () => {
+    const app = createApp();
+    await request(app).post('/api/projects').send({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+
+    const created = await request(app)
+      .post('/api/projects/crm/imports/ai')
+      .field('envKey', 'missing-env')
+      .attach('file', await createWorkbookBuffer(), 'cases.xlsx');
+    const jobs = await request(app).get('/api/projects/crm/imports');
+
+    expect(created.status).toBe(400);
+    expect(created.body.message).toContain('导入环境不存在');
+    expect(jobs.body).toEqual([]);
+  });
 });
 
 /**
