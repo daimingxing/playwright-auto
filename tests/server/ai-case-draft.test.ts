@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { parseJsonObject } from '../../server/src/services/ai-client';
 import { buildCaseDraftInput, normalizeAiDraft } from '../../server/src/services/ai-case-draft';
 import { resolveUnique } from '../../server/src/services/page-context';
 
@@ -77,5 +78,11 @@ describe('AI 草稿生成服务', () => {
       { text: '新增', locator: "getByRole('button', { name: '新增' })", unique: true },
       { text: '保存', locator: "getByRole('button', { name: '保存' })", unique: false }
     ]);
+  });
+
+  it('解析兼容模型返回的 JSON 文本', () => {
+    expect(parseJsonObject('{"ok":true}')).toEqual({ ok: true });
+    expect(parseJsonObject('```json\n{"ok":true}\n```')).toEqual({ ok: true });
+    expect(parseJsonObject('结果如下：{"ok":true}')).toEqual({ ok: true });
   });
 });
