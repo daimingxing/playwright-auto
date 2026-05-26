@@ -15,6 +15,13 @@ export function getImportProgress(job: ImportJob) {
 }
 
 /**
+ * 计算已生成但还需要用户确认的数量。
+ */
+export function getPendingCount(job: ImportJob) {
+  return Math.max(job.generatedCount - job.savedCount, 0);
+}
+
+/**
  * 判断导入项是否可以保存为草稿。
  */
 export function canSaveImportItem(item: ImportItem) {

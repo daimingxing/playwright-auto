@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { ImportItem, ImportJob } from '../../shared/types';
 import {
+  canRetryImportItem,
   canSaveImportItem,
   filterImportItems,
   formatImportItemStatus,
   formatImportStatus,
   getImportProgress,
+  getPendingCount,
   getItemIssueText
 } from '../../web/src/pages/ai-import';
 
@@ -15,10 +17,21 @@ describe('AI 导入页面工具', () => {
     expect(getImportProgress(makeJob({ totalCount: 0, generatedCount: 4 }))).toBe(0);
   });
 
+  it('统计已生成但待确认的导入项数量', () => {
+    expect(getPendingCount(makeJob({ generatedCount: 6, savedCount: 2, skippedCount: 3 }))).toBe(4);
+    expect(getPendingCount(makeJob({ generatedCount: 1, savedCount: 2, skippedCount: 0 }))).toBe(0);
+  });
+
   it('只允许保存待确认导入项', () => {
     expect(canSaveImportItem(makeItem('pendingReview'))).toBe(true);
     expect(canSaveImportItem(makeItem('saved'))).toBe(false);
     expect(canSaveImportItem(makeItem('failed'))).toBe(false);
+  });
+
+  it('只允许重试生成失败导入项', () => {
+    expect(canRetryImportItem(makeItem('failed'))).toBe(true);
+    expect(canRetryImportItem(makeItem('pendingReview'))).toBe(false);
+    expect(canRetryImportItem(makeItem('saved'))).toBe(false);
   });
 
   it('显示任务和导入项状态中文', () => {

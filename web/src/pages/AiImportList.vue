@@ -7,7 +7,7 @@ import { useRoute, useRouter } from 'vue-router';
 import type { ImportJob } from '../../../shared/types';
 import { createAiImport, listImports } from '../api/imports';
 import { getErrorMessage } from '../utils/error';
-import { formatImportStatus, formatImportTime, getImportProgress } from './ai-import';
+import { formatImportStatus, formatImportTime, getImportProgress, getPendingCount } from './ai-import';
 
 const route = useRoute();
 const router = useRouter();
@@ -159,7 +159,7 @@ onBeforeUnmount(() => {
             <el-table-column prop="savedCount" label="已保存" width="100" />
             <el-table-column label="待确认" width="100">
               <template #default="{ row }">
-                {{ Math.max(row.generatedCount - row.savedCount - row.skippedCount, 0) }}
+                {{ getPendingCount(row) }}
               </template>
             </el-table-column>
             <el-table-column prop="failedCount" label="失败" width="90" />

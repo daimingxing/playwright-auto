@@ -60,6 +60,7 @@ const pagedItems = computed(() => {
 });
 const selectedSaveIds = computed(() => selectedRows.value.filter(canSaveImportItem).map((item) => item.itemId));
 const selectedSkipIds = computed(() => selectedRows.value.filter(canSkipImportItem).map((item) => item.itemId));
+const selectedRetryIds = computed(() => selectedRows.value.filter(canRetryImportItem).map((item) => item.itemId));
 
 /**
  * 加载导入任务和导入项。
@@ -173,6 +174,24 @@ async function skipSelected() {
 }
 
 /**
+ * 重试选中的失败导入项。
+ */
+async function retrySelected() {
+  if (selectedRetryIds.value.length === 0) {
+    ElMessage.warning('请先选择生成失败用例');
+    return;
+  }
+
+  try {
+    await Promise.all(selectedRetryIds.value.map((itemId) => retryImportItem(projectKey, importId, itemId)));
+    await loadData();
+    ElMessage.success(`已重新加入 ${selectedRetryIds.value.length} 条生成队列`);
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error));
+  }
+}
+
+/**
  * 重试单条生成失败的导入项。
  */
 async function retryItem(item: ImportItem) {
@@ -202,7 +221,7 @@ async function skipItem(item: ImportItem) {
  * 判断表格行是否可勾选。
  */
 function canSelect(row: ImportItem) {
-  return canSaveImportItem(row) || canSkipImportItem(row);
+  return canSaveImportItem(row) || canSkipImportItem(row) || canRetryImportItem(row);
 }
 
 /**
@@ -248,6 +267,7 @@ onBeforeUnmount(() => {
       </div>
       <div class="toolbar-actions btn-shadow-md">
         <el-button :icon="RefreshRight" :loading="loading" @click="loadData">刷新</el-button>
+        <el-button :disabled="selectedRetryIds.length === 0" @click="retrySelected">重试选中</el-button>
         <el-button :disabled="selectedSkipIds.length === 0" @click="skipSelected">跳过选中</el-button>
         <el-button type="primary" :disabled="selectedSaveIds.length === 0" :loading="saving" @click="saveSelected">
           保存选中为草稿

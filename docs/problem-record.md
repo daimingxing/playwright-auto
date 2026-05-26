@@ -71,3 +71,12 @@
 - 经验：Windows 仓库中读取计划或批量处理文本时要优先避开外层 `$` 展开；新增后端依赖后必须跑 `typecheck`，仅靠 Vitest 通过不足以发现 Express 和 SDK 的类型合同差异。
 
 ---
+
+## 2026-05-26 DeepSeek 结构化输出兼容差异
+
+- 状态：已解决
+- 问题：使用 DeepSeek OpenAI 兼容接口真实验证 AI 导入时，普通 `/chat/completions` 连通成功，但 Vercel AI SDK `generateObject` 会发送 `response_format: json_schema`，DeepSeek 当前返回 `This response_format type is unavailable now`，导致项目封装层无法直接生成结构化对象。
+- 处理：保留 Vercel AI SDK 和 OpenAI 兼容 provider，但把 `server/src/services/ai-client.ts` 改为 `generateText`，通过提示词要求只返回 JSON，再由项目侧解析 JSON 文本并交给 Zod schema 校验；同时支持纯 JSON、Markdown JSON 代码块和前后带说明的 JSON 文本。
+- 经验：OpenAI 兼容不等于完全支持 OpenAI 的所有结构化输出参数。供应商中立的 AI 接入层应避免把业务逻辑绑定到某个 provider 的高级响应格式，真实模型接入必须做一次端到端烟测。
+
+---
