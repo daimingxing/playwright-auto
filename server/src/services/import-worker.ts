@@ -1,6 +1,15 @@
 import type { CaseMeta, CaseStep } from '../../../shared/types';
 import { getAppConfig } from '../lib/app-config';
-import { getImportItem, getImportJob, listImportItems, updateImportItem, updateImportJobSummary } from '../lib/import-store';
+import {
+  getImportItem,
+  getImportJob,
+  listImportItems,
+  listImportJobs,
+  recoverImportItems,
+  updateImportItem,
+  updateImportJobSummary
+} from '../lib/import-store';
+import { listProjects } from '../lib/project-store';
 import { reviewCase } from './case-review';
 import { generateCaseDraft } from './ai-case-draft';
 import { collectPageContext } from './page-context';
@@ -13,6 +22,22 @@ interface QueueTask {
 
 const queue: QueueTask[] = [];
 let runningCount = 0;
+
+/**
+ * 恢复服务启动前未完成的导入任务。
+ */
+export async function recoverImportJobs() {
+  const projects = await listProjects();
+
+  for (const project of projects) {
+    const jobs = await listImportJobs(project.key);
+
+    for (const job of jobs) {
+      await recoverImportItems(project.key, job.importId);
+      await enqueueImportJob(project.key, job.importId);
+    }
+  }
+}
 
 /**
  * 把导入任务中的待处理项加入本地后台队列。
@@ -77,7 +102,7 @@ export async function processImportItem(projectKey: string, importId: string, it
         draft,
         review,
         errorMessage: undefined,
-        retryCount: attempt
+        retryCount: 0
       });
       return;
     } catch (error) {
@@ -107,7 +132,11 @@ function drainQueue() {
 
     processImportItem(task.projectKey, task.importId, task.itemId)
       .catch(async () => {
-        await updateImportJobSummary(task.projectKey, task.importId);
+        try {
+          await updateImportJobSummary(task.projectKey, task.importId);
+        } catch {
+          // 测试或重启过程中任务目录可能已被清理，队列不能因此留下未处理拒绝。
+        }
       })
       .finally(() => {
         runningCount -= 1;

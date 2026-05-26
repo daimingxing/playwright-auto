@@ -83,10 +83,10 @@ export async function listImportJobs(projectKey: string) {
 }
 
 /**
- * 根据文件 hash 查找已有导入任务。
+ * 根据文件 hash 和导入环境查找已有导入任务。
  */
-export async function findImportByHash(projectKey: string, fileHash: string) {
-  return (await listImportJobs(projectKey)).find((job) => job.fileHash === fileHash);
+export async function findImportByHash(projectKey: string, fileHash: string, envKey: string) {
+  return (await listImportJobs(projectKey)).find((job) => job.fileHash === fileHash && job.envKey === envKey);
 }
 
 /**
@@ -155,6 +155,29 @@ export async function updateImportItem(projectKey: string, importId: string, ite
   await updateImportJobSummary(projectKey, importId);
 
   return nextItem;
+}
+
+/**
+ * 恢复服务中断前处于生成中的导入项。
+ */
+export async function recoverImportItems(projectKey: string, importId: string) {
+  const items = await listImportItems(projectKey, importId);
+  const recovered: string[] = [];
+
+  for (const item of items) {
+    if (item.status !== 'generating') {
+      continue;
+    }
+
+    await updateImportItem(projectKey, importId, item.itemId, {
+      status: 'pending',
+      retryCount: 0,
+      errorMessage: '上次导入生成被服务重启中断，已重新排队'
+    });
+    recovered.push(item.itemId);
+  }
+
+  return recovered;
 }
 
 /**

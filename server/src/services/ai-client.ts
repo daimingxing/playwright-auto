@@ -33,7 +33,8 @@ export async function generateAiJson<T>(input: AiJsonInput<T>) {
     schema: zodSchema(input.schema),
     output: 'object',
     temperature: config.temperature,
-    maxRetries: config.maxRetries,
+    // 重试次数由导入 worker 统一控制，避免 SDK 内层重试放大真实模型调用次数。
+    maxRetries: 0,
     timeout: config.timeoutMs
   });
 

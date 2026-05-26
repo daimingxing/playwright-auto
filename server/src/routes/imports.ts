@@ -37,6 +37,7 @@ interface ItemParams extends ImportParams {
 }
 
 export const importsRouter = Router({ mergeParams: true });
+const savingItems = new Map<string, Promise<{ itemId: string; caseKey: string }>>();
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -52,7 +53,7 @@ importsRouter.post<ProjectParams>('/ai', upload.single('file') as RequestHandler
 
     const envKey = await readImportEnvKey(req.params.projectKey, req.body?.envKey);
     const fileHash = createHash('sha256').update(req.file.buffer).digest('hex');
-    const existing = await findImportByHash(req.params.projectKey, fileHash);
+    const existing = await findImportByHash(req.params.projectKey, fileHash, envKey);
 
     if (existing) {
       res.json({ ...existing, reused: true });
@@ -130,7 +131,8 @@ importsRouter.post<ItemParams>('/:importId/items/:itemId/retry', async (req, res
 
     const nextItem = await updateImportItem(req.params.projectKey, req.params.importId, req.params.itemId, {
       status: 'pending',
-      errorMessage: undefined
+      errorMessage: undefined,
+      retryCount: 0
     });
     enqueueImportItem(req.params.projectKey, req.params.importId, req.params.itemId);
 
@@ -162,29 +164,7 @@ importsRouter.post<ImportParams>('/:importId/save', async (req, res, next) => {
 
     for (const itemId of itemIds) {
       try {
-        const item = await getImportItem(req.params.projectKey, req.params.importId, itemId);
-
-        if (item.status === 'saved') {
-          failed.push({ itemId, message: '导入项已保存' });
-          continue;
-        }
-
-        if (item.status !== 'pendingReview' || !item.draft) {
-          failed.push({ itemId, message: '导入项尚未生成可保存草稿' });
-          continue;
-        }
-
-        const created = await createCaseDraft(req.params.projectKey, {
-          name: item.draft.name,
-          startPath: item.draft.startPath,
-          steps: item.draft.steps.map(toCaseStep)
-        });
-        await updateImportItem(req.params.projectKey, req.params.importId, itemId, {
-          status: 'saved',
-          savedCaseKey: created.key,
-          savedAt: new Date().toISOString()
-        });
-        saved.push({ itemId, caseKey: created.key });
+        saved.push(await saveImportItem(req.params.projectKey, req.params.importId, itemId));
       } catch (error) {
         failed.push({ itemId, message: error instanceof Error ? error.message : '保存草稿失败' });
       }
@@ -195,6 +175,59 @@ importsRouter.post<ImportParams>('/:importId/save', async (req, res, next) => {
     next(error);
   }
 });
+
+/**
+ * 幂等保存单个导入项为草稿用例。
+ */
+async function saveImportItem(projectKey: string, importId: string, itemId: string) {
+  const lockKey = `${projectKey}/${importId}/${itemId}`;
+  const existing = savingItems.get(lockKey);
+
+  if (existing) {
+    return existing;
+  }
+
+  const task = doSaveImportItem(projectKey, importId, itemId);
+  savingItems.set(lockKey, task);
+
+  try {
+    return await task;
+  } finally {
+    savingItems.delete(lockKey);
+  }
+}
+
+/**
+ * 执行单个导入项保存。
+ */
+async function doSaveImportItem(projectKey: string, importId: string, itemId: string) {
+  const item = await getImportItem(projectKey, importId, itemId);
+
+  if (item.status === 'saved') {
+    if (!item.savedCaseKey) {
+      throw new Error('导入项已保存但缺少草稿标识');
+    }
+
+    return { itemId, caseKey: item.savedCaseKey };
+  }
+
+  if (item.status !== 'pendingReview' || !item.draft) {
+    throw new Error('导入项尚未生成可保存草稿');
+  }
+
+  const created = await createCaseDraft(projectKey, {
+    name: item.draft.name,
+    startPath: item.draft.startPath,
+    steps: item.draft.steps.map(toCaseStep)
+  });
+  await updateImportItem(projectKey, importId, itemId, {
+    status: 'saved',
+    savedCaseKey: created.key,
+    savedAt: new Date().toISOString()
+  });
+
+  return { itemId, caseKey: created.key };
+}
 
 /**
  * 解析保存接口传入的导入项列表。

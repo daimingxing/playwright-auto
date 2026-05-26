@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../../server/src/app';
+import { updateImportItem } from '../../server/src/lib/import-store';
 
 let root = '';
 
@@ -66,6 +67,90 @@ describe('AI 导入接口', () => {
     expect(created.status).toBe(400);
     expect(created.body.message).toContain('导入环境不存在');
     expect(jobs.body).toEqual([]);
+  });
+
+  it('同一文件在不同环境下创建不同导入任务', async () => {
+    const app = createApp();
+    await request(app).post('/api/projects').send({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    await request(app).post('/api/projects/crm/envs').send({
+      name: '测试环境',
+      key: 'test',
+      baseUrl: 'https://crm-test.local'
+    });
+    const buffer = await createWorkbookBuffer();
+
+    const first = await request(app)
+      .post('/api/projects/crm/imports/ai')
+      .field('envKey', 'default')
+      .attach('file', buffer, 'cases.xlsx');
+    const second = await request(app)
+      .post('/api/projects/crm/imports/ai')
+      .field('envKey', 'test')
+      .attach('file', buffer, 'cases.xlsx');
+
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(201);
+    expect(second.body.importId).not.toBe(first.body.importId);
+  });
+
+  it('手动重试失败导入项时重置重试次数', async () => {
+    const app = createApp();
+    await request(app).post('/api/projects').send({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    const created = await request(app)
+      .post('/api/projects/crm/imports/ai')
+      .attach('file', await createWorkbookBuffer(), 'cases.xlsx');
+    const items = await waitItems(app, created.body.importId);
+
+    await updateImportItem('crm', created.body.importId, items.body[0].itemId, {
+      status: 'failed',
+      errorMessage: '模型超时',
+      retryCount: 1
+    });
+
+    const retried = await request(app)
+      .post(`/api/projects/crm/imports/${created.body.importId}/items/${items.body[0].itemId}/retry`);
+    const nextItems = await waitItems(app, created.body.importId);
+
+    expect(retried.status).toBe(200);
+    expect(nextItems.body[0]).toMatchObject({
+      status: 'pendingReview',
+      retryCount: 0
+    });
+  });
+
+  it('重复保存同一导入项时返回已有草稿且不重复创建用例', async () => {
+    const app = createApp();
+    await request(app).post('/api/projects').send({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    const created = await request(app)
+      .post('/api/projects/crm/imports/ai')
+      .attach('file', await createWorkbookBuffer(), 'cases.xlsx');
+    const items = await waitItems(app, created.body.importId);
+    const itemId = items.body[0].itemId;
+
+    const first = await request(app)
+      .post(`/api/projects/crm/imports/${created.body.importId}/save`)
+      .send({ itemIds: [itemId] });
+    const second = await request(app)
+      .post(`/api/projects/crm/imports/${created.body.importId}/save`)
+      .send({ itemIds: [itemId] });
+    const cases = await request(app).get('/api/projects/crm/cases');
+
+    expect(first.body.saved).toHaveLength(1);
+    expect(second.body.saved).toEqual(first.body.saved);
+    expect(second.body.failed).toEqual([]);
+    expect(cases.body).toHaveLength(1);
   });
 });
 
