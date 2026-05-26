@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { CaseMeta, CaseStatus } from '../../../shared/types';
+import type { CaseMeta, CaseStatus, CaseStep } from '../../../shared/types';
 import { ensureDir, movePath, readJson, writeJson } from './fs';
 import { getCasePath, getProjectPath, getTrashPath } from './path';
 import { expirePracticalReviewIfNeeded } from './practical-review-store';
@@ -14,6 +14,12 @@ import { HttpError, badRequest } from './http-error';
 interface CreateCaseInput {
   name: string;
   startPath: string;
+}
+
+export interface CreateCaseDraftInput {
+  name: string;
+  startPath: string;
+  steps: CaseStep[];
 }
 
 /**
@@ -37,6 +43,21 @@ export async function createCase(projectKey: string, input: CreateCaseInput) {
   await writeJson(join(getCasePath(projectKey, caseKey), 'case.json'), item);
 
   return item;
+}
+
+/**
+ * 直接创建带步骤的草稿用例。
+ */
+export async function createCaseDraft(projectKey: string, input: CreateCaseDraftInput) {
+  const created = await createCase(projectKey, {
+    name: input.name,
+    startPath: input.startPath
+  });
+
+  return updateCaseDraft(projectKey, created.key, {
+    ...created,
+    steps: input.steps
+  });
 }
 
 /**

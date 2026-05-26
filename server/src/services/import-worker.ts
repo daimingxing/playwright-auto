@@ -1,0 +1,134 @@
+import type { CaseMeta, CaseStep } from '../../../shared/types';
+import { getAppConfig } from '../lib/app-config';
+import { getImportItem, getImportJob, listImportItems, updateImportItem, updateImportJobSummary } from '../lib/import-store';
+import { reviewCase } from './case-review';
+import { generateCaseDraft } from './ai-case-draft';
+import { collectPageContext } from './page-context';
+
+interface QueueTask {
+  projectKey: string;
+  importId: string;
+  itemId: string;
+}
+
+const queue: QueueTask[] = [];
+let runningCount = 0;
+
+/**
+ * 把导入任务中的待处理项加入本地后台队列。
+ */
+export async function enqueueImportJob(projectKey: string, importId: string) {
+  const items = await listImportItems(projectKey, importId);
+
+  for (const item of items) {
+    if (item.status === 'pending') {
+      queue.push({ projectKey, importId, itemId: item.itemId });
+    }
+  }
+
+  drainQueue();
+}
+
+/**
+ * 把单个导入项加入本地后台队列。
+ */
+export function enqueueImportItem(projectKey: string, importId: string, itemId: string) {
+  queue.push({ projectKey, importId, itemId });
+  drainQueue();
+}
+
+/**
+ * 处理单个导入项。
+ */
+export async function processImportItem(projectKey: string, importId: string, itemId: string): Promise<void> {
+  const config = getAppConfig().ai;
+  let item = await getImportItem(projectKey, importId, itemId);
+
+  if (item.status !== 'pending' && item.status !== 'failed') {
+    return;
+  }
+
+  for (let attempt = item.retryCount; attempt <= config.maxRetries; attempt += 1) {
+    try {
+      item = await updateImportItem(projectKey, importId, itemId, {
+        status: 'generating',
+        errorMessage: undefined,
+        retryCount: attempt
+      });
+
+      const job = await getImportJob(projectKey, importId);
+      const pageContext = await collectPageContext({
+        projectKey,
+        envKey: job.envKey,
+        caseInfo: item.source.caseInfo,
+        steps: item.source.steps,
+        data: item.source.data
+      });
+      const draft = await generateCaseDraft({
+        caseInfo: item.source.caseInfo,
+        steps: item.source.steps,
+        data: item.source.data,
+        pageContext
+      });
+      const review = reviewCase(createReviewCase(draft));
+
+      await updateImportItem(projectKey, importId, itemId, {
+        status: 'pendingReview',
+        draft,
+        review,
+        errorMessage: undefined,
+        retryCount: attempt
+      });
+      return;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'AI 草稿生成失败';
+
+      if (attempt >= config.maxRetries) {
+        await updateImportItem(projectKey, importId, itemId, {
+          status: 'failed',
+          errorMessage: message,
+          retryCount: attempt
+        });
+        return;
+      }
+    }
+  }
+}
+
+/**
+ * 按配置并发消费本地队列。
+ */
+function drainQueue() {
+  const concurrency = getAppConfig().ai.concurrency;
+
+  while (runningCount < concurrency && queue.length > 0) {
+    const task = queue.shift()!;
+    runningCount += 1;
+
+    processImportItem(task.projectKey, task.importId, task.itemId)
+      .catch(async () => {
+        await updateImportJobSummary(task.projectKey, task.importId);
+      })
+      .finally(() => {
+        runningCount -= 1;
+        drainQueue();
+      });
+  }
+}
+
+/**
+ * 创建用于基础检查的临时用例对象。
+ */
+function createReviewCase(draft: { name: string; startPath: string; steps: CaseStep[] }): CaseMeta {
+  const now = new Date().toISOString();
+
+  return {
+    name: draft.name,
+    key: 'ai-import-draft',
+    status: 'draft',
+    startPath: draft.startPath,
+    steps: draft.steps,
+    createdAt: now,
+    updatedAt: now
+  };
+}

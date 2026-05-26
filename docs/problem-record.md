@@ -62,3 +62,12 @@
 - 经验：Express 请求生命周期里，`req.close` 不等于“响应前客户端断开”；需要以响应对象是否写完作为取消判断边界，相关改动必须跑 API 级回归测试。
 
 ---
+
+## 2026-05-26 AI 导入后端实现类型差异
+
+- 状态：已解决
+- 问题：AI 导入后端实现时同时遇到三类集成差异：PowerShell 外层双引号会吞掉 `$lines` 变量导致计划片段读取命令报错；Express 5 类型下 `multer` 中间件和路由泛型参数不完全兼容；AI SDK v5 的 `generateObject` 需要用 `zodSchema` 包装 Zod schema 并显式声明 `output: 'object'`。
+- 处理：后续 PowerShell 复杂脚本改用单引号脚本块；导入路由参数类型增加索引签名并把 `upload.single('file')` 明确收窄为当前路由的 `RequestHandler`；AI 客户端通过项目自有 `ai-client` 封装 `generateObject`、`createOpenAICompatible` 和 `zodSchema`，业务服务不直接依赖 SDK 细节。
+- 经验：Windows 仓库中读取计划或批量处理文本时要优先避开外层 `$` 展开；新增后端依赖后必须跑 `typecheck`，仅靠 Vitest 通过不足以发现 Express 和 SDK 的类型合同差异。
+
+---

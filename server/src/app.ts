@@ -5,6 +5,7 @@ import { projectsRouter } from './routes/projects';
 import { runsRouter } from './routes/runs';
 import { authRouter } from './routes/auth';
 import { recordRouter } from './routes/record';
+import { importsRouter } from './routes/imports';
 import { RunError } from './services/runner';
 import { getAppConfig } from './lib/app-config';
 import { ZodError, type ZodIssue } from 'zod';
@@ -58,6 +59,7 @@ export function createApp() {
   app.use('/api/projects/:projectKey/trash', trashRouter);
   app.use('/api/projects/:projectKey/runs', runsRouter);
   app.use('/api/projects/:projectKey/auth', authRouter);
+  app.use('/api/projects/:projectKey/imports', importsRouter);
 
   app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     const message = error instanceof Error ? error.message : '未知错误';
