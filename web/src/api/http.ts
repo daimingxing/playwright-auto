@@ -2,12 +2,15 @@
  * 发送本地 API 请求。
  */
 export async function requestJson<T>(url: string, init?: RequestInit) {
+  const isFormData = init?.body instanceof FormData;
   const res = await fetch(resolveApiUrl(url), {
     ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...init?.headers
-    }
+    headers: isFormData
+      ? init?.headers
+      : {
+          'Content-Type': 'application/json',
+          ...init?.headers
+        }
   });
 
   if (!res.ok) {

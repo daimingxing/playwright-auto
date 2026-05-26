@@ -277,6 +277,11 @@ onMounted(loadData);
           >新建用例</el-button
         >
         <el-button
+          size="large"
+          @click="router.push(`/projects/${projectKey}/imports`)"
+          >AI导入</el-button
+        >
+        <el-button
           type="success"
           size="large"
           @click="router.push(`/projects/${projectKey}/runs`)"

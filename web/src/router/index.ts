@@ -5,6 +5,8 @@ export const router = createRouter({
   routes: [
     { path: '/', component: () => import('../pages/ProjectList.vue') },
     { path: '/projects/:projectKey', component: () => import('../pages/ProjectDetail.vue') },
+    { path: '/projects/:projectKey/imports', component: () => import('../pages/AiImportList.vue') },
+    { path: '/projects/:projectKey/imports/:importId', component: () => import('../pages/AiImportPreview.vue') },
     { path: '/projects/:projectKey/cases/:caseKey', component: () => import('../pages/CaseEditor.vue') },
     { path: '/projects/:projectKey/runs', component: () => import('../pages/RunCenter.vue') }
   ]
