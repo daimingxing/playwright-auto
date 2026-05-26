@@ -11,7 +11,7 @@ import {
 } from '../lib/import-store';
 import { listProjects } from '../lib/project-store';
 import { reviewCase } from './case-review';
-import { generateCaseDraft } from './ai-case-draft';
+import { AiDraftError, generateCaseDraft } from './ai-case-draft';
 import { collectPageContext } from './page-context';
 
 interface QueueTask {
@@ -89,17 +89,19 @@ export async function processImportItem(projectKey: string, importId: string, it
         steps: item.source.steps,
         data: item.source.data
       });
-      const draft = await generateCaseDraft({
+      const draftInput = {
         caseInfo: item.source.caseInfo,
         steps: item.source.steps,
         data: item.source.data,
         pageContext
-      });
-      const review = reviewCase(createReviewCase(draft));
+      };
+      const result = await generateCaseDraft(draftInput);
+      const review = reviewCase(createReviewCase(result.draft));
 
       await updateImportItem(projectKey, importId, itemId, {
         status: 'pendingReview',
-        draft,
+        draft: result.draft,
+        aiDebug: result.aiDebug,
         review,
         errorMessage: undefined,
         retryCount: 0
@@ -112,6 +114,7 @@ export async function processImportItem(projectKey: string, importId: string, it
         await updateImportItem(projectKey, importId, itemId, {
           status: 'failed',
           errorMessage: message,
+          aiDebug: error instanceof AiDraftError ? error.aiDebug : undefined,
           retryCount: attempt
         });
         return;

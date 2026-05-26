@@ -62,7 +62,7 @@ importsRouter.post<ProjectParams>('/ai', upload.single('file') as RequestHandler
 
     const cases = await parseImportExcel(req.file.buffer);
     const job = await createImportJob(req.params.projectKey, {
-      fileName: req.file.originalname,
+      fileName: normalizeUploadName(req.file.originalname),
       fileHash,
       envKey,
       cases
@@ -77,6 +77,16 @@ importsRouter.post<ProjectParams>('/ai', upload.single('file') as RequestHandler
     next(error);
   }
 });
+
+/**
+ * 修正 multipart 上传中被 latin1 误读的 UTF-8 文件名。
+ */
+export function normalizeUploadName(fileName: string) {
+  const decoded = Buffer.from(fileName, 'latin1').toString('utf8');
+
+  // replacement character 表示原始文件名不是可还原的 UTF-8，保留原值更安全。
+  return decoded.includes('\uFFFD') ? fileName : decoded;
+}
 
 /**
  * 读取并校验导入使用的项目环境。

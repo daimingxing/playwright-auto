@@ -7,13 +7,37 @@ import { badRequest } from '../lib/http-error';
 export interface AiJsonInput<T> {
   system: string;
   user: string;
-  schema: z.ZodType<T>;
+  schema?: z.ZodType<T>;
+}
+
+export interface AiJsonResult<T> {
+  value: T;
+  response: string;
+  parsed: unknown;
+}
+
+/**
+ * 表示模型已有原始响应，但响应无法解析或校验为目标 JSON。
+ */
+export class AiJsonError extends Error {
+  response: string;
+  parsed?: unknown;
+
+  /**
+   * 创建携带模型原始输出的 JSON 解析错误。
+   */
+  constructor(message: string, response: string, parsed?: unknown) {
+    super(message);
+    this.name = 'AiJsonError';
+    this.response = response;
+    this.parsed = parsed;
+  }
 }
 
 /**
  * 使用项目封装的 AI 客户端生成结构化 JSON。
  */
-export async function generateAiJson<T>(input: AiJsonInput<T>) {
+export async function generateAiJson<T>(input: AiJsonInput<T>): Promise<AiJsonResult<T>> {
   const config = getAppConfig().ai;
 
   if (!config.enabled || !config.baseUrl || !config.model) {
@@ -38,7 +62,43 @@ export async function generateAiJson<T>(input: AiJsonInput<T>) {
     timeout: config.timeoutMs
   });
 
-  return input.schema.parse(parseJsonObject(result.text));
+  const parsed = parseJsonResult(result.text);
+
+  return {
+    value: parseSchemaValue(input, result.text, parsed),
+    response: result.text,
+    parsed
+  };
+}
+
+/**
+ * 解析模型文本并在失败时保留原始输出。
+ */
+function parseJsonResult(text: string) {
+  try {
+    return parseJsonObject(text);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'AI 返回内容不是 JSON 对象';
+
+    throw new AiJsonError(message, text);
+  }
+}
+
+/**
+ * 按可选 schema 校验模型 JSON。
+ */
+function parseSchemaValue<T>(input: AiJsonInput<T>, response: string, parsed: unknown): T {
+  if (!input.schema) {
+    return parsed as T;
+  }
+
+  try {
+    return input.schema.parse(parsed);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'AI 返回结构不符合要求';
+
+    throw new AiJsonError(message, response, parsed);
+  }
 }
 
 /**

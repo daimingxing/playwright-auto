@@ -110,6 +110,15 @@ export interface AiCaseDraft {
   missingInfo: string[];
 }
 
+export interface AiDebugInfo {
+  system: string;
+  user: string;
+  response?: string;
+  parsed?: unknown;
+  error?: string;
+  updatedAt: string;
+}
+
 export interface ImportJob {
   importId: string;
   fileName: string;
@@ -141,6 +150,7 @@ export interface ImportItem {
     data: ImportDataSource[];
   };
   draft?: AiCaseDraft;
+  aiDebug?: AiDebugInfo;
   review?: CaseReview;
   status: ImportItemStatus;
   errorMessage?: string;

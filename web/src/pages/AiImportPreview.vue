@@ -479,6 +479,27 @@ onBeforeUnmount(() => {
           </ul>
         </section>
 
+        <section v-if="detailItem.aiDebug" class="detail-block">
+          <h3>AI 调试信息</h3>
+          <el-collapse>
+            <el-collapse-item title="系统提示词" name="system">
+              <pre class="debug-text">{{ detailItem.aiDebug.system }}</pre>
+            </el-collapse-item>
+            <el-collapse-item title="用户输入" name="user">
+              <pre class="debug-text">{{ detailItem.aiDebug.user }}</pre>
+            </el-collapse-item>
+            <el-collapse-item v-if="detailItem.aiDebug.response" title="模型原始输出" name="response">
+              <pre class="debug-text">{{ detailItem.aiDebug.response }}</pre>
+            </el-collapse-item>
+            <el-collapse-item v-if="detailItem.aiDebug.parsed" title="解析后的 JSON" name="parsed">
+              <pre class="debug-text">{{ JSON.stringify(detailItem.aiDebug.parsed, null, 2) }}</pre>
+            </el-collapse-item>
+            <el-collapse-item v-if="detailItem.aiDebug.error" title="结构错误" name="error">
+              <pre class="debug-text">{{ detailItem.aiDebug.error }}</pre>
+            </el-collapse-item>
+          </el-collapse>
+        </section>
+
         <section v-if="detailItem.savedCaseKey" class="detail-block">
           <h3>保存结果</h3>
           <el-button type="primary" @click="openSavedCase(detailItem)">打开草稿用例</el-button>
@@ -660,6 +681,20 @@ onBeforeUnmount(() => {
 
 .issue-list li {
   line-height: 1.7;
+}
+
+.debug-text {
+  background: #0f172a;
+  border-radius: 6px;
+  color: #e5e7eb;
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  padding: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 @media (max-width: 980px) {

@@ -6,6 +6,7 @@ import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../../server/src/app';
 import { updateImportItem } from '../../server/src/lib/import-store';
+import { normalizeUploadName } from '../../server/src/routes/imports';
 
 let root = '';
 
@@ -95,6 +96,13 @@ describe('AI 导入接口', () => {
     expect(first.status).toBe(201);
     expect(second.status).toBe(201);
     expect(second.body.importId).not.toBe(first.body.importId);
+  });
+
+  it('还原上传时被 latin1 误读的中文文件名', () => {
+    const mojibake = Buffer.from('AI自然语言用例导入模板.xlsx', 'utf8').toString('latin1');
+
+    expect(normalizeUploadName(mojibake)).toBe('AI自然语言用例导入模板.xlsx');
+    expect(normalizeUploadName('cases.xlsx')).toBe('cases.xlsx');
   });
 
   it('手动重试失败导入项时重置重试次数', async () => {

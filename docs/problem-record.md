@@ -80,3 +80,12 @@
 - 经验：OpenAI 兼容不等于完全支持 OpenAI 的所有结构化输出参数。供应商中立的 AI 接入层应避免把业务逻辑绑定到某个 provider 的高级响应格式，真实模型接入必须做一次端到端烟测。
 
 ---
+
+## 2026-05-26 AI 导入模型输出结构不稳定
+
+- 状态：已解决
+- 问题：真实模型可能把步骤内容包在 `source`、`draft`、`step` 等子对象里，或漏掉平台内部字段 `id`、`confidence`、`warnings`，导致 `steps[0].id/type/text` 等 Zod 校验错误直接展示到导入预览页，用户无法判断模型实际输入输出。
+- 处理：`server/src/services/ai-case-draft.ts` 增加模型输出归一化，兼容常见包裹结构并为草稿字段补默认值；`server/src/services/ai-client.ts` 和导入 worker 保留模型原始输出、解析 JSON 和结构错误；预览详情页增加“AI 调试信息”折叠面板。
+- 经验：对非强约束模型输出，schema 校验前需要一层业务归一化；校验失败不能只返回 Zod 文本，还要把 prompt、response、parsed 和 error 一起持久化，方便复现和调提示词。
+
+---

@@ -68,6 +68,59 @@ describe('AI 草稿生成服务', () => {
     });
   });
 
+  it('兼容模型把步骤包在 source/draft 里的输出', () => {
+    const draft = normalizeAiDraft({
+      name: '新增用户',
+      startPath: '/user/list',
+      confidence: 'medium',
+      warnings: [],
+      missingInfo: [],
+      steps: [
+        {
+          source: {
+            id: 'ai-1',
+            type: 'click',
+            selector: "getByRole('button', { name: '新增' })",
+            text: '点击新增按钮',
+            confidence: 'medium',
+            warnings: []
+          }
+        }
+      ]
+    });
+
+    expect(draft.steps[0]).toMatchObject({
+      id: 'ai-1',
+      type: 'click',
+      text: '点击新增按钮'
+    });
+  });
+
+  it('为缺少平台字段的模型步骤补充草稿默认值', () => {
+    const draft = normalizeAiDraft({
+      name: '新增用户',
+      startPath: '/user/list',
+      confidence: 'medium',
+      warnings: [],
+      missingInfo: [],
+      steps: [
+        {
+          source: {
+            actionText: '点击新增按钮'
+          }
+        }
+      ]
+    });
+
+    expect(draft.steps[0]).toMatchObject({
+      id: 'ai-1',
+      type: 'click',
+      text: '点击新增按钮',
+      confidence: 'medium',
+      warnings: []
+    });
+  });
+
   it('根据现场匹配数量标记候选定位器唯一性', () => {
     const items = resolveUnique([
       { text: '新增', locator: "getByRole('button', { name: '新增' })" },
