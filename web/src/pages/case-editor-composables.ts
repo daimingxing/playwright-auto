@@ -14,7 +14,7 @@ import {
 import { getAuthState, saveLogin, startLogin } from '../api/auth';
 import { setProjectEnv } from '../state/project-env';
 import { getErrorMessage } from '../utils/error';
-import { canMoveSteps, copySteps, moveSteps, removeSteps } from './case-editor';
+import { canMoveSteps, copySteps, getInsertIndex, moveSteps, removeSteps } from './case-editor';
 
 interface CaseAuthOptions {
   projectKey: string;
@@ -268,6 +268,7 @@ interface CasePracticalOptions {
   item: Ref<CaseMeta | null>;
   activeEnv: Ref<EnvMeta | null>;
   practicalMode: Ref<RunMode>;
+  saveDraft: () => Promise<boolean>;
   showError: (error: unknown) => void;
 }
 
@@ -293,6 +294,12 @@ export function useCasePractical(options: CasePracticalOptions) {
     practicalReviewing.value = true;
 
     try {
+      const saved = await options.saveDraft();
+
+      if (!saved) {
+        return;
+      }
+
       const record = await startPracticalReview(options.projectKey, options.caseKey, {
         envKey: options.activeEnv.value.key,
         mode: options.practicalMode.value
@@ -401,7 +408,7 @@ interface CaseRecordOptions {
   caseKey: string;
   item: Ref<CaseMeta | null>;
   activeEnv: Ref<EnvMeta | null>;
-  clearStepReviewPreview: () => void;
+  selectedId: Ref<string>;
   runStepReviewPreview: (step: CaseStep) => void;
   showError: (error: unknown) => void;
 }
@@ -426,7 +433,7 @@ export function useCaseRecord(options: CaseRecordOptions) {
 
     try {
       await ElMessageBox.confirm(
-        `当前录制环境：${envLabel}。停止录制后会用录制结果替换当前编辑页步骤，替换后仍需手动保存。`,
+        `当前录制环境：${envLabel}。停止录制后会把录制结果插入到选中步骤后方，未选中步骤时追加到末尾，导入后仍需手动保存。`,
         '开始录制',
         { type: 'warning' }
       );
@@ -453,9 +460,10 @@ export function useCaseRecord(options: CaseRecordOptions) {
     try {
       const result = await stopRecord(options.projectKey, options.caseKey, recordId.value);
       if (options.item.value) {
-        options.item.value.steps = result.steps;
-        options.clearStepReviewPreview();
-        options.item.value.steps.forEach((step) => options.runStepReviewPreview(step));
+        // 未选中步骤时插入位置回退到列表末尾，避免录制结果覆盖已有步骤。
+        const index = getInsertIndex(options.item.value.steps, options.selectedId.value);
+        options.item.value.steps.splice(index, 0, ...result.steps);
+        result.steps.forEach((step) => options.runStepReviewPreview(step));
       }
       recordId.value = '';
       isRecording.value = false;

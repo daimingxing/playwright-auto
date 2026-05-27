@@ -172,6 +172,7 @@ const {
   item,
   activeEnv,
   practicalMode,
+  saveDraft: () => saveDraft(false),
   showError,
 });
 const {
@@ -184,7 +185,7 @@ const {
   caseKey,
   item,
   activeEnv,
-  clearStepReviewPreview,
+  selectedId,
   runStepReviewPreview,
   showError,
 });
@@ -513,17 +514,21 @@ async function saveCase() {
 /**
  * 保存当前用例草稿。
  */
-async function saveDraft() {
+async function saveDraft(showMessage = true) {
   if (!item.value) {
-    return;
+    return false;
   }
 
   try {
     item.value = await saveCaseDraft(projectKey, caseKey, item.value);
     clearStepReviewPreview();
-    ElMessage.success("草稿已保存");
+    if (showMessage) {
+      ElMessage.success("草稿已保存");
+    }
+    return true;
   } catch (error) {
     showError(error);
+    return false;
   }
 }
 
@@ -563,7 +568,7 @@ onMounted(loadCase);
         <el-button v-else type="danger" @click="stopRecordCase">
           <i style="display: inline-block; width: 10px; height: 10px; background-color: currentColor; margin-right: 6px;"></i>停止录制
         </el-button>
-        <el-button :disabled="isRecording" :icon="Document" @click="saveDraft">保存草稿</el-button>
+        <el-button :disabled="isRecording" :icon="Document" @click="saveDraft()">保存草稿</el-button>
         <el-button type="primary" :disabled="isRecording" :icon="DocumentChecked" @click="saveCase"
           >生成测试用例</el-button
         >

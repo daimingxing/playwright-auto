@@ -102,7 +102,7 @@ describe('用例编辑器录制组合函数', () => {
       caseKey: 'case-a',
       item,
       activeEnv,
-      clearStepReviewPreview: vi.fn(),
+      selectedId: ref(''),
       runStepReviewPreview: vi.fn(),
       showError: vi.fn()
     });
@@ -121,16 +121,15 @@ describe('用例编辑器录制组合函数', () => {
     expect(record.isRecording.value).toBe(true);
   });
 
-  it('停止录制后导入步骤并触发基础检查', async () => {
-    const item = ref(makeCase());
-    const clearStepReviewPreview = vi.fn();
+  it('停止录制后把录制步骤插入到选中步骤后方', async () => {
+    const item = ref(makeCase([makeStep('old-a'), makeStep('old-b')]));
     const runStepReviewPreview = vi.fn();
     const record = useCaseRecord({
       projectKey: 'crm',
       caseKey: 'case-a',
       item,
       activeEnv: ref(makeEnv('default')),
-      clearStepReviewPreview,
+      selectedId: ref('old-a'),
       runStepReviewPreview,
       showError: vi.fn()
     });
@@ -142,11 +141,29 @@ describe('用例编辑器录制组合函数', () => {
     await record.stopRecordCase();
 
     expect(mocks.stopRecord).toHaveBeenCalledWith('crm', 'case-a', 'record-1');
-    expect(item.value?.steps).toEqual(steps);
-    expect(clearStepReviewPreview).toHaveBeenCalledTimes(1);
+    expect(item.value?.steps.map((step) => step.id)).toEqual(['old-a', 'new-a', 'new-b', 'old-b']);
     expect(runStepReviewPreview).toHaveBeenCalledTimes(2);
     expect(record.recordId.value).toBe('');
     expect(record.isRecording.value).toBe(false);
+  });
+
+  it('停止录制时没有选中步骤则追加到末尾', async () => {
+    const item = ref(makeCase([makeStep('old-a')]));
+    const record = useCaseRecord({
+      projectKey: 'crm',
+      caseKey: 'case-a',
+      item,
+      activeEnv: ref(makeEnv('default')),
+      selectedId: ref(''),
+      runStepReviewPreview: vi.fn(),
+      showError: vi.fn()
+    });
+    record.recordId.value = 'record-1';
+    mocks.stopRecord.mockResolvedValue({ steps: [makeStep('new-a')] });
+
+    await record.stopRecordCase();
+
+    expect(item.value?.steps.map((step) => step.id)).toEqual(['old-a', 'new-a']);
   });
 });
 
@@ -178,9 +195,10 @@ describe('用例编辑器步骤批量组合函数', () => {
 });
 
 describe('用例编辑器实测检查组合函数', () => {
-  it('实测失败时刷新用例并打开失败分析', async () => {
+  it('实测前先保存当前草稿再启动检查', async () => {
     const item = ref(makeCase());
     const record = makePracticalRecord('failed');
+    const saveDraft = vi.fn().mockResolvedValue(true);
     mocks.startPracticalReview.mockResolvedValue(record);
     mocks.getCase.mockResolvedValue({ ...makeCase(), practicalReview: record.summary });
     const practical = useCasePractical({
@@ -189,11 +207,13 @@ describe('用例编辑器实测检查组合函数', () => {
       item,
       activeEnv: ref(makeEnv('default')),
       practicalMode: ref('headless'),
+      saveDraft,
       showError: vi.fn()
     });
 
     await practical.runPracticalCheck();
 
+    expect(saveDraft).toHaveBeenCalledTimes(1);
     expect(mocks.startPracticalReview).toHaveBeenCalledWith('crm', 'case-a', {
       envKey: 'default',
       mode: 'headless'
@@ -204,6 +224,22 @@ describe('用例编辑器实测检查组合函数', () => {
     expect(mocks.message.error).toHaveBeenCalledWith('未找到目标元素');
   });
 
+  it('草稿保存失败时不启动实测检查', async () => {
+    const practical = useCasePractical({
+      projectKey: 'crm',
+      caseKey: 'case-a',
+      item: ref(makeCase()),
+      activeEnv: ref(makeEnv('default')),
+      practicalMode: ref('headless'),
+      saveDraft: vi.fn().mockResolvedValue(false),
+      showError: vi.fn()
+    });
+
+    await practical.runPracticalCheck();
+
+    expect(mocks.startPracticalReview).not.toHaveBeenCalled();
+  });
+
   it('打开最近失败分析时复用已有记录', async () => {
     const record = makePracticalRecord('failed');
     const practical = useCasePractical({
@@ -212,6 +248,7 @@ describe('用例编辑器实测检查组合函数', () => {
       item: ref({ ...makeCase(), practicalReview: record.summary }),
       activeEnv: ref(makeEnv('default')),
       practicalMode: ref('headless'),
+      saveDraft: vi.fn().mockResolvedValue(true),
       showError: vi.fn()
     });
     practical.activePracticalRecord.value = record;
