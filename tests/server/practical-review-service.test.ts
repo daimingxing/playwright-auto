@@ -5,9 +5,9 @@ import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createCase, updateCase } from '../../server/src/lib/case-store';
 import { createProject } from '../../server/src/lib/project-store';
-import { generatePracticalReviewSpec } from '../../server/src/services/practical-review-spec';
-import { renderPracticalLocator } from '../../server/src/services/practical-review-locator';
-import { runPracticalReview } from '../../server/src/services/practical-review';
+import { generatePracticalReviewSpec } from '../../server/src/services/practical-review/practical-review-spec';
+import { renderPracticalLocator } from '../../server/src/services/practical-review/practical-review-locator';
+import { runPracticalReview } from '../../server/src/services/practical-review/practical-review';
 
 const spawnMock = vi.hoisted(() => vi.fn());
 
@@ -15,7 +15,7 @@ vi.mock('node:child_process', () => ({
   spawn: spawnMock
 }));
 
-vi.mock('../../server/src/services/vendor-browser', () => ({
+vi.mock('../../server/src/services/playwright/vendor-browser', () => ({
   assertVendorBrowser: vi.fn(),
   getVendorEnv: vi.fn(() => ({}))
 }));

@@ -10,4 +10,8 @@ describe('启动冒烟测试', () => {
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
   });
+
+  it('Playwright 配置可以加载目录迁移后的本地浏览器依赖', async () => {
+    await expect(import('../../playwright.config')).resolves.toBeDefined();
+  });
 });

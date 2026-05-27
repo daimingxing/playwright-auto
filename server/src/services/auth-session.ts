@@ -6,8 +6,8 @@ import { writeJson } from '../lib/fs';
 import { getProjectPath } from '../lib/path';
 import { getProject } from '../lib/project-store';
 import { badRequest, notFound } from '../lib/http-error';
-import { getBrowserPath } from './browser-path';
-import { assertVendorBrowser } from './vendor-browser';
+import { getBrowserPath } from './playwright/browser-path';
+import { assertVendorBrowser } from './playwright/vendor-browser';
 
 interface StorageState {
   cookies: unknown[];

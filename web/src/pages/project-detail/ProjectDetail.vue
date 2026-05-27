@@ -9,7 +9,7 @@ import {
 } from "@element-plus/icons-vue";
 import { computed, onMounted, reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import type { CaseMeta, CaseStatus } from "../../../shared/types";
+import type { CaseMeta, CaseStatus } from "../../../../shared/types";
 import {
   batchUpdateCaseStatus,
   copyCase,
@@ -21,15 +21,15 @@ import {
   removeTrashCase,
   restoreCase,
   updateCaseStatus,
-} from "../api/cases";
-import { useProjectUiStore, type CaseStatusFilter } from "../state/project-ui";
-import { getErrorIssues, getErrorMessage } from "../utils/error";
+} from "../../api/cases";
+import { useProjectUiStore, type CaseStatusFilter } from "../../state/project-ui";
+import { getErrorIssues, getErrorMessage } from "../../utils/error";
 import {
   formatCaseCreatedTime,
   formatCaseStatus,
   formatCheckStatus,
-} from "./case-editor";
-import { formatPracticalReviewTime } from "./run-center";
+} from "../case-editor/case-editor";
+import { formatPracticalReviewTime } from "../run-center/run-center";
 
 const route = useRoute();
 const router = useRouter();

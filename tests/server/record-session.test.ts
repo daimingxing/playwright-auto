@@ -7,7 +7,7 @@ import { readJson, writeJson } from '../../server/src/lib/fs';
 import { getProjectPath } from '../../server/src/lib/path';
 import { addProjectEnv, createProject } from '../../server/src/lib/project-store';
 import { createAuthState, getProjectAuthPath } from '../../server/src/services/auth-session';
-import { startRecordSession, stopRecordSession } from '../../server/src/services/record-session';
+import { startRecordSession, stopRecordSession } from '../../server/src/services/record/record-session';
 import type { ProjectMeta } from '../../shared/types';
 
 const spawnMock = vi.hoisted(() => vi.fn());

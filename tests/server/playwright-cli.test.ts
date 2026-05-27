@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { runPlaywrightTask } from '../../server/src/services/playwright-cli';
+import { runPlaywrightTask } from '../../server/src/services/playwright/playwright-cli';
 
 const spawnMock = vi.hoisted(() => vi.fn());
 

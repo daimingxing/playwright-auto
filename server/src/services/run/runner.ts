@@ -1,15 +1,15 @@
 import { join } from 'node:path';
-import { createRun, updateRun } from '../lib/run-store';
-import { getProjectPath, getRunPath } from '../lib/path';
-import { listCases } from '../lib/case-store';
-import { getProject } from '../lib/project-store';
-import type { CaseMeta, RunConfig, RunInput } from '../../../shared/types';
-import { getProjectAuthPath, hasProjectAuth } from './auth-session';
-import { assertVendorBrowser, getVendorEnv } from './vendor-browser';
-import { getAppConfig } from '../lib/app-config';
-import { runPlaywrightTask } from './playwright-cli';
-import { badRequest, notFound } from '../lib/http-error';
-import { isReviewPassed } from './case-review';
+import { createRun, updateRun } from '../../lib/run-store';
+import { getProjectPath, getRunPath } from '../../lib/path';
+import { listCases } from '../../lib/case-store';
+import { getProject } from '../../lib/project-store';
+import type { CaseMeta, RunConfig, RunInput } from '../../../../shared/types';
+import { getProjectAuthPath, hasProjectAuth } from '../auth-session';
+import { assertVendorBrowser, getVendorEnv } from '../playwright/vendor-browser';
+import { getAppConfig } from '../../lib/app-config';
+import { runPlaywrightTask } from '../playwright/playwright-cli';
+import { badRequest, notFound } from '../../lib/http-error';
+import { isReviewPassed } from '../case-review';
 
 interface RunProjectInput extends RunInput {
   storageState?: string;

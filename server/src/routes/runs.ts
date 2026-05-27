@@ -4,7 +4,7 @@ import { Router } from 'express';
 import { getRunPath } from '../lib/path';
 import { deleteRun, listRuns } from '../lib/run-store';
 import { zipDir } from '../services/export';
-import { getRunConfig, runProject } from '../services/runner';
+import { getRunConfig, runProject } from '../services/run/runner';
 import { badRequest, notFound } from '../lib/http-error';
 
 interface ProjectParams {

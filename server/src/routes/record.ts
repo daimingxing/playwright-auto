@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { startRecordSession, stopRecordSession } from '../services/record-session';
+import { startRecordSession, stopRecordSession } from '../services/record/record-session';
 
 interface RecordParams {
   projectKey: string;

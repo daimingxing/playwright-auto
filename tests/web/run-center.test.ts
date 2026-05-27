@@ -12,7 +12,7 @@ import {
   getSelectedKeys,
   isRunnableCase,
   mergeSelectedCaseKeys
-} from '../../web/src/pages/run-center';
+} from '../../web/src/pages/run-center/run-center';
 
 describe('运行中心用例选择工具', () => {
   it('首次加载用例时默认选中全部可用用例', () => {

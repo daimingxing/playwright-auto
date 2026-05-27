@@ -4,9 +4,9 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import type { UploadFile } from 'element-plus';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import type { ImportJob } from '../../../shared/types';
-import { createAiImport, deleteImport, listImports } from '../api/imports';
-import { getErrorMessage } from '../utils/error';
+import type { ImportJob } from '../../../../shared/types';
+import { createAiImport, deleteImport, listImports } from '../../api/imports';
+import { getErrorMessage } from '../../utils/error';
 import { formatImportStatus, formatImportTime, getImportProgress, getPendingCount } from './ai-import';
 
 const route = useRoute();

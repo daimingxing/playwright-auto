@@ -7,7 +7,7 @@ import { ensureDir, movePath, readJson, writeJson } from './fs';
 import { getCasePath, getProjectPath, getTrashPath } from './path';
 import { expirePracticalReviewIfNeeded } from './practical-review-store';
 import { createCaseSchema } from './schema';
-import { generateSpec } from '../services/case-generator';
+import { generateSpec } from '../services/case/case-generator';
 import { isReviewPassed, reviewCase } from '../services/case-review';
 import { HttpError, badRequest } from './http-error';
 

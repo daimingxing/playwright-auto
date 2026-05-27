@@ -1,8 +1,8 @@
 import { generateText } from 'ai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import type { z } from 'zod';
-import { getAppConfig } from '../lib/app-config';
-import { badRequest } from '../lib/http-error';
+import { getAppConfig } from '../../lib/app-config';
+import { badRequest } from '../../lib/http-error';
 
 export interface AiJsonInput<T> {
   system: string;

@@ -1,6 +1,6 @@
 import ts from 'typescript';
-import type { CaseStep, StepTimeoutConfig } from '../../../shared/types';
-import { getAppConfig } from '../lib/app-config';
+import type { CaseStep, StepTimeoutConfig } from '../../../../shared/types';
+import { getAppConfig } from '../../lib/app-config';
 
 export interface ParseResult {
   steps: CaseStep[];

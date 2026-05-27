@@ -6,7 +6,7 @@ import { runsRouter } from './routes/runs';
 import { authRouter } from './routes/auth';
 import { recordRouter } from './routes/record';
 import { importsRouter } from './routes/imports';
-import { RunError } from './services/runner';
+import { RunError } from './services/run/runner';
 import { getAppConfig } from './lib/app-config';
 import { ZodError, type ZodIssue } from 'zod';
 import { HttpError } from './lib/http-error';

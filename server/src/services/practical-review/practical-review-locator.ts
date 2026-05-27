@@ -1,4 +1,4 @@
-import { quoteText } from './code-literal';
+import { quoteText } from '../case/code-literal';
 
 /**
  * 规范化实测检查用的定位表达式。

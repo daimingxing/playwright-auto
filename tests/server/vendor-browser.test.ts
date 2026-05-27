@@ -9,7 +9,7 @@ import {
   getVendorRegistryPath,
   prepareVendorBrowser,
   vendorBrowserList
-} from '../../server/src/services/vendor-browser';
+} from '../../server/src/services/playwright/vendor-browser';
 
 let root = '';
 

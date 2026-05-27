@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseCodegenSpec } from '../../server/src/services/codegen-parser';
+import { parseCodegenSpec } from '../../server/src/services/record/codegen-parser';
 
 describe('codegen 脚本解析器', () => {
   it('把 Playwright codegen 输出转换为平台步骤', () => {

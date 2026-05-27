@@ -1,7 +1,7 @@
 import { ref } from 'vue';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CaseMeta, CaseStep, EnvMeta, PracticalReviewRecord } from '../../shared/types';
-import { useCaseAuth, useCasePractical, useCaseRecord, useStepBatch } from '../../web/src/pages/case-editor-composables';
+import { useCaseAuth, useCasePractical, useCaseRecord, useStepBatch } from '../../web/src/pages/case-editor/case-editor-composables';
 
 const mocks = vi.hoisted(() => ({
   getAuthState: vi.fn(),

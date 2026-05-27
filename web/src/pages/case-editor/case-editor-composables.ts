@@ -1,7 +1,7 @@
 import { computed, nextTick, ref, type Ref } from 'vue';
 import type { TableInstance } from 'element-plus';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import type { CaseMeta, CaseStep, EnvMeta, PracticalReviewRecord, RunMode } from '../../../shared/types';
+import type { CaseMeta, CaseStep, EnvMeta, PracticalReviewRecord, RunMode } from '../../../../shared/types';
 import {
   clearPracticalReviews,
   getCase,
@@ -10,10 +10,10 @@ import {
   startPracticalReview,
   startRecord,
   stopRecord
-} from '../api/cases';
-import { getAuthState, saveLogin, startLogin } from '../api/auth';
-import { setProjectEnv } from '../state/project-env';
-import { getErrorMessage } from '../utils/error';
+} from '../../api/cases';
+import { getAuthState, saveLogin, startLogin } from '../../api/auth';
+import { setProjectEnv } from '../../state/project-env';
+import { getErrorMessage } from '../../utils/error';
 import { canMoveSteps, copySteps, getInsertIndex, moveSteps, removeSteps } from './case-editor';
 
 interface CaseAuthOptions {

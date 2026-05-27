@@ -29,7 +29,7 @@ import {
   stepGroups,
   stepLabels,
   stepTypes
-} from '../../web/src/pages/case-editor';
+} from '../../web/src/pages/case-editor/case-editor';
 
 /**
  * 创建一条测试用步骤。

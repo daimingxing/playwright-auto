@@ -1,7 +1,7 @@
-import type { CaseMeta, PracticalReviewSummary } from '../../../shared/types';
-import { resolveApiUrl } from '../api/http';
-import { formatDateTime } from '../utils/time';
-import { getCaseCheckStatus } from './case-editor';
+import type { CaseMeta, PracticalReviewSummary } from '../../../../shared/types';
+import { resolveApiUrl } from '../../api/http';
+import { formatDateTime } from '../../utils/time';
+import { getCaseCheckStatus } from '../case-editor/case-editor';
 
 /**
  * 合并用例列表和当前选择，首次加载时默认选中全部用例。

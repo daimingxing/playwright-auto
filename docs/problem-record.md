@@ -9,6 +9,24 @@
 
 ---
 
+## 2026-05-27 PowerShell 批量替换误伤源码标点
+
+- 状态：已解决
+- 问题：目录迁移时用 PowerShell 数组保存替换对，嵌套数组被展开后，替换循环把 `.` 当成待替换文本，导致少数 TypeScript 文件里的属性访问和正则被替换成 `/`，例如 `summary.status` 变成 `summary/status`。
+- 处理：先用 `npm run typecheck` 和 Serena 诊断定位语法错误，再从 Git 原始路径恢复被误伤文件，只重新应用明确的 import 路径修改；后续路径迁移改用 `apply_patch` 或带命名字段的对象数组，避免字符串数组被 PowerShell 展开。
+- 经验：Windows 下批量改源码路径时，不要用易被展开的嵌套数组承载替换对；每轮替换后先跑 `typecheck` 和异常标点搜索，再继续扩大改动范围。
+
+---
+
+## 2026-05-27 Playwright 配置遗漏服务路径迁移
+
+- 状态：已解决
+- 问题：服务目录迁移后，`playwright.config.ts` 仍导入旧的 `server/src/services/browser-path` 和 `server/src/services/vendor-browser`。普通类型检查、接口测试和前端构建没有加载这份 Playwright 配置，点击“开始实测检查”时子进程才加载配置并返回 500。
+- 处理：把 `playwright.config.ts` 的导入改为 `server/src/services/playwright/browser-path` 和 `server/src/services/playwright/vendor-browser`；在 `tests/smoke/startup.test.ts` 增加 Playwright 配置加载冒烟测试，先确认旧路径会失败，再确认修复后通过。
+- 经验：迁移 Playwright 子进程相关文件时，必须把 `playwright.config.ts` 当作运行时入口一起检查；只跑 `typecheck` 和普通 Vitest 不足以覆盖 Playwright 配置加载。
+
+---
+
 ## 2026-05-24 实测检查卡片高度回归
 
 - 状态：已解决

@@ -2,15 +2,15 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { CaseMeta } from '../../../shared/types';
-import { buildStartUrl } from '../../../shared/url';
-import { getCase } from '../lib/case-store';
-import { getProject } from '../lib/project-store';
-import { getProjectAuthPath, hasProjectAuth } from './auth-session';
+import type { CaseMeta } from '../../../../shared/types';
+import { buildStartUrl } from '../../../../shared/url';
+import { getCase } from '../../lib/case-store';
+import { getProject } from '../../lib/project-store';
+import { getProjectAuthPath, hasProjectAuth } from '../auth-session';
 import { parseCodegenSpec } from './codegen-parser';
-import { assertVendorBrowser, getVendorEnv } from './vendor-browser';
-import { getPlaywrightCliPath } from './playwright-cli';
-import { badRequest, notFound } from '../lib/http-error';
+import { assertVendorBrowser, getVendorEnv } from '../playwright/vendor-browser';
+import { getPlaywrightCliPath } from '../playwright/playwright-cli';
+import { badRequest, notFound } from '../../lib/http-error';
 
 interface RecordSession {
   projectKey: string;

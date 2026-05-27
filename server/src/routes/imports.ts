@@ -23,8 +23,8 @@ import { createCaseDraft } from '../lib/case-store';
 import { getCasePath } from '../lib/path';
 import { getProject } from '../lib/project-store';
 import { envKeySchema } from '../lib/schema';
-import { parseImportExcel } from '../services/import-excel';
-import { enqueueImportItem, enqueueImportJob } from '../services/import-worker';
+import { parseImportExcel } from '../services/import/import-excel';
+import { enqueueImportItem, enqueueImportJob } from '../services/import/import-worker';
 
 interface ProjectParams {
   [key: string]: string;

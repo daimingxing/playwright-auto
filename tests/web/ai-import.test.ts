@@ -10,7 +10,7 @@ import {
   getImportProgress,
   getPendingCount,
   getItemIssueText
-} from '../../web/src/pages/ai-import';
+} from '../../web/src/pages/ai-import/ai-import';
 
 describe('AI 导入页面工具', () => {
   it('格式化导入任务进度', () => {

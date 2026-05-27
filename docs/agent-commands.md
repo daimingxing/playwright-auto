@@ -57,5 +57,5 @@ npm run test:e2e
 - 前端结构拆分后，至少运行 `npm run typecheck`、相关 `tests/web/*.test.ts` 和必要时的 `npm run build`
 - 摘要类命令优先使用 `rtk`
 - Playwright 命令不要用 `rtk` 包裹
-- Playwright 运行和实测检查的子进程输出、退出码、启动错误和取消信号由 `server/src/services/playwright-cli.ts` 统一处理
+- Playwright 运行和实测检查的子进程输出、退出码、启动错误和取消信号由 `server/src/services/playwright/playwright-cli.ts` 统一处理
 - 需要原样读取中文文档时使用 `pwsh`

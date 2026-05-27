@@ -12,7 +12,7 @@ import type { ProjectMeta, RunMeta } from '../../shared/types';
 import { addProjectEnv, createProject } from '../../server/src/lib/project-store';
 import { createAuthState, getProjectAuthPath, hasProjectAuth } from '../../server/src/services/auth-session';
 import { exportRun } from '../../server/src/services/export';
-import { getProjectRunFiles, RunError, runProject } from '../../server/src/services/runner';
+import { getProjectRunFiles, RunError, runProject } from '../../server/src/services/run/runner';
 
 const spawnMock = vi.hoisted(() => vi.fn());
 

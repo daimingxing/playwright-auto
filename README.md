@@ -233,11 +233,11 @@ npm run test:e2e
 
 ## 目录说明
 
-- `web/src/pages`：前端页面和页面级组合逻辑
+- `web/src/pages`：前端页面目录；每个页面或页面组按目录存放 Vue 页面和页面级 TypeScript 逻辑
 - `web/src/components`：前端通用或页面拆出的组件
 - `web/src/api`：前端 API 调用
 - `server/src/routes`：后端 HTTP 路由
-- `server/src/services`：运行、录制、导出、登录态等业务逻辑
+- `server/src/services`：运行、录制、导出、登录态等业务逻辑；复杂任务按子目录聚合
 - `server/src/lib`：文件存储、路径、schema 等基础逻辑
 - `shared/types.ts`：前后端共享类型
 - `tests`：单元测试、接口测试和冒烟测试
@@ -246,14 +246,14 @@ npm run test:e2e
 
 ## AI 导入代码地图
 
-- `server/src/services/ai-client.ts`：模型服务适配层。当前使用 Vercel AI SDK 的 OpenAI 兼容 provider，并把模型返回文本解析为 JSON；解析失败时会保留模型原始输出。
-- `server/src/services/ai-case-draft.ts`：构造系统提示词和用户输入，定义 AI 草稿输出 schema，并把输出归一化为平台草稿步骤；这是大模型对话循环的核心入口。
-- `server/src/services/page-context.ts`：用 Playwright 打开目标页面，采集压缩后的页面上下文摘要，不把完整 HTML 交给模型。
-- `server/src/services/import-excel.ts`：解析 Excel 三表模板，校验用例、步骤和测试数据关联。
-- `server/src/services/import-worker.ts`：本地后台队列，负责异步生成草稿、失败重试和服务启动后的任务恢复。
+- `server/src/services/ai/ai-client.ts`：模型服务适配层。当前使用 Vercel AI SDK 的 OpenAI 兼容 provider，并把模型返回文本解析为 JSON；解析失败时会保留模型原始输出。
+- `server/src/services/ai/ai-case-draft.ts`：构造系统提示词和用户输入，定义 AI 草稿输出 schema，并把输出归一化为平台草稿步骤；这是大模型对话循环的核心入口。
+- `server/src/services/ai/page-context.ts`：用 Playwright 打开目标页面，采集压缩后的页面上下文摘要，不把完整 HTML 交给模型。
+- `server/src/services/import/import-excel.ts`：解析 Excel 三表模板，校验用例、步骤和测试数据关联。
+- `server/src/services/import/import-worker.ts`：本地后台队列，负责异步生成草稿、失败重试和服务启动后的任务恢复。
 - `server/src/lib/import-store.ts`：AI 导入任务和导入项的文件持久化。
 - `server/src/routes/imports.ts`：AI 导入 HTTP API，包括上传、列表、预览项、重试、跳过、保存草稿和放弃导入记录。
-- `web/src/pages/AiImportList.vue`：导入记录和上传页面。
-- `web/src/pages/AiImportPreview.vue`：导入预览、筛选、详情、重试、跳过和批量保存页面；点开单条导入项详情，可以在“AI 调试信息”中查看系统提示词、用户输入、模型原始输出、解析后的 JSON 和结构错误。
+- `web/src/pages/ai-import/AiImportList.vue`：导入记录和上传页面。
+- `web/src/pages/ai-import/AiImportPreview.vue`：导入预览、筛选、详情、重试、跳过和批量保存页面；点开单条导入项详情，可以在“AI 调试信息”中查看系统提示词、用户输入、模型原始输出、解析后的 JSON 和结构错误。
 - `web/src/api/imports.ts`：前端 AI 导入 API 封装。
 - `docs/ai-case-import/`：测试人员使用的 Excel 模板和填写说明。

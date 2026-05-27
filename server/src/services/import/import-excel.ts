@@ -1,6 +1,6 @@
 import ExcelJS from 'exceljs';
-import type { ImportCaseSource, ImportDataSource, ImportStepSource } from '../../../shared/types';
-import { badRequest } from '../lib/http-error';
+import type { ImportCaseSource, ImportDataSource, ImportStepSource } from '../../../../shared/types';
+import { badRequest } from '../../lib/http-error';
 
 export interface ParsedImportCase {
   caseInfo: ImportCaseSource;

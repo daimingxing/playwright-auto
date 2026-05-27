@@ -4,9 +4,9 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import type { TableInstance } from 'element-plus';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import type { ImportItem, ImportJob } from '../../../shared/types';
-import { deleteImport, getImport, listImportItems, retryImportItem, saveImportItems, skipImportItem } from '../api/imports';
-import { getErrorMessage } from '../utils/error';
+import type { ImportItem, ImportJob } from '../../../../shared/types';
+import { deleteImport, getImport, listImportItems, retryImportItem, saveImportItems, skipImportItem } from '../../api/imports';
+import { getErrorMessage } from '../../utils/error';
 import {
   canOpenSavedCase,
   canRetryImportItem,

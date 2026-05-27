@@ -1,7 +1,7 @@
 import { ref } from 'vue';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { RunMeta } from '../../shared/types';
-import { useRunAuth, useRunReports, useRunStart } from '../../web/src/pages/run-center-composables';
+import { useRunAuth, useRunReports, useRunStart } from '../../web/src/pages/run-center/run-center-composables';
 
 const mocks = vi.hoisted(() => ({
   getAuthState: vi.fn(),
@@ -89,7 +89,7 @@ describe('运行中心报告组合函数', () => {
     mocks.listRuns.mockResolvedValue(reports);
     const state = useRunReports({
       projectKey: 'crm',
-      delay: (_ms) => timers.push(() => {
+      delay: (_ms: number) => timers.push(() => {
         state.refreshingReports.value = false;
       })
     });

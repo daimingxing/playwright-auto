@@ -1,5 +1,5 @@
-import type { CaseMeta, CaseStep } from '../../../shared/types';
-import { getAppConfig } from '../lib/app-config';
+import type { CaseMeta, CaseStep } from '../../../../shared/types';
+import { getAppConfig } from '../../lib/app-config';
 import {
   getImportItem,
   getImportJob,
@@ -8,11 +8,11 @@ import {
   recoverImportItems,
   updateImportItem,
   updateImportJobSummary
-} from '../lib/import-store';
-import { listProjects } from '../lib/project-store';
-import { reviewCase } from './case-review';
-import { AiDraftError, generateCaseDraft } from './ai-case-draft';
-import { collectPageContext, PageContextError } from './page-context';
+} from '../../lib/import-store';
+import { listProjects } from '../../lib/project-store';
+import { reviewCase } from '../case-review';
+import { AiDraftError, generateCaseDraft } from '../ai/ai-case-draft';
+import { collectPageContext, PageContextError } from '../ai/page-context';
 
 interface QueueTask {
   projectKey: string;

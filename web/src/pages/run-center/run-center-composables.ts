@@ -1,10 +1,10 @@
 import { ref, type Ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import type { CaseMeta, RunMeta, RunMode } from '../../../shared/types';
-import { getAuthState, saveLogin, startLogin } from '../api/auth';
-import { deleteRun, exportRun, listRuns, runProject } from '../api/runs';
-import { setProjectEnv } from '../state/project-env';
-import { getErrorMessage } from '../utils/error';
+import type { CaseMeta, RunMeta, RunMode } from '../../../../shared/types';
+import { getAuthState, saveLogin, startLogin } from '../../api/auth';
+import { deleteRun, exportRun, listRuns, runProject } from '../../api/runs';
+import { setProjectEnv } from '../../state/project-env';
+import { getErrorMessage } from '../../utils/error';
 import { getReportUrl } from './run-center';
 
 const REFRESH_DELAY_MS = 480;

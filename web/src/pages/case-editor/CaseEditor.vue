@@ -17,7 +17,7 @@ import {
   Document,
   DocumentChecked
 } from "@element-plus/icons-vue";
-import LocatorBuilderDrawer from "../components/LocatorBuilderDrawer.vue";
+import LocatorBuilderDrawer from "../../components/LocatorBuilderDrawer.vue";
 import type {
   CaseMeta,
   CaseStep,
@@ -25,18 +25,18 @@ import type {
   CaseStatus,
   RunMode,
   StepType,
-} from "../../../shared/types";
+} from "../../../../shared/types";
 import {
   getCase,
   saveCaseDraft,
   updateCase,
   updateCaseStatus,
-} from "../api/cases";
-import { getAppStepConfig, getProject } from "../api/projects";
-import { getProjectEnv } from "../state/project-env";
-import { getErrorIssues, getErrorMessage } from "../utils/error";
-import { formatDateTime } from "../utils/time";
-import { reviewCaseStep } from "../../../shared/case-review";
+} from "../../api/cases";
+import { getAppStepConfig, getProject } from "../../api/projects";
+import { getProjectEnv } from "../../state/project-env";
+import { getErrorIssues, getErrorMessage } from "../../utils/error";
+import { formatDateTime } from "../../utils/time";
+import { reviewCaseStep } from "../../../../shared/case-review";
 import {
   copyStep,
   formatCaseStatus,
@@ -62,7 +62,7 @@ import {
   stepTimeouts,
 } from "./case-editor";
 import { useCaseAuth, useCasePractical, useCaseRecord, useStepBatch } from "./case-editor-composables";
-import { formatLocatorSummary, type LocatorBuilderState } from "./locator-builder";
+import { formatLocatorSummary, type LocatorBuilderState } from "../locator-builder/locator-builder";
 
 const route = useRoute();
 const router = useRouter();

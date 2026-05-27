@@ -1,10 +1,10 @@
 import { chromium, type Locator, type Page } from '@playwright/test';
-import type { ImportCaseSource, ImportDataSource, ImportStepSource } from '../../../shared/types';
-import { buildStartUrl } from '../../../shared/url';
-import { getProject } from '../lib/project-store';
-import { getBrowserPath } from './browser-path';
-import { getProjectAuthPath, hasProjectAuth } from './auth-session';
-import { assertVendorBrowser } from './vendor-browser';
+import type { ImportCaseSource, ImportDataSource, ImportStepSource } from '../../../../shared/types';
+import { buildStartUrl } from '../../../../shared/url';
+import { getProject } from '../../lib/project-store';
+import { getBrowserPath } from '../playwright/browser-path';
+import { getProjectAuthPath, hasProjectAuth } from '../auth-session';
+import { assertVendorBrowser } from '../playwright/vendor-browser';
 
 export interface PageElement {
   text?: string;

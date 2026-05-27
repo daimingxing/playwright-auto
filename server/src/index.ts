@@ -1,6 +1,6 @@
 import { createApp } from './app';
 import { getAppConfig } from './lib/app-config';
-import { recoverImportJobs } from './services/import-worker';
+import { recoverImportJobs } from './services/import/import-worker';
 
 const port = getAppConfig().server.port;
 const app = createApp();

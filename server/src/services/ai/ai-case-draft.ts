@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { stepTypes, type AiCaseDraft, type AiDebugInfo, type AiDraftStep, type AiLevel, type ImportCaseSource, type ImportDataSource, type ImportStepSource, type StepType } from '../../../shared/types';
+import { stepTypes, type AiCaseDraft, type AiDebugInfo, type AiDraftStep, type AiLevel, type ImportCaseSource, type ImportDataSource, type ImportStepSource, type StepType } from '../../../../shared/types';
 import { AiJsonError, generateAiJson } from './ai-client';
 import type { PageContext } from './page-context';
-import { buildAiCaseDraftSystemPrompt, buildAiCaseDraftUserPrompt } from '../prompts/ai-case-draft-prompt';
+import { buildAiCaseDraftSystemPrompt, buildAiCaseDraftUserPrompt } from '../../prompts/ai-case-draft-prompt';
 
 export interface DraftInput {
   caseInfo: ImportCaseSource;

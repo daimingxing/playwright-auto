@@ -1,5 +1,5 @@
-import type { CaseMeta, CaseStep } from '../../../shared/types';
-import { renderLocatorExpression } from '../../../shared/locator-builder';
+import type { CaseMeta, CaseStep } from '../../../../shared/types';
+import { renderLocatorExpression } from '../../../../shared/locator-builder';
 import { quoteText } from './code-literal';
 
 /**

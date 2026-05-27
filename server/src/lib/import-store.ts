@@ -3,7 +3,7 @@ import { readdir, rm } from 'node:fs/promises';
 import { createHash, randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 import type { ImportItem, ImportJob } from '../../../shared/types';
-import type { ParsedImportCase } from '../services/import-excel';
+import type { ParsedImportCase } from '../services/import/import-excel';
 import { ensureDir, readJson, writeJson } from './fs';
 import { getImportItemPath, getImportPath, getImportsPath } from './path';
 import { notFound } from './http-error';

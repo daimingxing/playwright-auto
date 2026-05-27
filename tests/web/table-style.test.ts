@@ -2,10 +2,10 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const pageFiles = [
-  'web/src/pages/CaseEditor.vue',
-  'web/src/pages/ProjectDetail.vue',
-  'web/src/pages/ProjectList.vue',
-  'web/src/pages/RunCenter.vue'
+  'web/src/pages/case-editor/CaseEditor.vue',
+  'web/src/pages/project-detail/ProjectDetail.vue',
+  'web/src/pages/project-list/ProjectList.vue',
+  'web/src/pages/run-center/RunCenter.vue'
 ];
 
 describe('表格展示样式约束', () => {
@@ -24,7 +24,7 @@ describe('表格展示样式约束', () => {
 
   it('表格状态色区分隔行、悬停和步骤选中', () => {
     const content = readFileSync('web/src/styles/table.css', 'utf8');
-    const caseEditor = readFileSync('web/src/pages/CaseEditor.vue', 'utf8');
+    const caseEditor = readFileSync('web/src/pages/case-editor/CaseEditor.vue', 'utf8');
     const stripeRule = '.el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell';
     const hoverRule = '.el-table__body tr.hover-row > td.el-table__cell';
     const nativeHoverRule = '.el-table--enable-row-hover .el-table__body tr:hover > td.el-table__cell';

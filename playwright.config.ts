@@ -1,6 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
-import { getBrowserPath } from './server/src/services/browser-path';
-import { getVendorEnv } from './server/src/services/vendor-browser';
+import { getBrowserPath } from './server/src/services/playwright/browser-path';
+import { getVendorEnv } from './server/src/services/playwright/vendor-browser';
 
 const output = process.env.PLAYWRIGHT_AUTO_OUTPUT ?? 'test-results';
 const storageState = process.env.PLAYWRIGHT_STORAGE_STATE || undefined;

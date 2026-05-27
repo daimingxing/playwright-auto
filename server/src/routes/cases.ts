@@ -19,7 +19,7 @@ import { listPracticalReviewRecords, readPracticalReviewRecord } from '../lib/pr
 import { getCasePath, getPracticalReviewPath } from '../lib/path';
 import { practicalReviewInputSchema } from '../lib/schema';
 import { zipDir } from '../services/export';
-import { runPracticalReview } from '../services/practical-review';
+import { runPracticalReview } from '../services/practical-review/practical-review';
 import { badRequest, notFound } from '../lib/http-error';
 
 interface ProjectParams {

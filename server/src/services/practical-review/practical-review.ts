@@ -8,23 +8,23 @@ import type {
   PracticalReviewRecord,
   RunMode,
   PracticalStepReview
-} from '../../../shared/types';
-import { buildStartUrl } from '../../../shared/url';
-import { getCase } from '../lib/case-store';
-import { getProject } from '../lib/project-store';
+} from '../../../../shared/types';
+import { buildStartUrl } from '../../../../shared/url';
+import { getCase } from '../../lib/case-store';
+import { getProject } from '../../lib/project-store';
 import {
   cleanupPracticalReviews,
   createCaseSnapshotHash,
   createPracticalReviewId,
   savePracticalReviewRecord,
   updateLatestPracticalReview
-} from '../lib/practical-review-store';
-import { getPracticalReviewWorkPath } from '../lib/path';
-import { getProjectAuthPath, hasProjectAuth } from './auth-session';
+} from '../../lib/practical-review-store';
+import { getPracticalReviewWorkPath } from '../../lib/path';
+import { getProjectAuthPath, hasProjectAuth } from '../auth-session';
 import { generatePracticalReviewSpec } from './practical-review-spec';
-import { assertVendorBrowser, getVendorEnv } from './vendor-browser';
-import { runPlaywrightTask } from './playwright-cli';
-import { notFound } from '../lib/http-error';
+import { assertVendorBrowser, getVendorEnv } from '../playwright/vendor-browser';
+import { runPlaywrightTask } from '../playwright/playwright-cli';
+import { notFound } from '../../lib/http-error';
 
 interface PracticalReviewInput {
   envKey?: string;

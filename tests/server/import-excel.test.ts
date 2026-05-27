@@ -1,6 +1,6 @@
 import ExcelJS from 'exceljs';
 import { describe, expect, it } from 'vitest';
-import { parseImportExcel } from '../../server/src/services/import-excel';
+import { parseImportExcel } from '../../server/src/services/import/import-excel';
 
 describe('AI 导入 Excel 解析', () => {
   it('解析用例清单、步骤明细和测试数据', async () => {

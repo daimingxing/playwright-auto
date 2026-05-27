@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CaseMeta } from '../../shared/types';
-import { generateSpec } from '../../server/src/services/case-generator';
+import { generateSpec } from '../../server/src/services/case/case-generator';
 
 describe('用例生成器', () => {
   it('根据结构化步骤生成 Playwright TypeScript 用例', () => {

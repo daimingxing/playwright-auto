@@ -1,6 +1,6 @@
-import type { CaseStep } from '../../../shared/types';
-import { renderLocatorExpression } from '../../../shared/locator-builder';
-import { quoteText } from './code-literal';
+import type { CaseStep } from '../../../../shared/types';
+import { renderLocatorExpression } from '../../../../shared/locator-builder';
+import { quoteText } from '../case/code-literal';
 import { renderPracticalLocator } from './practical-review-locator';
 
 interface GenerateInput {

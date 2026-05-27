@@ -3,7 +3,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { ArrowDown, ArrowRight, Delete, Download, Monitor, Setting } from '@element-plus/icons-vue';
 import { onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import type { EnvMeta, ProjectMeta } from '../../../shared/types';
+import type { EnvMeta, ProjectMeta } from '../../../../shared/types';
 import {
   addProjectEnv,
   createProject,
@@ -12,9 +12,9 @@ import {
   exportProject,
   listProjects,
   updateProjectEnv
-} from '../api/projects';
-import { getDefaultEnv, getProjectEnv, isDefaultEnv, setProjectEnv } from '../state/project-env';
-import { getErrorMessage } from '../utils/error';
+} from '../../api/projects';
+import { getDefaultEnv, getProjectEnv, isDefaultEnv, setProjectEnv } from '../../state/project-env';
+import { getErrorMessage } from '../../utils/error';
 
 const router = useRouter();
 const loading = ref(false);

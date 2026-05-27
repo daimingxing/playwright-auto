@@ -3,12 +3,12 @@ import { Back, Delete, RefreshRight } from '@element-plus/icons-vue';
 import type { TableInstance } from 'element-plus';
 import { nextTick, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import type { CaseMeta, EnvMeta, RunConfig, RunMeta, RunMode } from '../../../shared/types';
-import { listCases } from '../api/cases';
-import { getProject } from '../api/projects';
-import { getRunConfig } from '../api/runs';
-import { getProjectEnv } from '../state/project-env';
-import { useProjectUiStore } from '../state/project-ui';
+import type { CaseMeta, EnvMeta, RunConfig, RunMeta, RunMode } from '../../../../shared/types';
+import { listCases } from '../../api/cases';
+import { getProject } from '../../api/projects';
+import { getRunConfig } from '../../api/runs';
+import { getProjectEnv } from '../../state/project-env';
+import { useProjectUiStore } from '../../state/project-ui';
 import { useRunAuth, useRunReports, useRunStart } from './run-center-composables';
 import {
   canStartRun,

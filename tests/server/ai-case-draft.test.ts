@@ -1,9 +1,9 @@
 import { chromium } from '@playwright/test';
 import { describe, expect, it } from 'vitest';
-import { parseJsonObject } from '../../server/src/services/ai-client';
-import { buildCaseDraftInput, completeDraftSelectors, normalizeAiDraft } from '../../server/src/services/ai-case-draft';
-import { assertPageAvailable, readPageSnapshot, resolveUnique, waitForPageReady } from '../../server/src/services/page-context';
-import { getChromePath } from '../../server/src/services/vendor-browser';
+import { parseJsonObject } from '../../server/src/services/ai/ai-client';
+import { buildCaseDraftInput, completeDraftSelectors, normalizeAiDraft } from '../../server/src/services/ai/ai-case-draft';
+import { assertPageAvailable, readPageSnapshot, resolveUnique, waitForPageReady } from '../../server/src/services/ai/page-context';
+import { getChromePath } from '../../server/src/services/playwright/vendor-browser';
 
 describe('AI 草稿生成服务', () => {
   it('构造包含模板、数据和页面上下文的模型输入', () => {

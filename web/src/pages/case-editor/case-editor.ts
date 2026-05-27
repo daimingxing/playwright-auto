@@ -1,6 +1,6 @@
-import type { CaseMeta, CaseReviewItem, CaseStatus, CaseStep, CheckStatus, EnvMeta, PracticalReviewSummary, StepTimeoutConfig, StepType } from '../../../shared/types';
-import { buildStartUrl } from '../../../shared/url';
-import { formatDateTime } from '../utils/time';
+import type { CaseMeta, CaseReviewItem, CaseStatus, CaseStep, CheckStatus, EnvMeta, PracticalReviewSummary, StepTimeoutConfig, StepType } from '../../../../shared/types';
+import { buildStartUrl } from '../../../../shared/url';
+import { formatDateTime } from '../../utils/time';
 
 export const stepTypes: StepType[] = [
   'goto',
