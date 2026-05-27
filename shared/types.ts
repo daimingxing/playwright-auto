@@ -1,19 +1,22 @@
 import type { LocatorBuilderState } from './locator-builder';
 
-export type StepType =
-  | 'goto'
-  | 'click'
-  | 'rightClick'
-  | 'doubleClick'
-  | 'hover'
-  | 'fill'
-  | 'select'
-  | 'wait'
-  | 'assertText'
-  | 'assertVisible'
-  | 'assertValue'
-  | 'assertUrl'
-  | 'assertTitle';
+export const stepTypes = [
+  'goto',
+  'click',
+  'rightClick',
+  'doubleClick',
+  'hover',
+  'fill',
+  'select',
+  'wait',
+  'assertText',
+  'assertVisible',
+  'assertValue',
+  'assertUrl',
+  'assertTitle'
+] as const;
+
+export type StepType = typeof stepTypes[number];
 
 export type MatchType = 'contains' | 'equals' | 'regex';
 

@@ -30,6 +30,7 @@ export interface PageContext {
     inputs: PageElement[];
     selects: PageElement[];
     links: PageElement[];
+    navigation: PageElement[];
     tables: TableElement[];
   };
   aria?: string;
@@ -62,6 +63,8 @@ export class PageContextError extends Error {
 
 const maxItems = 20;
 const maxText = 80;
+const readyTimeoutMs = 12000;
+const minReadyTextLength = 2;
 
 /**
  * 采集目标页面上下文摘要。
@@ -89,25 +92,60 @@ export async function collectPageContext(input: CollectInput): Promise<PageConte
     const targetUrl = buildStartUrl(baseUrl, input.caseInfo.targetUrl);
     const response = await page.goto(targetUrl, { waitUntil: 'domcontentloaded' });
     assertPageAvailable(response, targetUrl);
+    const warnings: string[] = [];
 
-    return {
-      page: {
-        url: page.url(),
-        title: await page.title(),
-        headings: await readTexts(page.locator('h1,h2,h3,[role="heading"]'))
-      },
-      elements: {
-        buttons: await readButtons(page),
-        inputs: await readInputs(page),
-        selects: await readSelects(page),
-        links: await readLinks(page),
-        tables: await readTables(page)
-      },
-      warnings: []
-    };
+    await waitForPageReady(page, warnings);
+
+    // 必须等待快照读取完成后再进入 finally 关闭浏览器，否则真实页面读取标题或元素时会遇到页面已关闭。
+    return await readPageSnapshot(page, warnings);
   } finally {
     await browser.close();
   }
+}
+
+/**
+ * 等待 SPA 页面渲染出可供 AI 使用的可见内容。
+ */
+export async function waitForPageReady(page: Page, warnings: string[] = []) {
+  try {
+    await page.waitForFunction(
+      (minLength) => {
+        const bodyText = document.body?.innerText?.trim() ?? '';
+        const hasUsefulElement = Boolean(document.querySelector(
+          'button,a,input,textarea,select,[role="button"],[role="menuitem"],.el-menu-item,.el-sub-menu__title'
+        ));
+
+        // 很多 Vite/Vue 页面在 domcontentloaded 时只有空壳，需要等真实业务文本或交互元素出现。
+        return bodyText.length >= minLength || hasUsefulElement;
+      },
+      minReadyTextLength,
+      { timeout: readyTimeoutMs }
+    );
+  } catch {
+    warnings.push('页面在等待后仍缺少可见文本或交互元素，可能未登录、页面渲染失败或目标 URL 不正确。');
+  }
+}
+
+/**
+ * 读取当前页面的压缩上下文快照。
+ */
+export async function readPageSnapshot(page: Page, warnings: string[] = []): Promise<PageContext> {
+  return {
+    page: {
+      url: page.url(),
+      title: await page.title(),
+      headings: await readTexts(page.locator('h1,h2,h3,[role="heading"]'))
+    },
+    elements: {
+      buttons: await readButtons(page),
+      inputs: await readInputs(page),
+      selects: await readSelects(page),
+      links: await readLinks(page),
+      navigation: await readNavigation(page),
+      tables: await readTables(page)
+    },
+    warnings
+  };
 }
 
 /**
@@ -166,6 +204,20 @@ async function readLinks(page: Page) {
     locator: `getByText('${escapeText(text)}')`
   }));
   const counts = await Promise.all(items.map((text) => page.getByText(text).count()));
+
+  return resolveUnique(candidates, counts);
+}
+
+/**
+ * 读取导航和菜单元素摘要。
+ */
+async function readNavigation(page: Page) {
+  const items = uniqueTexts(await readTexts(page.locator('[role="menuitem"],nav a,aside a,.el-menu-item,.el-sub-menu__title,.el-menu a')));
+  const candidates = items.map((text) => ({
+    text,
+    locator: `getByText('${escapeText(text)}', { exact: true })`
+  }));
+  const counts = await Promise.all(items.map((text) => page.getByText(text, { exact: true }).count()));
 
   return resolveUnique(candidates, counts);
 }
@@ -263,6 +315,7 @@ function createTestContext(caseInfo: ImportCaseSource): PageContext {
       inputs: [],
       selects: [],
       links: [],
+      navigation: [],
       tables: []
     },
     warnings: []
@@ -274,6 +327,13 @@ function createTestContext(caseInfo: ImportCaseSource): PageContext {
  */
 function normalizeText(value: string | null | undefined) {
   return (value ?? '').replace(/\s+/g, ' ').trim().slice(0, maxText);
+}
+
+/**
+ * 按文本内容去重，避免 Element Plus 菜单多层 DOM 输出重复菜单名。
+ */
+function uniqueTexts(values: string[]) {
+  return Array.from(new Set(values));
 }
 
 /**
