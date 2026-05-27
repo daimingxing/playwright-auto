@@ -150,6 +150,34 @@ describe('实测检查服务', () => {
     expect(code).toContain("page.locator('tr').filter({ has: page.getByRole('button', { name: '编辑' }) }).click()");
   });
 
+  it('生成脚本时把手写 CSS 定位器渲染为 locator 调用', () => {
+    const code = generatePracticalReviewSpec({
+      startUrl: 'https://crm.test.local/orders',
+      resultPath: 'D:/tmp/review-result.json',
+      screenshotDir: 'D:/tmp/screenshots',
+      steps: [
+        {
+          id: 's1',
+          type: 'click',
+          selector: "button:has-text('新增')",
+          selectorDraft: {
+            mode: 'advanced',
+            value: {
+              kind: 'text',
+              text: '',
+              flags: ''
+            },
+            indexMode: 'none',
+            advancedSelector: "button:has-text('新增')"
+          }
+        }
+      ]
+    });
+
+    expect(code).toContain("page.locator('button:has-text(\\'新增\\')').click()");
+    expect(code).not.toContain('page.button:has-text');
+  });
+
   it('浏览器执行未生成结果文件时返回清晰错误', async () => {
     process.env.NODE_ENV = 'development';
     await createProject({ name: 'CRM', key: 'crm', baseUrl: 'https://crm.test.local' });

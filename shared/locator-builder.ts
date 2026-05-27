@@ -253,7 +253,7 @@ export function buildLocatorSelector(state: LocatorBuilderState) {
  */
 export function renderLocatorExpression(state: LocatorBuilderState, pageName = 'page') {
   if (state.mode === 'advanced') {
-    return `${pageName}.${state.advancedSelector?.trim() ?? ''}`;
+    return renderAdvancedSelector(state.advancedSelector, pageName);
   }
 
   let selector = buildBaseSelector(state, pageName);
@@ -285,6 +285,24 @@ export function renderLocatorExpression(state: LocatorBuilderState, pageName = '
   }
 
   return selector;
+}
+
+/**
+ * 渲染手写定位器表达式。
+ */
+function renderAdvancedSelector(selector: string | undefined, pageName: string) {
+  const text = selector?.trim() ?? '';
+
+  if (!text) {
+    return `${pageName}.locator('')`;
+  }
+
+  if (/^(locator|getByRole|getByText|getByLabel|getByPlaceholder|getByTestId|getByTitle|getByAltText|frameLocator)\(/.test(text)) {
+    return `${pageName}.${text}`;
+  }
+
+  // 高级定位器可能保存的是 Playwright CSS，例如 button:has-text('新增')，必须包进 locator 才是合法表达式。
+  return `${pageName}.locator(${quoteValue(text)})`;
 }
 
 /**

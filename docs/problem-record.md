@@ -125,3 +125,21 @@
 - 经验：模型看见上下文不代表一定会遵守结构字段；AI 草稿链路需要“提示词模板 + 宽容归一化 + 平台确定性补全 + 基础检查兜底”配合。第一阶段的草稿目标是可审核，不是证明 selector 已经可执行；低置信推理 selector 可以保留，但必须显式暴露风险。
 
 ---
+
+## 2026-05-27 实测检查手写 CSS 定位器生成非法脚本
+
+- 状态：已解决
+- 问题：AI 草稿保存后，部分步骤同时带有 `selector` 和 `selectorDraft`。当 `selectorDraft.mode=advanced` 且 `advancedSelector` 是 `button:has-text('新增')` 这类裸 Playwright CSS 时，实测检查优先使用 `selectorDraft`，原渲染逻辑直接拼成 `page.button:has-text('新增')`，生成非法 TypeScript 脚本，接口返回 500。
+- 处理：`shared/locator-builder.ts` 的 `renderLocatorExpression` 对高级模式做分支：如果手写内容是 `locator(...)`、`getByText(...)` 等 Playwright 定位方法，则渲染为 `page.xxx`；否则按 CSS 文本包成 `page.locator(...)`。补充实测检查脚本生成测试和定位器构建器测试。
+- 经验：高级手写定位器不是都能当作 Playwright 方法链，裸 CSS 和 Playwright CSS 伪类必须进入 `locator()`。实测检查生成脚本前要保证 selector 表达式语法合法，否则会把本应是步骤失败的问题升级成接口 500。
+
+---
+
+## 2026-05-27 录制入口 goto 重复保存为测试步骤
+
+- 状态：已解决
+- 问题：Playwright codegen 录制脚本开头会自动生成 `page.goto(...)`，但平台用例已经通过 `startPath` 打开起始页面。停止录制后再把首个 `goto` 保存为步骤，会导致正式执行和实测检查重复刷新起始页面，增加等待时间，也可能影响页面初始化状态。
+- 处理：`server/src/services/codegen-parser.ts` 在解析录制脚本时跳过主页面的首个 `goto` 步骤；中途真正需要跳转的 `goto` 仍然保留。同步调整 codegen 解析器测试，覆盖“入口 goto 过滤、中途 goto 保留”的行为。
+- 经验：录制脚本是可执行代码，用例数据是平台结构化步骤，两者不能逐行等价保存。codegen 入口导航应作为 `startPath` 的来源或校验信息，而不是测试动作本身。
+
+---

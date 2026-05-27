@@ -23,7 +23,6 @@ test('test', async ({ page }) => {
     const result = parseCodegenSpec(code);
 
     expect(result.steps).toMatchObject([
-      { type: 'goto', value: 'https://example.test/orders', timeout: 20000 },
       { type: 'fill', selector: "getByRole('textbox', { name: '名称' })", value: '测试订单', timeout: 2000 },
       { type: 'click', selector: "getByRole('button', { name: '保存' })", timeout: 2000 },
       { type: 'hover', selector: "getByRole('link', { name: '售后 QQ' })", timeout: 2000 },
@@ -55,11 +54,13 @@ test('test', async ({ page }) => {
     ]);
   });
 
-  it('解析 goto 和 selectOption 步骤', () => {
+  it('过滤录制入口 goto 但保留中途 goto 步骤', () => {
     const code = `
 import { test, expect } from '@playwright/test';
 
 test('test', async ({ page }) => {
+  await page.goto('/orders');
+  await page.getByRole('link', { name: '订单列表' }).click();
   await page.goto('/orders/list');
   await page.locator('#status').selectOption('done');
 });
@@ -68,6 +69,7 @@ test('test', async ({ page }) => {
     const result = parseCodegenSpec(code);
 
     expect(result.steps).toMatchObject([
+      { type: 'click', selector: "getByRole('link', { name: '订单列表' })", timeout: 2000 },
       { type: 'goto', value: '/orders/list', timeout: 20000 },
       { type: 'select', selector: "locator('#status')", value: 'done', timeout: 2000 }
     ]);
@@ -78,8 +80,8 @@ test('test', async ({ page }) => {
 import { test, expect } from '@playwright/test';
 
 test('test', async ({ page }) => {
-  await page.goto('/orders/list');
   await page.getByRole('button', { name: '保存' }).click();
+  await page.goto('/orders/list');
 });
 `;
 
@@ -90,8 +92,8 @@ test('test', async ({ page }) => {
     });
 
     expect(result.steps).toMatchObject([
-      { type: 'goto', timeout: 30000 },
-      { type: 'click', timeout: 3000 }
+      { type: 'click', timeout: 3000 },
+      { type: 'goto', timeout: 30000 }
     ]);
   });
 

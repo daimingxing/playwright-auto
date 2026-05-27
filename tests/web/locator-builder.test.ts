@@ -137,6 +137,21 @@ describe('定位器构建器', () => {
     expect(expression).toBe("page1.locator('tr').filter({ has: page1.getByRole('button', { name: '编辑' }) })");
   });
 
+  it('会把高级模式中的裸 CSS 渲染成 locator 表达式', () => {
+    expect(renderLocatorExpression({
+      mode: 'advanced',
+      value: '',
+      indexMode: 'none',
+      advancedSelector: "button:has-text('新增')"
+    })).toBe("page.locator('button:has-text(\\'新增\\')')");
+    expect(renderLocatorExpression({
+      mode: 'advanced',
+      value: '',
+      indexMode: 'none',
+      advancedSelector: "getByText('新增')"
+    })).toBe("page.getByText('新增')");
+  });
+
   it('会把全量 role 放入下拉并保持常用 role 置顶', () => {
     expect(roleOptions.slice(0, 4).map((item) => item.value)).toEqual(['button', 'textbox', 'checkbox', 'radio']);
     expect(roleOptions.map((item) => item.value)).toContain('navigation');

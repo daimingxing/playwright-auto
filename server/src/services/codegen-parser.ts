@@ -23,6 +23,10 @@ export function parseCodegenSpec(code: string, timeouts: StepTimeoutConfig = get
     const step = parseAwaitStep(node, source, state, timeouts);
 
     if (step) {
+      if (shouldSkipStartGoto(step, steps)) {
+        return;
+      }
+
       steps.push({
         ...step,
         id: crypto.randomUUID()
@@ -31,6 +35,14 @@ export function parseCodegenSpec(code: string, timeouts: StepTimeoutConfig = get
   });
 
   return { steps };
+}
+
+/**
+ * 判断是否跳过 codegen 自动生成的入口页面跳转。
+ */
+function shouldSkipStartGoto(step: Omit<CaseStep, 'id'>, steps: CaseStep[]) {
+  // 用例的 startPath 已经负责打开起始页面，录制脚本首个 goto 不应重复保存为测试步骤。
+  return step.type === 'goto' && steps.length === 0 && !step.pageAlias && !step.opensPageAlias;
 }
 
 interface ParseState {
