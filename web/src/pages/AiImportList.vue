@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { Back, RefreshRight, UploadFilled } from '@element-plus/icons-vue';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import type { UploadFile } from 'element-plus';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { ImportJob } from '../../../shared/types';
-import { createAiImport, listImports } from '../api/imports';
+import { createAiImport, deleteImport, listImports } from '../api/imports';
 import { getErrorMessage } from '../utils/error';
 import { formatImportStatus, formatImportTime, getImportProgress, getPendingCount } from './ai-import';
 
@@ -96,6 +96,33 @@ function openJob(job: ImportJob) {
   void router.push(`/projects/${projectKey}/imports/${job.importId}`);
 }
 
+/**
+ * 放弃单个导入任务。
+ */
+async function removeJob(job: ImportJob) {
+  const confirmed = await ElMessageBox.confirm(
+    `确认放弃导入记录「${job.fileName}」吗？已保存的草稿用例不会被删除。`,
+    '放弃导入',
+    {
+      confirmButtonText: '放弃导入',
+      cancelButtonText: '取消',
+      type: 'warning'
+    }
+  ).catch(() => false);
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    await deleteImport(projectKey, job.importId);
+    await loadJobs();
+    ElMessage.success('已放弃导入记录');
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error));
+  }
+}
+
 onMounted(loadJobs);
 onBeforeUnmount(() => {
   if (timer) {
@@ -173,9 +200,12 @@ onBeforeUnmount(() => {
                 {{ formatImportTime(row.updatedAt) }}
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="130">
+            <el-table-column label="操作" width="210">
               <template #default="{ row }">
-                <el-button type="primary" size="small" @click="openJob(row)">继续处理</el-button>
+                <div class="row-actions btn-shadow-sm">
+                  <el-button type="primary" size="small" @click="openJob(row)">继续处理</el-button>
+                  <el-button size="small" type="danger" plain @click="removeJob(row)">放弃</el-button>
+                </div>
               </template>
             </el-table-column>
           </el-table>
@@ -288,6 +318,16 @@ onBeforeUnmount(() => {
   flex: 1;
   min-height: 0;
   overflow: auto;
+}
+
+.row-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.row-actions :deep(.el-button) {
+  margin-left: 0;
 }
 
 @media (max-width: 760px) {

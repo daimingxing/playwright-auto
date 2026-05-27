@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { readdir } from 'node:fs/promises';
+import { readdir, rm } from 'node:fs/promises';
 import { createHash, randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 import type { ImportItem, ImportJob } from '../../../shared/types';
@@ -95,6 +95,21 @@ export async function findImportByHash(projectKey: string, fileHash: string, env
 export async function getImportJob(projectKey: string, importId: string) {
   try {
     return await readJson<ImportJob>(getJobPath(projectKey, importId));
+  } catch (error) {
+    if (isMissingFile(error)) {
+      throw notFound('导入任务不存在');
+    }
+
+    throw error;
+  }
+}
+
+/**
+ * 删除单个导入任务目录。
+ */
+export async function deleteImportJob(projectKey: string, importId: string) {
+  try {
+    await rm(getImportPath(projectKey, importId), { recursive: true, force: false });
   } catch (error) {
     if (isMissingFile(error)) {
       throw notFound('导入任务不存在');

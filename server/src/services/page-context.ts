@@ -44,6 +44,22 @@ export interface CollectInput {
   data: ImportDataSource[];
 }
 
+interface PageResponse {
+  url(): string;
+  status(): number;
+  statusText(): string;
+}
+
+export class PageContextError extends Error {
+  /**
+   * 创建页面上下文采集中断错误。
+   */
+  constructor(message: string) {
+    super(message);
+    this.name = 'PageContextError';
+  }
+}
+
 const maxItems = 20;
 const maxText = 80;
 
@@ -70,7 +86,9 @@ export async function collectPageContext(input: CollectInput): Promise<PageConte
   const page = await context.newPage();
 
   try {
-    await page.goto(buildStartUrl(baseUrl, input.caseInfo.targetUrl), { waitUntil: 'domcontentloaded' });
+    const targetUrl = buildStartUrl(baseUrl, input.caseInfo.targetUrl);
+    const response = await page.goto(targetUrl, { waitUntil: 'domcontentloaded' });
+    assertPageAvailable(response, targetUrl);
 
     return {
       page: {
@@ -89,6 +107,24 @@ export async function collectPageContext(input: CollectInput): Promise<PageConte
     };
   } finally {
     await browser.close();
+  }
+}
+
+/**
+ * 确认目标页面真实可访问。
+ */
+export function assertPageAvailable(response: PageResponse | null, targetUrl: string) {
+  if (!response) {
+    throw new PageContextError(`目标页面不可访问：${targetUrl}。未收到页面响应，请检查目标页面URL是否写错，或页面是否存在。`);
+  }
+
+  const status = response.status();
+
+  // HTTP 400 及以上表示客户端或服务端错误，不能把错误页上下文交给 AI 继续生成。
+  if (status >= 400) {
+    const reason = response.statusText() ? ` ${response.statusText()}` : '';
+
+    throw new PageContextError(`目标页面不可访问：${response.url()}（HTTP ${status}${reason}）。请检查目标页面URL是否写错，或页面是否存在。`);
   }
 }
 

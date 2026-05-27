@@ -12,7 +12,7 @@ import {
 import { listProjects } from '../lib/project-store';
 import { reviewCase } from './case-review';
 import { AiDraftError, generateCaseDraft } from './ai-case-draft';
-import { collectPageContext } from './page-context';
+import { collectPageContext, PageContextError } from './page-context';
 
 interface QueueTask {
   projectKey: string;
@@ -109,6 +109,15 @@ export async function processImportItem(projectKey: string, importId: string, it
       return;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'AI 草稿生成失败';
+
+      if (error instanceof PageContextError) {
+        await updateImportItem(projectKey, importId, itemId, {
+          status: 'failed',
+          errorMessage: message,
+          retryCount: attempt
+        });
+        return;
+      }
 
       if (attempt >= config.maxRetries) {
         await updateImportItem(projectKey, importId, itemId, {

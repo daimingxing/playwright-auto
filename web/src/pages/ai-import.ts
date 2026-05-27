@@ -32,7 +32,14 @@ export function canSaveImportItem(item: ImportItem) {
  * 判断导入项是否可以重试生成。
  */
 export function canRetryImportItem(item: ImportItem) {
-  return item.status === 'failed';
+  return item.status === 'failed' || (item.status === 'saved' && item.savedCaseState === 'missing');
+}
+
+/**
+ * 判断保存后的草稿是否可以打开。
+ */
+export function canOpenSavedCase(item: ImportItem) {
+  return Boolean(item.savedCaseKey && item.savedCaseState !== 'missing');
 }
 
 /**

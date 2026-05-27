@@ -5,9 +5,10 @@ import type { TableInstance } from 'element-plus';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { ImportItem, ImportJob } from '../../../shared/types';
-import { getImport, listImportItems, retryImportItem, saveImportItems, skipImportItem } from '../api/imports';
+import { deleteImport, getImport, listImportItems, retryImportItem, saveImportItems, skipImportItem } from '../api/imports';
 import { getErrorMessage } from '../utils/error';
 import {
+  canOpenSavedCase,
   canRetryImportItem,
   canSaveImportItem,
   canSkipImportItem,
@@ -178,7 +179,7 @@ async function skipSelected() {
  */
 async function retrySelected() {
   if (selectedRetryIds.value.length === 0) {
-    ElMessage.warning('请先选择生成失败用例');
+    ElMessage.warning('请先选择可重试用例');
     return;
   }
 
@@ -218,6 +219,33 @@ async function skipItem(item: ImportItem) {
 }
 
 /**
+ * 放弃当前导入任务。
+ */
+async function removeImport() {
+  const confirmed = await ElMessageBox.confirm(
+    '确认放弃当前导入记录吗？已保存的草稿用例不会被删除。',
+    '放弃导入',
+    {
+      confirmButtonText: '放弃导入',
+      cancelButtonText: '取消',
+      type: 'warning'
+    }
+  ).catch(() => false);
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    await deleteImport(projectKey, importId);
+    ElMessage.success('已放弃导入记录');
+    await router.push(`/projects/${projectKey}/imports`);
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error));
+  }
+}
+
+/**
  * 判断表格行是否可勾选。
  */
 function canSelect(row: ImportItem) {
@@ -245,9 +273,12 @@ function getReviewText(item: ImportItem) {
  * 打开保存后的草稿用例。
  */
 function openSavedCase(item: ImportItem) {
-  if (item.savedCaseKey) {
+  if (canOpenSavedCase(item) && item.savedCaseKey) {
     void router.push(`/projects/${projectKey}/cases/${item.savedCaseKey}`);
+    return;
   }
+
+  ElMessage.warning('草稿用例已不存在，请重新生成后再保存');
 }
 
 onMounted(loadData);
@@ -269,6 +300,7 @@ onBeforeUnmount(() => {
         <el-button :icon="RefreshRight" :loading="loading" @click="loadData">刷新</el-button>
         <el-button :disabled="selectedRetryIds.length === 0" @click="retrySelected">重试选中</el-button>
         <el-button :disabled="selectedSkipIds.length === 0" @click="skipSelected">跳过选中</el-button>
+        <el-button type="danger" plain @click="removeImport">放弃导入</el-button>
         <el-button type="primary" :disabled="selectedSaveIds.length === 0" :loading="saving" @click="saveSelected">
           保存选中为草稿
         </el-button>
@@ -320,6 +352,11 @@ onBeforeUnmount(() => {
           <el-table-column type="selection" width="44" :selectable="canSelect" reserve-selection />
           <el-table-column prop="caseNo" label="用例编号" width="120" show-overflow-tooltip />
           <el-table-column prop="caseName" label="用例名称" min-width="220" show-overflow-tooltip />
+          <el-table-column label="目标页面" min-width="220" show-overflow-tooltip>
+            <template #default="{ row }">
+              {{ row.source.caseInfo.targetUrl }}
+            </template>
+          </el-table-column>
           <el-table-column label="步骤数" width="90">
             <template #default="{ row }">
               {{ row.draft?.steps.length ?? row.source.steps.length }}
@@ -355,7 +392,15 @@ onBeforeUnmount(() => {
                 <el-button size="small" @click="openDetail(row)">详情</el-button>
                 <el-button size="small" :disabled="!canRetryImportItem(row)" @click="retryItem(row)">重试</el-button>
                 <el-button size="small" :disabled="!canSkipImportItem(row)" @click="skipItem(row)">跳过</el-button>
-                <el-button v-if="row.savedCaseKey" size="small" type="primary" @click="openSavedCase(row)">草稿</el-button>
+                <el-button
+                  v-if="row.savedCaseKey"
+                  size="small"
+                  type="primary"
+                  :disabled="!canOpenSavedCase(row)"
+                  @click="openSavedCase(row)"
+                >
+                  {{ canOpenSavedCase(row) ? '草稿' : '已删除' }}
+                </el-button>
               </div>
             </template>
           </el-table-column>
@@ -502,7 +547,13 @@ onBeforeUnmount(() => {
 
         <section v-if="detailItem.savedCaseKey" class="detail-block">
           <h3>保存结果</h3>
-          <el-button type="primary" @click="openSavedCase(detailItem)">打开草稿用例</el-button>
+          <el-alert
+            v-if="!canOpenSavedCase(detailItem)"
+            title="草稿用例已不存在，可以重新生成后再次保存。"
+            type="warning"
+            :closable="false"
+          />
+          <el-button v-else type="primary" @click="openSavedCase(detailItem)">打开草稿用例</el-button>
         </section>
       </div>
     </el-drawer>

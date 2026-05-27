@@ -190,7 +190,7 @@ data/
       imports/
 ```
 
-`cases/` 是可用测试用例，`trash/` 是回收站，`runs/` 保存运行记录和报告，`auth/` 保存登录态，`imports/` 保存 AI 导入任务、原始 Excel 和导入项草稿。
+`cases/` 是可用测试用例，`trash/` 是回收站，`runs/` 保存运行记录和报告，`auth/` 保存登录态，`imports/` 保存 AI 导入任务、原始 Excel 和导入项草稿。放弃导入记录只删除 `imports/` 下的过程数据，不删除已经保存到 `cases/` 的草稿用例。
 
 每条测试用例保存为独立目录：
 
@@ -252,7 +252,7 @@ npm run test:e2e
 - `server/src/services/import-excel.ts`：解析 Excel 三表模板，校验用例、步骤和测试数据关联。
 - `server/src/services/import-worker.ts`：本地后台队列，负责异步生成草稿、失败重试和服务启动后的任务恢复。
 - `server/src/lib/import-store.ts`：AI 导入任务和导入项的文件持久化。
-- `server/src/routes/imports.ts`：AI 导入 HTTP API，包括上传、列表、预览项、重试、跳过和保存草稿。
+- `server/src/routes/imports.ts`：AI 导入 HTTP API，包括上传、列表、预览项、重试、跳过、保存草稿和放弃导入记录。
 - `web/src/pages/AiImportList.vue`：导入记录和上传页面。
 - `web/src/pages/AiImportPreview.vue`：导入预览、筛选、详情、重试、跳过和批量保存页面；点开单条导入项详情，可以在“AI 调试信息”中查看系统提示词、用户输入、模型原始输出、解析后的 JSON 和结构错误。
 - `web/src/api/imports.ts`：前端 AI 导入 API 封装。

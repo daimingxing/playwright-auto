@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import multer from 'multer';
 import { Router } from 'express';
 import type { RequestHandler } from 'express';
@@ -10,6 +11,7 @@ import { ensureDir } from '../lib/fs';
 import { getImportPath } from '../lib/path';
 import {
   createImportJob,
+  deleteImportJob,
   findImportByHash,
   getImportItem,
   getImportJob,
@@ -18,6 +20,7 @@ import {
   updateImportItem
 } from '../lib/import-store';
 import { createCaseDraft } from '../lib/case-store';
+import { getCasePath } from '../lib/path';
 import { getProject } from '../lib/project-store';
 import { envKeySchema } from '../lib/schema';
 import { parseImportExcel } from '../services/import-excel';
@@ -125,7 +128,7 @@ importsRouter.get<ImportParams>('/:importId', async (req, res, next) => {
 
 importsRouter.get<ImportParams>('/:importId/items', async (req, res, next) => {
   try {
-    res.json(await listImportItems(req.params.projectKey, req.params.importId));
+    res.json(await readImportItems(req.params.projectKey, req.params.importId));
   } catch (error) {
     next(error);
   }
@@ -134,19 +137,35 @@ importsRouter.get<ImportParams>('/:importId/items', async (req, res, next) => {
 importsRouter.post<ItemParams>('/:importId/items/:itemId/retry', async (req, res, next) => {
   try {
     const item = await getImportItem(req.params.projectKey, req.params.importId, req.params.itemId);
+    const canRetrySaved = item.status === 'saved' && readSavedCaseState(req.params.projectKey, item.savedCaseKey) === 'missing';
 
-    if (item.status !== 'failed') {
-      throw badRequest('只有生成失败的导入项可以重试');
+    if (item.status !== 'failed' && !canRetrySaved) {
+      throw badRequest('只有生成失败或草稿已不存在的导入项可以重试');
     }
 
     const nextItem = await updateImportItem(req.params.projectKey, req.params.importId, req.params.itemId, {
       status: 'pending',
       errorMessage: undefined,
+      draft: undefined,
+      aiDebug: undefined,
+      review: undefined,
+      savedCaseKey: undefined,
+      savedCaseState: undefined,
+      savedAt: undefined,
       retryCount: 0
     });
     enqueueImportItem(req.params.projectKey, req.params.importId, req.params.itemId);
 
     res.json(nextItem);
+  } catch (error) {
+    next(error);
+  }
+});
+
+importsRouter.delete<ImportParams>('/:importId', async (req, res, next) => {
+  try {
+    await deleteImportJob(req.params.projectKey, req.params.importId);
+    res.status(204).end();
   } catch (error) {
     next(error);
   }
@@ -218,6 +237,10 @@ async function doSaveImportItem(projectKey: string, importId: string, itemId: st
       throw new Error('导入项已保存但缺少草稿标识');
     }
 
+    if (readSavedCaseState(projectKey, item.savedCaseKey) === 'missing') {
+      throw new Error('已保存草稿不存在，请重新生成后再保存');
+    }
+
     return { itemId, caseKey: item.savedCaseKey };
   }
 
@@ -237,6 +260,29 @@ async function doSaveImportItem(projectKey: string, importId: string, itemId: st
   });
 
   return { itemId, caseKey: created.key };
+}
+
+/**
+ * 读取导入项列表并补充保存草稿引用状态。
+ */
+async function readImportItems(projectKey: string, importId: string) {
+  const items = await listImportItems(projectKey, importId);
+
+  return items.map((item) => ({
+    ...item,
+    savedCaseState: readSavedCaseState(projectKey, item.savedCaseKey)
+  }));
+}
+
+/**
+ * 判断已保存草稿是否仍然存在于可用用例列表中。
+ */
+function readSavedCaseState(projectKey: string, caseKey: string | undefined) {
+  if (!caseKey) {
+    return undefined;
+  }
+
+  return existsSync(getCasePath(projectKey, caseKey)) ? 'active' : 'missing';
 }
 
 /**

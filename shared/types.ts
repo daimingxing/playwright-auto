@@ -61,6 +61,8 @@ export type ImportStatus = 'running' | 'pendingReview' | 'partialSaved' | 'compl
 
 export type ImportItemStatus = 'pending' | 'generating' | 'pendingReview' | 'failed' | 'saved' | 'skipped';
 
+export type SavedCaseState = 'active' | 'missing';
+
 export type AiLevel = 'high' | 'medium' | 'low';
 
 export interface ImportStepSource {
@@ -155,6 +157,7 @@ export interface ImportItem {
   status: ImportItemStatus;
   errorMessage?: string;
   savedCaseKey?: string;
+  savedCaseState?: SavedCaseState;
   savedAt?: string;
   retryCount: number;
   updatedAt: string;

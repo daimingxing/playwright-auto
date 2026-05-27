@@ -3,6 +3,7 @@ import type { ImportItem, ImportJob } from '../../shared/types';
 import {
   canRetryImportItem,
   canSaveImportItem,
+  canOpenSavedCase,
   filterImportItems,
   formatImportItemStatus,
   formatImportStatus,
@@ -32,6 +33,12 @@ describe('AI 导入页面工具', () => {
     expect(canRetryImportItem(makeItem('failed'))).toBe(true);
     expect(canRetryImportItem(makeItem('pendingReview'))).toBe(false);
     expect(canRetryImportItem(makeItem('saved'))).toBe(false);
+    expect(canRetryImportItem(makeItem('saved', { savedCaseKey: 'case-1', savedCaseState: 'missing' }))).toBe(true);
+  });
+
+  it('只允许打开仍存在的已保存草稿', () => {
+    expect(canOpenSavedCase(makeItem('saved', { savedCaseKey: 'case-1', savedCaseState: 'active' }))).toBe(true);
+    expect(canOpenSavedCase(makeItem('saved', { savedCaseKey: 'case-1', savedCaseState: 'missing' }))).toBe(false);
   });
 
   it('显示任务和导入项状态中文', () => {

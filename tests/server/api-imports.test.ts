@@ -160,6 +160,66 @@ describe('AI 导入接口', () => {
     expect(second.body.failed).toEqual([]);
     expect(cases.body).toHaveLength(1);
   });
+
+  it('删除导入记录时只移除导入任务且保留已保存草稿', async () => {
+    const app = createApp();
+    await request(app).post('/api/projects').send({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    const created = await request(app)
+      .post('/api/projects/crm/imports/ai')
+      .attach('file', await createWorkbookBuffer(), 'cases.xlsx');
+    const items = await waitItems(app, created.body.importId);
+    await request(app)
+      .post(`/api/projects/crm/imports/${created.body.importId}/save`)
+      .send({ itemIds: [items.body[0].itemId] });
+
+    const removed = await request(app).delete(`/api/projects/crm/imports/${created.body.importId}`);
+    const jobs = await request(app).get('/api/projects/crm/imports');
+    const cases = await request(app).get('/api/projects/crm/cases');
+
+    expect(removed.status).toBe(204);
+    expect(jobs.body).toEqual([]);
+    expect(cases.body).toHaveLength(1);
+  });
+
+  it('已保存草稿被删除后返回失效状态并允许重新生成', async () => {
+    const app = createApp();
+    await request(app).post('/api/projects').send({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    const created = await request(app)
+      .post('/api/projects/crm/imports/ai')
+      .attach('file', await createWorkbookBuffer(), 'cases.xlsx');
+    const items = await waitItems(app, created.body.importId);
+    const itemId = items.body[0].itemId;
+    const saved = await request(app)
+      .post(`/api/projects/crm/imports/${created.body.importId}/save`)
+      .send({ itemIds: [itemId] });
+    await request(app).delete(`/api/projects/crm/cases/${saved.body.saved[0].caseKey}`);
+
+    const staleItems = await request(app).get(`/api/projects/crm/imports/${created.body.importId}/items`);
+    expect(staleItems.body[0]).toMatchObject({
+      status: 'saved',
+      savedCaseKey: saved.body.saved[0].caseKey,
+      savedCaseState: 'missing'
+    });
+
+    const retried = await request(app)
+      .post(`/api/projects/crm/imports/${created.body.importId}/items/${itemId}/retry`);
+    const nextItems = await waitItems(app, created.body.importId);
+
+    expect(retried.status).toBe(200);
+    expect(nextItems.body[0]).toMatchObject({
+      status: 'pendingReview'
+    });
+    expect(nextItems.body[0].savedCaseState).toBeUndefined();
+    expect(nextItems.body[0].savedCaseKey).toBeUndefined();
+  });
 });
 
 /**

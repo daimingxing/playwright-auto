@@ -50,6 +50,15 @@ export function retryImportItem(projectKey: string, importId: string, itemId: st
 }
 
 /**
+ * 删除单个 AI 导入任务。
+ */
+export function deleteImport(projectKey: string, importId: string) {
+  return requestJson<void>(`/api/projects/${projectKey}/imports/${importId}`, {
+    method: 'DELETE'
+  });
+}
+
+/**
  * 跳过无需保存的导入项。
  */
 export function skipImportItem(projectKey: string, importId: string, itemId: string) {

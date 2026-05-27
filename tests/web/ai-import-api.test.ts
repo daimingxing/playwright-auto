@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createAiImport,
+  deleteImport,
   listImportItems,
   retryImportItem,
   saveImportItems,
@@ -43,11 +44,13 @@ describe('AI 导入前端 API', () => {
     await listImportItems('crm', 'import-1');
     await retryImportItem('crm', 'import-1', 'item-1');
     await skipImportItem('crm', 'import-1', 'item-2');
+    await deleteImport('crm', 'import-1');
 
     expect(fetchMock.mock.calls.map((call) => [call[0], call[1]?.method])).toEqual([
       ['/api/projects/crm/imports/import-1/items', undefined],
       ['/api/projects/crm/imports/import-1/items/item-1/retry', 'POST'],
-      ['/api/projects/crm/imports/import-1/items/item-2/skip', 'POST']
+      ['/api/projects/crm/imports/import-1/items/item-2/skip', 'POST'],
+      ['/api/projects/crm/imports/import-1', 'DELETE']
     ]);
   });
 });

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseJsonObject } from '../../server/src/services/ai-client';
 import { buildCaseDraftInput, normalizeAiDraft } from '../../server/src/services/ai-case-draft';
-import { resolveUnique } from '../../server/src/services/page-context';
+import { assertPageAvailable, resolveUnique } from '../../server/src/services/page-context';
 
 describe('AI 草稿生成服务', () => {
   it('构造包含模板、数据和页面上下文的模型输入', () => {
@@ -137,5 +137,15 @@ describe('AI 草稿生成服务', () => {
     expect(parseJsonObject('{"ok":true}')).toEqual({ ok: true });
     expect(parseJsonObject('```json\n{"ok":true}\n```')).toEqual({ ok: true });
     expect(parseJsonObject('结果如下：{"ok":true}')).toEqual({ ok: true });
+  });
+
+  it('目标页面返回错误状态时终止页面上下文采集', () => {
+    expect(() =>
+      assertPageAvailable({
+        url: () => 'https://crm.test.local/missing',
+        status: () => 404,
+        statusText: () => 'Not Found'
+      }, 'https://crm.test.local/missing')
+    ).toThrow('目标页面不可访问');
   });
 });
