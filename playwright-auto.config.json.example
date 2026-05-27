@@ -24,10 +24,10 @@
     }
   },
   "ai": {
-    "enabled": false,
-    "baseUrl": "",
+    "enabled": true,
+    "baseUrl": "https://api.deepseek.com",
     "apiKey": "",
-    "model": "",
+    "model": "deepseek-v4-flash",
     "temperature": 0.1,
     "timeoutMs": 60000,
     "maxRetries": 1,

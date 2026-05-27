@@ -62,7 +62,9 @@ npm run dev
 
 ## 本地配置
 
-项目根目录的 `playwright-auto.config.json` 用于调整本地运行参数：
+项目根目录的 `playwright-auto.config.json` 用于调整本地运行参数。
+
+> **提示**：为防止敏感信息（如 API Key）被意外提交到代码库，项目使用配置模板机制。首次运行前，请复制 `playwright-auto.config.json.example` 并重命名为 `playwright-auto.config.json`，然后在其中填入你自己的配置（它已被 `.gitignore` 忽略，你的修改不会被 Git 追踪）。
 
 ```json
 {
