@@ -26,6 +26,7 @@ import { getProject } from '../lib/project-store';
 import { envKeySchema } from '../lib/schema';
 import { parseImportExcel } from '../services/import/import-excel';
 import { enqueueImportItem, enqueueImportJob } from '../services/import/import-worker';
+import type { ImportItem, PageMapSummary } from '../../../shared/types';
 
 interface ProjectParams {
   [key: string]: string;
@@ -275,9 +276,21 @@ async function readImportItems(projectKey: string, importId: string) {
 
   return items.map((item) => ({
     ...item,
-    pageMap: maps.find((map) => map.envKey === job.envKey && map.targetUrl === item.source.caseInfo.targetUrl),
+    pageMap: findItemPageMap(item, job.envKey, maps),
     savedCaseState: readSavedCaseState(projectKey, item.savedCaseKey)
   }));
+}
+
+/**
+ * 查找导入项关联的页面地图摘要。
+ */
+function findItemPageMap(item: ImportItem, envKey: string, maps: PageMapSummary[]) {
+  if (item.pageMapId) {
+    return maps.find((map) => map.mapId === item.pageMapId);
+  }
+
+  // 旧导入项可能没有持久化 pageMapId，只能继续按环境和目标页面兼容匹配。
+  return maps.find((map) => map.envKey === envKey && map.targetUrl === item.source.caseInfo.targetUrl);
 }
 
 /**

@@ -6,6 +6,7 @@ import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../../server/src/app';
 import { updateImportItem } from '../../server/src/lib/import-store';
+import { createPageMap } from '../../server/src/lib/page-map-store';
 import { normalizeUploadName } from '../../server/src/routes/imports';
 
 let root = '';
@@ -110,6 +111,45 @@ describe('AI 导入接口', () => {
 
     expect(normalizeUploadName(mojibake)).toBe('AI自然语言用例导入模板.xlsx');
     expect(normalizeUploadName('cases.xlsx')).toBe('cases.xlsx');
+  });
+
+  it('同环境同页面存在多张页面地图时按导入项 pageMapId 返回摘要', async () => {
+    const app = createApp();
+    await request(app).post('/api/projects').send({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    const created = await request(app)
+      .post('/api/projects/crm/imports/ai')
+      .attach('file', await createWorkbookBuffer(), 'cases.xlsx');
+    const items = await waitItems(app, created.body.importId);
+    const item = items.body[0];
+
+    await createPageMap({
+      mapId: 'pm-ffffffffffffffff',
+      projectKey: 'crm',
+      envKey: 'default',
+      targetUrl: '/user/list',
+      authHash: 'other-auth',
+      viewport: {
+        width: 1366,
+        height: 768
+      },
+      status: 'ready',
+      states: [],
+      warnings: [],
+      createdAt: '2099-01-01T00:00:00.000Z',
+      updatedAt: '2099-01-01T00:00:00.000Z'
+    });
+
+    const nextItems = await request(app).get(`/api/projects/crm/imports/${created.body.importId}/items`);
+
+    expect(nextItems.body[0].pageMap).toMatchObject({
+      mapId: item.pageMapId,
+      authHash: 'no-auth',
+      targetUrl: '/user/list'
+    });
   });
 
   it('手动重试失败导入项时清理旧错误和降级信息', async () => {
