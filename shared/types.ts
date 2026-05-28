@@ -163,10 +163,16 @@ export interface PageAction {
   type: StepType;
   targetType?: TargetType;
   targetName: string;
+  note?: string;
   selector?: string;
   value?: string;
   path: string[];
   warning?: string;
+}
+
+export interface PageActionResult {
+  actions: PageAction[];
+  warnings: string[];
 }
 
 export interface PageState {
