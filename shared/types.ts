@@ -76,6 +76,15 @@ export interface AiConfig {
   timeoutMs: number;
   maxRetries: number;
   concurrency: number;
+  pageMap: PageMapConfig;
+}
+
+export interface PageMapConfig {
+  staleDays: number;
+  maxActions: number;
+  maxDepth: number;
+  timeoutMs: number;
+  autoCreate: boolean;
 }
 
 export type ImportStatus = 'running' | 'pendingReview' | 'partialSaved' | 'completed' | 'failed';
@@ -144,6 +153,62 @@ export interface AiDebugInfo {
   response?: string;
   parsed?: unknown;
   error?: string;
+  updatedAt: string;
+}
+
+export type PageMapStatus = 'ready' | 'stale' | 'failed';
+
+export interface PageAction {
+  id: string;
+  type: StepType;
+  targetType?: TargetType;
+  targetName: string;
+  selector?: string;
+  value?: string;
+  path: string[];
+  warning?: string;
+}
+
+export interface PageState {
+  stateId: string;
+  name: string;
+  url: string;
+  title?: string;
+  snapshotPath: string;
+  sourceAction?: PageAction;
+  warnings: string[];
+  createdAt: string;
+}
+
+export interface PageMapSummary {
+  mapId: string;
+  projectKey: string;
+  envKey: string;
+  targetUrl: string;
+  authHash: string;
+  viewport: {
+    width: number;
+    height: number;
+  };
+  status: PageMapStatus;
+  stateCount: number;
+  updatedAt: string;
+}
+
+export interface PageMap {
+  mapId: string;
+  projectKey: string;
+  envKey: string;
+  targetUrl: string;
+  authHash: string;
+  viewport: {
+    width: number;
+    height: number;
+  };
+  status: PageMapStatus;
+  states: PageState[];
+  warnings: string[];
+  createdAt: string;
   updatedAt: string;
 }
 

@@ -48,6 +48,7 @@ export function createApp() {
         timeoutMs: config.ai.timeoutMs,
         maxRetries: config.ai.maxRetries,
         concurrency: config.ai.concurrency,
+        pageMap: config.ai.pageMap,
         configured: Boolean(config.ai.baseUrl && config.ai.model)
       }
     });

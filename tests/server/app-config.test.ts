@@ -56,7 +56,14 @@ describe('应用配置', () => {
         temperature: 0.1,
         timeoutMs: 60000,
         maxRetries: 1,
-        concurrency: 1
+        concurrency: 1,
+        pageMap: {
+          staleDays: 30,
+          maxActions: 20,
+          maxDepth: 2,
+          timeoutMs: 30000,
+          autoCreate: true
+        }
       }
     });
   });
@@ -117,7 +124,14 @@ describe('应用配置', () => {
         temperature: 0.1,
         timeoutMs: 60000,
         maxRetries: 1,
-        concurrency: 1
+        concurrency: 1,
+        pageMap: {
+          staleDays: 30,
+          maxActions: 20,
+          maxDepth: 2,
+          timeoutMs: 30000,
+          autoCreate: true
+        }
       }
     });
   });
@@ -180,7 +194,14 @@ describe('应用配置', () => {
         temperature: 0.1,
         timeoutMs: 60000,
         maxRetries: 1,
-        concurrency: 1
+        concurrency: 1,
+        pageMap: {
+          staleDays: 30,
+          maxActions: 20,
+          maxDepth: 2,
+          timeoutMs: 30000,
+          autoCreate: true
+        }
       }
     });
   });

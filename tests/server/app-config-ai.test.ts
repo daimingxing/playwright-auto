@@ -33,7 +33,14 @@ describe('AI 配置', () => {
       temperature: 0.1,
       timeoutMs: 60000,
       maxRetries: 1,
-      concurrency: 1
+      concurrency: 1,
+      pageMap: {
+        staleDays: 30,
+        maxActions: 20,
+        maxDepth: 2,
+        timeoutMs: 30000,
+        autoCreate: true
+      }
     });
   });
 
@@ -47,7 +54,14 @@ describe('AI 配置', () => {
         temperature: 0.3,
         timeoutMs: 30000,
         maxRetries: 2,
-        concurrency: 2
+        concurrency: 2,
+        pageMap: {
+          staleDays: 7,
+          maxActions: 8,
+          maxDepth: 3,
+          timeoutMs: 15000,
+          autoCreate: false
+        }
       }
     });
     process.env.PLAYWRIGHT_AUTO_AI_API_KEY = 'env-key';
@@ -63,7 +77,46 @@ describe('AI 配置', () => {
       temperature: 0.3,
       timeoutMs: 30000,
       maxRetries: 2,
-      concurrency: 2
+      concurrency: 2,
+      pageMap: {
+        staleDays: 7,
+        maxActions: 8,
+        maxDepth: 3,
+        timeoutMs: 15000,
+        autoCreate: false
+      }
+    });
+  });
+
+  it('公开配置不泄露 AI 密钥并包含页面地图配置', async () => {
+    await writeConfig({
+      ai: {
+        enabled: true,
+        baseUrl: 'http://local-model/v1',
+        apiKey: 'file-key',
+        model: 'file-model',
+        pageMap: {
+          staleDays: 10,
+          maxActions: 6,
+          maxDepth: 2,
+          timeoutMs: 12000,
+          autoCreate: true
+        }
+      }
+    });
+    const { createApp } = await importFreshApp();
+    const request = (await import('supertest')).default;
+
+    const res = await request(createApp()).get('/api/app-config');
+
+    expect(res.status).toBe(200);
+    expect(res.body.ai.apiKey).toBeUndefined();
+    expect(res.body.ai.pageMap).toEqual({
+      staleDays: 10,
+      maxActions: 6,
+      maxDepth: 2,
+      timeoutMs: 12000,
+      autoCreate: true
     });
   });
 });
@@ -82,4 +135,12 @@ async function writeConfig(value: unknown) {
 async function importFreshConfig() {
   vi.resetModules();
   return import('../../server/src/lib/app-config');
+}
+
+/**
+ * 避免模块缓存影响公开配置接口。
+ */
+async function importFreshApp() {
+  vi.resetModules();
+  return import('../../server/src/app');
 }

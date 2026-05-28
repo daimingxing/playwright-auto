@@ -33,6 +33,13 @@ interface FileConfig {
     timeoutMs?: unknown;
     maxRetries?: unknown;
     concurrency?: unknown;
+    pageMap?: {
+      staleDays?: unknown;
+      maxActions?: unknown;
+      maxDepth?: unknown;
+      timeoutMs?: unknown;
+      autoCreate?: unknown;
+    };
   };
 }
 
@@ -66,7 +73,14 @@ const DEFAULT_CONFIG = {
     temperature: 0.1,
     timeoutMs: 60000,
     maxRetries: 1,
-    concurrency: 1
+    concurrency: 1,
+    pageMap: {
+      staleDays: 30,
+      maxActions: 20,
+      maxDepth: 2,
+      timeoutMs: 30000,
+      autoCreate: true
+    }
   }
 };
 
@@ -131,7 +145,26 @@ function readAiConfig(fileConfig: FileConfig) {
     temperature: readFloat(process.env.PLAYWRIGHT_AUTO_AI_TEMPERATURE, fileConfig.ai?.temperature, DEFAULT_CONFIG.ai.temperature, 0, 2),
     timeoutMs: readInt(process.env.PLAYWRIGHT_AUTO_AI_TIMEOUT_MS, fileConfig.ai?.timeoutMs, DEFAULT_CONFIG.ai.timeoutMs, 1000, 300000),
     maxRetries: readInt(undefined, fileConfig.ai?.maxRetries, DEFAULT_CONFIG.ai.maxRetries, 0, 5),
-    concurrency: readInt(process.env.PLAYWRIGHT_AUTO_AI_CONCURRENCY, fileConfig.ai?.concurrency, DEFAULT_CONFIG.ai.concurrency, 1, 5)
+    concurrency: readInt(process.env.PLAYWRIGHT_AUTO_AI_CONCURRENCY, fileConfig.ai?.concurrency, DEFAULT_CONFIG.ai.concurrency, 1, 5),
+    pageMap: readPageMapConfig(fileConfig)
+  };
+}
+
+/**
+ * 读取页面地图配置。
+ */
+function readPageMapConfig(fileConfig: FileConfig) {
+  const fileMap = fileConfig.ai?.pageMap;
+
+  return {
+    staleDays: readInt(undefined, fileMap?.staleDays, DEFAULT_CONFIG.ai.pageMap.staleDays, 1, 365),
+    // 限制探索动作数，避免页面地图采集阶段误把大页面跑成长期任务。
+    maxActions: readInt(undefined, fileMap?.maxActions, DEFAULT_CONFIG.ai.pageMap.maxActions, 0, 200),
+    // 限制动作深度，避免菜单、弹窗和树形控件组合产生指数级探索。
+    maxDepth: readInt(undefined, fileMap?.maxDepth, DEFAULT_CONFIG.ai.pageMap.maxDepth, 0, 10),
+    // 单次页面地图采集超时单独配置，避免复用 AI 请求超时导致浏览器任务等待过久。
+    timeoutMs: readInt(undefined, fileMap?.timeoutMs, DEFAULT_CONFIG.ai.pageMap.timeoutMs, 1000, 300000),
+    autoCreate: readBool(undefined, fileMap?.autoCreate, DEFAULT_CONFIG.ai.pageMap.autoCreate)
   };
 }
 

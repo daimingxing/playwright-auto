@@ -1,6 +1,31 @@
-import { resolve } from 'node:path';
+import { createHash } from 'node:crypto';
+import { existsSync, statSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 import { getAppConfig } from './app-config';
-import { assertCaseKey, assertImportId, assertImportItemId, assertProjectKey, assertReviewId, assertRunId, assertWorkId } from './guard';
+import {
+  assertCaseKey,
+  assertEnvKey,
+  assertImportId,
+  assertImportItemId,
+  assertPageMapId,
+  assertPageStateId,
+  assertProjectKey,
+  assertReviewId,
+  assertRunId,
+  assertWorkId
+} from './guard';
+
+interface PageMapKeyInput {
+  projectKey: string;
+  envKey: string;
+  targetUrl: string;
+  authHash: string;
+  viewport: {
+    width: number;
+    height: number;
+  };
+}
 
 /**
  * 获取数据根目录。
@@ -92,4 +117,87 @@ export function getPracticalReviewPath(projectKey: string, reviewId: string) {
 export function getPracticalReviewWorkPath(projectKey: string, workId: string) {
   assertWorkId(workId);
   return resolve(getPracticalReviewsPath(projectKey), 'work', workId);
+}
+
+/**
+ * 获取项目页面地图根目录。
+ */
+export function getPageMapsPath(projectKey: string) {
+  return resolve(getProjectPath(projectKey), 'page-maps');
+}
+
+/**
+ * 获取单张页面地图目录。
+ */
+export function getPageMapPath(projectKey: string, mapId: string) {
+  assertPageMapId(mapId);
+  return resolve(getPageMapsPath(projectKey), mapId);
+}
+
+/**
+ * 获取单张页面地图摘要文件路径。
+ */
+export function getPageMapFile(projectKey: string, mapId: string) {
+  return resolve(getPageMapPath(projectKey, mapId), 'map.json');
+}
+
+/**
+ * 获取页面地图快照文件路径。
+ */
+export function getPageMapShotFile(projectKey: string, mapId: string, stateId: string) {
+  assertPageStateId(stateId);
+  return resolve(getPageMapPath(projectKey, mapId), 'snapshots', `${stateId}.json`);
+}
+
+/**
+ * 创建页面地图缓存键。
+ */
+export function createPageMapKey(input: PageMapKeyInput) {
+  assertProjectKey(input.projectKey);
+  assertEnvKey(input.envKey);
+
+  return {
+    projectKey: input.projectKey,
+    envKey: input.envKey,
+    targetUrl: input.targetUrl.trim(),
+    authHash: input.authHash || 'no-auth',
+    viewport: {
+      width: input.viewport.width,
+      height: input.viewport.height
+    }
+  };
+}
+
+/**
+ * 根据缓存键生成稳定页面地图标识。
+ */
+export function createPageMapId(key: PageMapKeyInput) {
+  const text = JSON.stringify(createPageMapKey(key));
+  const hash = createHash('sha256').update(text).digest('hex').slice(0, 16);
+
+  return `pm-${hash}`;
+}
+
+/**
+ * 获取登录态摘要。
+ */
+export async function getAuthHash(projectKey: string, envKey: string) {
+  assertProjectKey(projectKey);
+  assertEnvKey(envKey);
+
+  const path = join(getProjectPath(projectKey), 'auth', `${envKey}.storageState.json`);
+
+  if (!existsSync(path)) {
+    return 'no-auth';
+  }
+
+  const stat = statSync(path);
+  const content = await readFile(path);
+  const hash = createHash('sha256');
+
+  hash.update(content);
+  // 文件系统时间精度在不同平台可能不同，同时纳入内容和更新时间可覆盖手动替换与同内容刷新两类变化。
+  hash.update(String(stat.mtimeMs));
+
+  return `auth-${hash.digest('hex').slice(0, 16)}`;
 }
