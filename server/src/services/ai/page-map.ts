@@ -14,6 +14,7 @@ interface PageMapInput {
     width: number;
     height: number;
   };
+  authHash?: string;
   staleDays?: number;
   steps?: ImportStepSource[];
   now?: Date;
@@ -33,7 +34,7 @@ export async function getPageMap(input: PageMapInput) {
     projectKey: input.projectKey,
     envKey: input.envKey,
     targetUrl: input.targetUrl,
-    authHash: await getAuthHash(input.projectKey, input.envKey),
+    authHash: input.authHash ?? await getAuthHash(input.projectKey, input.envKey),
     viewport: input.viewport
   });
   const mapId = createPageMapId(key);

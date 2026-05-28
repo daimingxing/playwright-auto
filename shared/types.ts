@@ -237,6 +237,8 @@ export interface ImportItem {
   itemId: string;
   caseNo: string;
   caseName: string;
+  groupId?: string;
+  groupIndex?: number;
   rowRefs: {
     caseRow: number;
     stepRows: number[];
@@ -255,6 +257,7 @@ export interface ImportItem {
   errorMessage?: string;
   savedCaseKey?: string;
   savedCaseState?: SavedCaseState;
+  pageMapId?: string;
   pageMap?: PageMapSummary;
   savedAt?: string;
   retryCount: number;

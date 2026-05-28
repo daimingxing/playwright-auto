@@ -46,6 +46,8 @@ export async function createImportJob(projectKey: string, input: CreateImportJob
       itemId,
       caseNo: item.caseInfo.caseNo,
       caseName: item.caseInfo.caseName,
+      groupId: undefined,
+      groupIndex: undefined,
       rowRefs: item.rowRefs,
       sourceHash: createSourceHash(item),
       source: {
@@ -54,6 +56,7 @@ export async function createImportJob(projectKey: string, input: CreateImportJob
         data: item.data
       },
       status: 'pending',
+      pageMapId: undefined,
       retryCount: 0,
       updatedAt: now
     } satisfies ImportItem);

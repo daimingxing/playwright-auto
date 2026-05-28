@@ -40,6 +40,13 @@ describe('AI 导入接口', () => {
 
     const items = await waitItems(app, created.body.importId);
     expect(items.body[0].status).toBe('pendingReview');
+    expect(items.body[0].pageMapId).toMatch(/^pm-/);
+    expect(items.body[0].groupId).toBe(items.body[0].pageMapId);
+    expect(items.body[0].groupIndex).toBe(0);
+    expect(items.body[0].pageMap).toMatchObject({
+      mapId: items.body[0].pageMapId,
+      targetUrl: '/user/list'
+    });
 
     const saved = await request(app)
       .post(`/api/projects/crm/imports/${created.body.importId}/save`)
