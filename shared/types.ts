@@ -18,6 +18,22 @@ export const stepTypes = [
 
 export type StepType = typeof stepTypes[number];
 
+export const stepTypeLabels: Record<StepType, string> = {
+  goto: '打开页面',
+  click: '点击',
+  rightClick: '右键点击',
+  doubleClick: '双击',
+  hover: '悬停',
+  fill: '填写',
+  select: '选择',
+  wait: '等待',
+  assertText: '检查文本',
+  assertVisible: '检查可见',
+  assertValue: '检查输入值',
+  assertUrl: '检查地址',
+  assertTitle: '检查标题'
+};
+
 export const targetTypes = [
   'page',
   'button',
@@ -37,6 +53,49 @@ export const targetTypes = [
 export type TargetType = typeof targetTypes[number];
 
 export type MatchType = 'contains' | 'equals' | 'regex';
+
+export const targetTypeLabels: Record<TargetType, string> = {
+  page: '页面',
+  button: '按钮',
+  input: '输入框',
+  select: '下拉框',
+  link: '链接',
+  menu: '菜单',
+  tab: '页签',
+  dialog: '弹窗',
+  text: '文本',
+  table: '表格',
+  tree: '树节点',
+  date: '日期控件',
+  region: '区域'
+};
+
+export const matchTypeLabels: Record<MatchType, string> = {
+  contains: '包含',
+  equals: '等于',
+  regex: '正则'
+};
+
+/**
+ * 格式化动作类型中文名。
+ */
+export function formatStepType(type: StepType) {
+  return stepTypeLabels[type];
+}
+
+/**
+ * 格式化导入目标类型中文名。
+ */
+export function formatTargetTypeText(type: TargetType) {
+  return targetTypeLabels[type];
+}
+
+/**
+ * 组合中文展示名和英文枚举值。
+ */
+export function formatEnumLabel(label: string, value: string) {
+  return `${label}(${value})`;
+}
 
 export type CaseStatus = 'draft' | 'ready' | 'active';
 

@@ -1,3 +1,5 @@
+import { formatEnumLabel, targetTypeLabels } from './types';
+
 export type LocatorMode =
   | 'role'
   | 'text'
@@ -56,19 +58,102 @@ export interface LocatorOptionItem {
   value: string;
 }
 
-const commonRoles: LocatorOptionItem[] = [
-  { label: '按钮', value: 'button' },
-  { label: '文本框', value: 'textbox' },
-  { label: '复选框', value: 'checkbox' },
-  { label: '单选框', value: 'radio' },
-  { label: '下拉框', value: 'combobox' },
-  { label: '链接', value: 'link' },
-  { label: '标题', value: 'heading' },
-  { label: '弹窗', value: 'dialog' },
-  { label: '选项', value: 'option' },
-  { label: '表格', value: 'table' },
-  { label: '行', value: 'row' },
-  { label: '单元格', value: 'cell' }
+const roleNames: Record<string, string> = {
+  alert: '警告',
+  alertdialog: '警告弹窗',
+  application: '应用',
+  article: '文章',
+  banner: '页眉区',
+  blockquote: '引用块',
+  button: targetTypeLabels.button,
+  caption: '标题说明',
+  cell: '单元格',
+  checkbox: '复选框',
+  code: '代码',
+  columnheader: '列头',
+  combobox: targetTypeLabels.select,
+  complementary: '补充区',
+  contentinfo: '页脚信息',
+  definition: '定义',
+  deletion: '删除内容',
+  dialog: targetTypeLabels.dialog,
+  directory: '目录',
+  document: '文档',
+  emphasis: '强调',
+  feed: '信息流',
+  figure: '图文块',
+  form: '表单',
+  generic: '通用',
+  grid: '网格',
+  gridcell: '网格单元格',
+  group: '分组',
+  heading: '标题',
+  img: '图片',
+  insertion: '新增内容',
+  link: targetTypeLabels.link,
+  list: '列表',
+  listbox: '列表框',
+  listitem: '列表项',
+  log: '日志',
+  main: '主内容',
+  marquee: '滚动字幕',
+  math: '数学内容',
+  menu: targetTypeLabels.menu,
+  menubar: '菜单栏',
+  menuitem: '菜单项',
+  menuitemcheckbox: '复选菜单项',
+  menuitemradio: '单选菜单项',
+  navigation: '导航',
+  none: '无语义',
+  note: '注释',
+  option: '选项',
+  paragraph: '段落',
+  presentation: '展示',
+  progressbar: '进度条',
+  radio: '单选框',
+  radiogroup: '单选组',
+  region: targetTypeLabels.region,
+  row: '行',
+  rowgroup: '行组',
+  rowheader: '行头',
+  scrollbar: '滚动条',
+  search: '搜索区',
+  searchbox: '搜索框',
+  separator: '分隔符',
+  slider: '滑块',
+  spinbutton: '数字调节框',
+  status: '状态',
+  strong: '强强调',
+  subscript: '下标',
+  superscript: '上标',
+  switch: '开关',
+  tab: targetTypeLabels.tab,
+  table: targetTypeLabels.table,
+  tablist: '标签页列表',
+  tabpanel: '标签页面板',
+  term: '术语',
+  textbox: targetTypeLabels.input,
+  time: '时间',
+  timer: '计时器',
+  toolbar: '工具栏',
+  tooltip: '提示',
+  tree: '树',
+  treegrid: '树形网格',
+  treeitem: targetTypeLabels.tree
+};
+const commonRoleValues = [
+  'button',
+  'textbox',
+  'checkbox',
+  'radio',
+  'combobox',
+  'link',
+  'heading',
+  'dialog',
+  'option',
+  'table',
+  'row',
+  'cell'
 ];
 const allRoleValues = [
   'alert',
@@ -153,12 +238,13 @@ const allRoleValues = [
   'treegrid',
   'treeitem'
 ];
+const commonRoles: LocatorOptionItem[] = commonRoleValues.map(makeRoleOption);
 
 export const roleOptions: LocatorOptionItem[] = [
   ...commonRoles,
   ...allRoleValues
     .filter((role) => !commonRoles.some((item) => item.value === role))
-    .map((role) => ({ label: role, value: role }))
+    .map(makeRoleOption)
 ];
 
 export const locatorModes: LocatorOptionItem[] = [
@@ -200,6 +286,15 @@ interface LocatorParseResult {
   hasText?: string;
   indexMode?: 'none' | 'nth' | 'first' | 'last';
   nth?: number;
+}
+
+/**
+ * 生成角色下拉选项文案，保留真实 ARIA role 值。
+ */
+function makeRoleOption(role: string): LocatorOptionItem {
+  const name = roleNames[role] ?? role;
+
+  return { label: formatEnumLabel(name, role), value: role };
 }
 
 /**

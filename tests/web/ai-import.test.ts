@@ -1,7 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import ExcelJS from 'exceljs';
 import { readFileSync } from 'node:fs';
-import type { ImportItem, ImportJob } from '../../shared/types';
+import {
+  formatEnumLabel,
+  formatStepType,
+  formatTargetTypeText,
+  matchTypeLabels,
+  stepTypeLabels,
+  stepTypes,
+  targetTypeLabels,
+  targetTypes,
+  type ImportItem,
+  type ImportJob
+} from '../../shared/types';
 import { parseImportExcel } from '../../server/src/services/import/import-excel';
 import {
   canRetryImportItem,
@@ -70,6 +81,19 @@ describe('AI 导入页面工具', () => {
     expect(formatDraftStepType('assertVisible')).toBe('检查可见');
     expect(formatTargetType('button')).toBe('按钮');
     expect(formatMatchType('contains')).toBe('包含');
+  });
+
+  it('共享枚举文案与导入展示保持一致', () => {
+    expect(formatStepType('click')).toBe('点击');
+    expect(formatTargetTypeText('input')).toBe('输入框');
+    expect(formatTargetTypeText('tab')).toBe('页签');
+    expect(formatTargetTypeText('tree')).toBe('树节点');
+    expect(targetTypes.map((type) => `${targetTypeLabels[type]}(${type})`)).toContain('输入框(input)');
+    expect(matchTypeLabels).toEqual({
+      contains: '包含',
+      equals: '等于',
+      regex: '正则'
+    });
   });
 
   it('格式化未知枚举时保留可见兜底文本', () => {
@@ -154,6 +178,9 @@ describe('AI 导入页面工具', () => {
     expect(steps?.getColumn(3).values).toEqual(
       expect.arrayContaining(['填写(fill)', '选择(select)', '检查可见(assertVisible)'])
     );
+    expect(steps?.getCell('C2').dataValidation?.formulae?.[0]).toBe(`"${stepTypes.map((type) => formatEnumLabel(stepTypeLabels[type], type)).join(',')}"`);
+    expect(steps?.getCell('D2').dataValidation?.formulae?.[0]).toBe(`"${targetTypes.map((type) => formatEnumLabel(targetTypeLabels[type], type)).join(',')}"`);
+    expect(steps?.getCell('G2').dataValidation?.formulae?.[0]).toBe(`"${Object.entries(matchTypeLabels).map(([type, label]) => formatEnumLabel(label, type)).join(',')}"`);
   });
 
   it('按状态、低置信和风险提示筛选导入项', () => {

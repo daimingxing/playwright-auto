@@ -87,6 +87,14 @@ describe('定位器构建器', () => {
     expect(roleOptions.slice(0, 4).map((item) => item.value)).toEqual(['button', 'textbox', 'checkbox', 'radio']);
   });
 
+  it('会使用中文和 role 值组合展示角色选项', () => {
+    expect(roleOptions.find((item) => item.value === 'button')).toEqual({ label: '按钮(button)', value: 'button' });
+    expect(roleOptions.find((item) => item.value === 'textbox')).toEqual({ label: '输入框(textbox)', value: 'textbox' });
+    expect(roleOptions.find((item) => item.value === 'tab')).toEqual({ label: '页签(tab)', value: 'tab' });
+    expect(roleOptions.find((item) => item.value === 'alert')).toEqual({ label: '警告(alert)', value: 'alert' });
+    expect(roleOptions.find((item) => item.value === 'article')).toEqual({ label: '文章(article)', value: 'article' });
+  });
+
   it('会生成正则、description 和过滤条件', () => {
     const selector = buildLocatorSelector({
       mode: 'role',

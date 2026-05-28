@@ -1,17 +1,20 @@
-import type {
-  AiDraftStep,
-  AiLevel,
-  ImportItem,
-  ImportItemStatus,
-  ImportJob,
-  ImportStatus,
-  ImportStepSource,
-  MatchType,
-  PageMap,
-  PageState,
-  PageMapStatus,
-  StepType,
-  TargetType
+import {
+  matchTypeLabels,
+  stepTypeLabels,
+  targetTypeLabels,
+  type AiDraftStep,
+  type AiLevel,
+  type ImportItem,
+  type ImportItemStatus,
+  type ImportJob,
+  type ImportStatus,
+  type ImportStepSource,
+  type MatchType,
+  type PageMap,
+  type PageState,
+  type PageMapStatus,
+  type StepType,
+  type TargetType
 } from '../../../../shared/types';
 import { formatDateTime } from '../../utils/time';
 
@@ -185,23 +188,7 @@ export function getCheckSteps(item: ImportItem) {
  * 格式化草稿步骤类型，面向测试人员隐藏内部实现术语。
  */
 export function formatDraftStepType(type?: StepType | string | null) {
-  const map: Record<StepType, string> = {
-    goto: '打开页面',
-    click: '点击',
-    rightClick: '右键点击',
-    doubleClick: '双击',
-    hover: '悬停',
-    fill: '填写',
-    select: '选择',
-    wait: '等待',
-    assertText: '检查文本',
-    assertVisible: '检查可见',
-    assertValue: '检查输入值',
-    assertUrl: '检查页面地址',
-    assertTitle: '检查页面标题'
-  };
-
-  return formatTypeText(type, map);
+  return formatTypeText(type, stepTypeLabels);
 }
 
 /**
@@ -241,36 +228,14 @@ export function getFallbackText(item: ImportItem) {
  * 格式化导入步骤目标类型，避免在预览页暴露内部枚举值。
  */
 export function formatTargetType(type?: TargetType | string | null) {
-  const map: Record<TargetType, string> = {
-    page: '页面',
-    button: '按钮',
-    input: '输入框',
-    select: '下拉框',
-    link: '链接',
-    menu: '菜单',
-    tab: '页签',
-    dialog: '弹窗',
-    text: '文本',
-    table: '表格',
-    tree: '树',
-    date: '日期控件',
-    region: '区域'
-  };
-
-  return formatTypeText(type, map);
+  return formatTypeText(type, targetTypeLabels);
 }
 
 /**
  * 格式化检查匹配方式，面向测试人员展示中文含义。
  */
 export function formatMatchType(type?: MatchType | string | null) {
-  const map: Record<MatchType, string> = {
-    contains: '包含',
-    equals: '等于',
-    regex: '正则'
-  };
-
-  return formatTypeText(type, map);
+  return formatTypeText(type, matchTypeLabels);
 }
 
 /**
