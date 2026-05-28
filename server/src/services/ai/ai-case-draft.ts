@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { stepTypes, type AiCaseDraft, type AiDebugInfo, type AiDraftStep, type AiLevel, type ImportCaseSource, type ImportDataSource, type ImportStepSource, type StepType } from '../../../../shared/types';
+import { stepTypes, type AiCaseDraft, type AiDebugInfo, type AiDraftStep, type AiLevel, type ImportCaseSource, type ImportDataSource, type ImportStepSource, type StepType, type TargetType } from '../../../../shared/types';
 import { AiJsonError, generateAiJson } from './ai-client';
-import type { PageContext } from './page-context';
+import type { PageContext, PageElement } from './page-context';
 import { buildAiCaseDraftSystemPrompt, buildAiCaseDraftUserPrompt } from '../../prompts/ai-case-draft-prompt';
 
 export interface DraftInput {
@@ -59,6 +59,13 @@ const draftSchema = z.object({
 const highScoreMin = 0.75;
 const mediumScoreMin = 0.4;
 const percentScoreMax = 100;
+const assertTypes: StepType[] = ['assertText', 'assertVisible', 'assertValue', 'assertUrl', 'assertTitle'];
+const typeFixWarning = '平台按模板动作类型修正 AI 返回步骤类型，请确认草稿步骤。';
+
+interface SelectorKind {
+  type: StepType;
+  target?: TargetType;
+}
 
 /**
  * 构造 AI 草稿生成输入。
@@ -242,24 +249,69 @@ function normalizeStep(step: z.infer<typeof draftStepSchema>, index: number): Ai
  * 补全单个步骤的定位器。
  */
 function completeStepSelector(step: AiDraftStep, source: ImportStepSource | undefined, context: PageContext): AiDraftStep {
-  if (step.selector || !source || !needsSelector(step.type) || isLazyMenuStep(source)) {
-    return step;
+  const kind = readSelectorKind(step, source);
+  const fixedStep = fixStepType(step, source);
+
+  if (fixedStep.selector || !source || !needsSelector(kind.type) || isLazyMenuStep(source)) {
+    return fixedStep;
   }
 
-  const candidate = findSelectorCandidate(source, step, context);
+  const candidate = findSelectorCandidate(source, fixedStep, context, kind);
 
   if (!candidate) {
-    return step;
+    return fixedStep;
   }
 
   return {
-    ...step,
+    ...fixedStep,
     selector: candidate.locator,
-    confidence: candidate.unique ? step.confidence : lowerLevel(step.confidence),
+    confidence: candidate.unique ? fixedStep.confidence : lowerLevel(fixedStep.confidence),
     warnings: candidate.unique
-      ? step.warnings
-      : uniqueWarnings([...step.warnings, '平台根据页面上下文自动补充 selector，但该定位器当前匹配不唯一，请人工确认。'])
+      ? fixedStep.warnings
+      : uniqueWarnings([...fixedStep.warnings, '平台根据页面上下文自动补充 selector，但该定位器当前匹配不唯一，请人工确认。'])
   };
+}
+
+/**
+ * 按模板动作类型修正 AI 返回的步骤类型。
+ */
+function fixStepType(step: AiDraftStep, source: ImportStepSource | undefined): AiDraftStep {
+  if (!source?.actionType) {
+    return step;
+  }
+
+  const sameType = source.actionType === step.type;
+  const fixed: AiDraftStep = {
+    ...step,
+    type: source.actionType,
+    warnings: sameType ? step.warnings : uniqueWarnings([...step.warnings, typeFixWarning])
+  };
+
+  if (!sameType) {
+    // 类型错位时模型 selector 往往来自错误候选集，必须丢弃后按模板字段重新补全。
+    delete fixed.selector;
+  }
+
+  return cleanStepFields(fixed, source.actionType);
+}
+
+/**
+ * 按模板动作类型清理草稿步骤不适用字段。
+ */
+function cleanStepFields(step: AiDraftStep, type: StepType): AiDraftStep {
+  const fixed = { ...step };
+
+  if (!usesMatch(type)) {
+    // match 只服务文本和值断言，assertVisible/assertUrl/assertTitle 也不能继承模型误写。
+    delete fixed.match;
+  }
+
+  if (!isValueType(type)) {
+    // click/hover/assertVisible 等不需要 value 的动作，不能继承模型误判时写出的值。
+    delete fixed.value;
+  }
+
+  return fixed;
 }
 
 /**
@@ -282,9 +334,9 @@ function isLazyMenuStep(source: ImportStepSource) {
 /**
  * 查找与自然语言步骤匹配的页面元素候选。
  */
-function findSelectorCandidate(source: ImportStepSource, step: AiDraftStep, context: PageContext) {
-  const target = `${source.targetText} ${source.actionText} ${step.text}`;
-  const items = getSelectorItems(step.type, context).filter((item) => item.text && target.includes(item.text));
+function findSelectorCandidate(source: ImportStepSource, step: AiDraftStep, context: PageContext, kind: SelectorKind) {
+  const target = `${readTargetName(source)} ${source.targetText} ${source.actionText} ${step.text}`;
+  const items = getSelectorItems(kind, context).filter((item) => item.text && target.includes(item.text));
 
   return items.sort((left, right) => (right.text?.length ?? 0) - (left.text?.length ?? 0))[0];
 }
@@ -292,12 +344,18 @@ function findSelectorCandidate(source: ImportStepSource, step: AiDraftStep, cont
 /**
  * 根据步骤类型读取可用的元素候选。
  */
-function getSelectorItems(type: StepType, context: PageContext) {
-  if (type === 'fill') {
-    return context.elements.inputs.map((item) => ({ ...item, text: item.placeholder ?? item.label }));
+function getSelectorItems(kind: SelectorKind, context: PageContext) {
+  const targetItems = getTargetItems(kind.target, context);
+
+  if (targetItems.length > 0) {
+    return targetItems;
   }
 
-  if (type === 'select') {
+  if (kind.type === 'fill') {
+    return mapInputItems(context.elements.inputs);
+  }
+
+  if (kind.type === 'select') {
     return context.elements.selects.map((item) => ({ ...item, text: item.label ?? item.placeholder }));
   }
 
@@ -306,6 +364,69 @@ function getSelectorItems(type: StepType, context: PageContext) {
     ...context.elements.links,
     ...context.elements.navigation
   ];
+}
+
+/**
+ * 读取 selector 补全应该使用的动作和目标类型。
+ */
+function readSelectorKind(step: AiDraftStep, source: ImportStepSource | undefined): SelectorKind {
+  return {
+    // 结构化 actionType 来自平台解析，比模型返回的 type 更可信；缺失时才回退模型类型。
+    type: source?.actionType ?? step.type,
+    target: source?.targetType
+  };
+}
+
+/**
+ * 根据结构化目标类型读取候选集合。
+ */
+function getTargetItems(target: TargetType | undefined, context: PageContext): PageElement[] {
+  if (target === 'input') {
+    return mapInputItems(context.elements.inputs);
+  }
+
+  if (target === 'select') {
+    return context.elements.selects.map((item) => ({ ...item, text: item.label ?? item.placeholder }));
+  }
+
+  if (target === 'date') {
+    // 日期控件可能是输入框、下拉面板或触发按钮，三类候选都需要保留。
+    return [
+      ...mapInputItems(context.elements.inputs),
+      ...context.elements.selects.map((item) => ({ ...item, text: item.label ?? item.placeholder })),
+      ...context.elements.buttons
+    ];
+  }
+
+  if (target === 'button') {
+    return context.elements.buttons;
+  }
+
+  if (target === 'link') {
+    return context.elements.links;
+  }
+
+  if (target === 'menu' || target === 'tab' || target === 'tree') {
+    return context.elements.navigation;
+  }
+
+  if (target === 'text') {
+    // 文本类断言可能来自按钮、链接或导航文案，按现有可定位元素集合兜底。
+    return [
+      ...context.elements.buttons,
+      ...context.elements.links,
+      ...context.elements.navigation
+    ];
+  }
+
+  return [];
+}
+
+/**
+ * 归一化输入框候选文本。
+ */
+function mapInputItems(items: PageElement[]) {
+  return items.map((item) => ({ ...item, text: item.label ?? item.placeholder }));
 }
 
 /**
@@ -377,33 +498,57 @@ function readWarnings(value: unknown) {
  * 创建测试环境固定草稿，避免真实模型调用。
  */
 function createTestDraft(input: DraftInput): AiCaseDraft {
-  const actionSteps = input.steps.map((step, index): AiDraftStep => ({
-    id: `ai-${index + 1}`,
-    type: inferStepType(step.actionText),
-    selector: inferSelector(step, input.pageContext),
-    value: inferValue(step, input.data),
-    text: step.actionText,
-    confidence: 'medium',
-    warnings: []
-  }));
-  const assertStep: AiDraftStep = {
-    id: `ai-${actionSteps.length + 1}`,
-    type: 'assertText',
-    selector: 'body',
-    value: input.caseInfo.expectedResult,
-    match: 'contains',
-    text: `检查：${input.caseInfo.expectedResult}`,
-    confidence: 'low',
-    warnings: ['检查步骤为 AI 生成草稿，需要用户确认。']
-  };
+  const actionSteps = input.steps.map((step, index) => createTestStep(step, index, input));
+  const steps = input.caseInfo.expectedResult
+    ? [...actionSteps, createExpectedStep(input.caseInfo.expectedResult, actionSteps.length)]
+    : actionSteps;
 
   return {
     name: input.caseInfo.caseName,
     startPath: input.caseInfo.targetUrl,
-    steps: [...actionSteps, assertStep],
+    steps,
     confidence: getMinLevel(actionSteps.map((step) => step.confidence)),
     warnings: [],
     missingInfo: []
+  };
+}
+
+/**
+ * 创建单个测试环境草稿步骤。
+ */
+function createTestStep(step: ImportStepSource, index: number, input: DraftInput): AiDraftStep {
+  const type = readStepType(step.actionType) ?? inferStepType(step.actionText);
+  const draft: AiDraftStep = {
+    id: `ai-${index + 1}`,
+    type,
+    selector: inferSelector(step, type, input.pageContext),
+    value: inferStepValue(step, type, input.data),
+    text: buildStepText(step, type),
+    confidence: 'medium',
+    warnings: []
+  };
+
+  if (usesMatch(type)) {
+    // matchType 只对文本和值断言有意义，其他检查动作不能写入 match。
+    draft.match = step.matchType ?? 'contains';
+  }
+
+  return draft;
+}
+
+/**
+ * 创建用例级预期结果兜底断言步骤。
+ */
+function createExpectedStep(expected: string, index: number): AiDraftStep {
+  return {
+    id: `ai-${index + 1}`,
+    type: 'assertText',
+    selector: 'body',
+    value: expected,
+    match: 'contains',
+    text: `检查：${expected}`,
+    confidence: 'low',
+    warnings: ['检查步骤为 AI 生成草稿，需要用户确认。']
   };
 }
 
@@ -425,8 +570,19 @@ function inferStepType(text: string): StepType {
 /**
  * 推断测试环境使用的定位器。
  */
-function inferSelector(step: ImportStepSource, context: PageContext) {
-  const target = step.targetText || step.actionText;
+function inferSelector(step: ImportStepSource, type: StepType, context: PageContext) {
+  if (['assertText', 'assertUrl', 'assertTitle'].includes(type)) {
+    return 'body';
+  }
+
+  const target = `${readTargetName(step)} ${step.targetText || step.actionText}`;
+  const items = getSelectorItems({ type, target: step.targetType }, context);
+  const match = items.find((item) => item.text && target.includes(item.text));
+
+  if (match) {
+    return match.locator;
+  }
+
   const button = context.elements.buttons.find((item) => target.includes(item.text ?? ''));
 
   if (button) {
@@ -454,6 +610,87 @@ function inferValue(step: ImportStepSource, data: ImportDataSource[]) {
   }
 
   return data.find((item) => item.dataKey === key)?.dataValue;
+}
+
+/**
+ * 读取草稿步骤需要写入的值。
+ */
+function inferStepValue(step: ImportStepSource, type: StepType, data: ImportDataSource[]) {
+  if (isValueType(type)) {
+    // 新版两表把输入值和期望值直接放在 inputValue，旧版才通过 dataKeys 查测试数据。
+    return step.inputValue || inferValue(step, data);
+  }
+
+  return undefined;
+}
+
+/**
+ * 判断步骤类型是否需要 value 字段。
+ */
+function isValueType(type: StepType) {
+  return ['goto', 'fill', 'select', 'assertText', 'assertValue', 'assertUrl', 'assertTitle'].includes(type);
+}
+
+/**
+ * 判断步骤类型是否属于检查类动作。
+ */
+function isAssertType(type: StepType) {
+  return assertTypes.includes(type);
+}
+
+/**
+ * 判断步骤类型是否使用 match 字段。
+ */
+function usesMatch(type: StepType) {
+  return ['assertText', 'assertValue'].includes(type);
+}
+
+/**
+ * 读取结构化目标名，缺失时兼容旧目标描述。
+ */
+function readTargetName(step: ImportStepSource) {
+  // targetName 是新版两表的人读对象名；旧字段仅在存量模板缺失时兜底。
+  return step.targetName || step.targetText || step.actionText;
+}
+
+/**
+ * 构造测试环境固定草稿的步骤文案。
+ */
+function buildStepText(step: ImportStepSource, type: StepType) {
+  const target = readTargetName(step);
+
+  if (isAssertType(type)) {
+    return `检查 ${target}`;
+  }
+
+  if (step.actionType && step.targetName) {
+    return `${readActionName(type)} ${target}`;
+  }
+
+  return step.actionText;
+}
+
+/**
+ * 读取常见动作中文名。
+ */
+function readActionName(type: StepType) {
+  const names: Partial<Record<StepType, string>> = {
+    goto: '打开',
+    click: '点击',
+    rightClick: '右键',
+    doubleClick: '双击',
+    hover: '悬停',
+    fill: '填写',
+    select: '选择',
+    wait: '等待',
+    assertText: '检查',
+    assertVisible: '检查',
+    assertValue: '检查',
+    assertUrl: '检查',
+    assertTitle: '检查'
+  };
+
+  return names[type] ?? '操作';
 }
 
 /**
