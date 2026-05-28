@@ -1,11 +1,369 @@
 import { chromium } from '@playwright/test';
 import { describe, expect, it } from 'vitest';
 import { parseJsonObject } from '../../server/src/services/ai/ai-client';
-import { buildCaseDraftInput, completeDraftSelectors, normalizeAiDraft } from '../../server/src/services/ai/ai-case-draft';
+import { buildCaseDraftGroupInput, buildCaseDraftInput, completeDraftSelectors, normalizeAiDraft, normalizeAiDraftGroup } from '../../server/src/services/ai/ai-case-draft';
+import type { DraftGroupInput } from '../../server/src/services/ai/ai-case-draft';
 import { assertPageAvailable, readPageSnapshot, resolveUnique, waitForPageReady } from '../../server/src/services/ai/page-context';
 import { getChromePath } from '../../server/src/services/playwright/vendor-browser';
 
 describe('AI 草稿生成服务', () => {
+  it('分组 prompt 包含页面地图摘要和多条用例', () => {
+    const input = buildCaseDraftGroupInput({
+      pageMap: {
+        mapId: 'pm-test',
+        targetUrl: '/user/list',
+        states: [
+          {
+            stateId: 'state-initial',
+            name: '初始页面',
+            context: {
+              page: { url: '/user/list', title: '用户管理', headings: ['用户管理'] },
+              elements: {
+                buttons: [{ text: '新增', locator: "getByRole('button', { name: '新增' })", unique: true }],
+                inputs: [],
+                selects: [],
+                links: [],
+                navigation: [],
+                tables: []
+              },
+              warnings: []
+            }
+          },
+          {
+            stateId: 'state-dialog',
+            name: '新增弹窗',
+            actionName: '新增',
+            context: {
+              page: { url: '/user/list', title: '新增用户', headings: ['新增用户'] },
+              elements: {
+                buttons: [{ text: '保存', locator: "getByRole('button', { name: '保存' })", unique: true }],
+                inputs: [{ label: '用户名称', locator: "getByLabel('用户名称')", unique: true }],
+                selects: [],
+                links: [],
+                navigation: [],
+                tables: []
+              },
+              warnings: []
+            }
+          }
+        ],
+        warnings: []
+      },
+      cases: [
+        {
+          caseInfo: {
+            caseNo: 'TC001',
+            caseName: '新增用户',
+            targetUrl: '/user/list',
+            precondition: '',
+            expectedResult: '新增成功',
+            note: ''
+          },
+          steps: [
+            {
+              caseNo: 'TC001',
+              stepNo: 1,
+              actionType: 'click',
+              targetType: 'button',
+              targetName: '新增',
+              actionText: '点击新增',
+              targetText: '新增按钮',
+              dataKeys: [],
+              note: ''
+            }
+          ],
+          data: []
+        },
+        {
+          caseInfo: {
+            caseNo: 'TC002',
+            caseName: '填写用户',
+            targetUrl: '/user/list',
+            precondition: '',
+            expectedResult: '',
+            note: ''
+          },
+          steps: [
+            {
+              caseNo: 'TC002',
+              stepNo: 1,
+              actionType: 'fill',
+              targetType: 'input',
+              targetName: '用户名称',
+              inputValue: '张三',
+              actionText: '填写用户名称',
+              targetText: '用户名称输入框',
+              dataKeys: [],
+              note: ''
+            }
+          ],
+          data: []
+        }
+      ]
+    });
+
+    expect(input.system).toContain('items');
+    expect(input.system).toContain('caseNo');
+    expect(input.user).toContain('"pageMap"');
+    expect(input.user).toContain('"state-dialog"');
+    expect(input.user).toContain('"cases"');
+    expect(input.user).toContain('"TC001"');
+    expect(input.user).toContain('"TC002"');
+  });
+
+  it('模型返回部分失败时成功项进入待确认，失败项保留错误信息', () => {
+    const result = normalizeAiDraftGroup({
+      items: [
+        {
+          caseNo: 'TC001',
+          draft: {
+            name: '新增用户',
+            startPath: '/user/list',
+            confidence: 'high',
+            warnings: [],
+            missingInfo: [],
+            steps: [
+              {
+                id: 'ai-1',
+                type: 'click',
+                text: '点击新增',
+                confidence: 'high',
+                warnings: []
+              }
+            ]
+          }
+        },
+        {
+          caseNo: 'TC002',
+          error: '缺少页面元素'
+        }
+      ]
+    }, createGroupNormalizeInput());
+
+    expect(result.items[0]).toMatchObject({
+      caseNo: 'TC001',
+      draft: {
+        steps: [
+          {
+            selector: "getByRole('button', { name: '新增' })"
+          }
+        ]
+      }
+    });
+    expect(result.items[0].error).toBeUndefined();
+    expect(result.items[1]).toMatchObject({
+      caseNo: 'TC002',
+      error: '缺少页面元素'
+    });
+    expect(result.items[1].draft).toBeUndefined();
+  });
+
+  it('未返回某个 caseNo 时该用例失败且不影响其他用例', () => {
+    const result = normalizeAiDraftGroup({
+      items: [
+        {
+          caseNo: 'TC001',
+          draft: {
+            name: '新增用户',
+            startPath: '/user/list',
+            confidence: 'high',
+            warnings: [],
+            missingInfo: [],
+            steps: [
+              {
+                id: 'ai-1',
+                type: 'click',
+                text: '点击新增',
+                confidence: 'high',
+                warnings: []
+              }
+            ]
+          }
+        }
+      ]
+    }, createGroupNormalizeInput());
+
+    expect(result.items[0].draft?.steps[0].selector).toBe("getByRole('button', { name: '新增' })");
+    expect(result.items[1]).toMatchObject({
+      caseNo: 'TC002',
+      error: 'AI 未返回该用例结果：TC002'
+    });
+  });
+
+  it('初始状态 selector 补全不会说明候选来自页面状态', () => {
+    const input = createGroupNormalizeInput();
+
+    input.cases[0].steps[0].targetName = '新增';
+    input.cases[0].steps[0].targetText = '新增按钮';
+    input.cases[0].steps[0].actionText = '点击新增';
+
+    const result = normalizeAiDraftGroup({
+      items: [
+        {
+          caseNo: 'TC001',
+          draft: {
+            name: '新增用户',
+            startPath: '/user/list',
+            confidence: 'high',
+            warnings: [],
+            missingInfo: [],
+            steps: [
+              {
+                id: 'ai-1',
+                type: 'click',
+                text: '点击新增',
+                confidence: 'high',
+                warnings: []
+              }
+            ]
+          }
+        },
+        {
+          caseNo: 'TC002',
+          error: '本条不处理'
+        }
+      ]
+    }, input);
+
+    expect(result.items[0].draft?.steps[0]).toMatchObject({
+      selector: "getByRole('button', { name: '新增' })"
+    });
+    expect(result.items[0].draft?.steps[0].warnings).not.toContain('selector 候选来自页面状态：初始页面。');
+  });
+
+  it('非初始状态 selector 补全会说明候选来自哪个页面状态', () => {
+    const result = normalizeAiDraftGroup({
+      items: [
+        {
+          caseNo: 'TC001',
+          draft: {
+            name: '新增用户',
+            startPath: '/user/list',
+            confidence: 'high',
+            warnings: [],
+            missingInfo: [],
+            steps: [
+              {
+                id: 'ai-1',
+                type: 'click',
+                text: '点击保存',
+                confidence: 'high',
+                warnings: []
+              }
+            ]
+          }
+        },
+        {
+          caseNo: 'TC002',
+          error: '本条不处理'
+        }
+      ]
+    }, createGroupNormalizeInput());
+
+    expect(result.items[0].draft?.steps[0]).toMatchObject({
+      selector: "getByRole('button', { name: '保存' })"
+    });
+    expect(result.items[0].draft?.steps[0].warnings).toContain('selector 候选来自页面状态：新增弹窗。');
+  });
+
+  it('缺少 caseNo 和未知 caseNo 进入组级错误且不生成空编号结果', () => {
+    const input = createGroupNormalizeInput();
+    const result = normalizeAiDraftGroup({
+      items: [
+        { draft: {} },
+        { caseNo: 'TC999', draft: {} },
+        {
+          caseNo: 'TC001',
+          draft: {
+            name: '新增用户',
+            startPath: '/user/list',
+            confidence: 'high',
+            warnings: [],
+            missingInfo: [],
+            steps: [
+              {
+                id: 'ai-1',
+                type: 'click',
+                text: '点击保存',
+                confidence: 'high',
+                warnings: []
+              }
+            ]
+          }
+        }
+      ]
+    }, input);
+
+    expect(result.groupErrors).toEqual([
+      'AI 返回项缺少 caseNo（第 1 项）',
+      'AI 返回未知用例编号：TC999'
+    ]);
+    expect(result.items.some((item) => item.caseNo === '')).toBe(false);
+    expect(result.items[0].draft?.steps[0].selector).toBe("getByRole('button', { name: '保存' })");
+    expect(result.items[1]).toMatchObject({
+      caseNo: 'TC002',
+      error: 'AI 未返回该用例结果：TC002'
+    });
+  });
+
+  it('重复 caseNo 和草稿结构不合法进入对应用例错误', () => {
+    const input = createGroupNormalizeInput();
+
+    expect(normalizeAiDraftGroup({ items: [{ caseNo: 'TC001', draft: { name: '坏结构' } }] }, input).items[0].error).toContain('AI 返回草稿结构不合法');
+    expect(normalizeAiDraftGroup({ items: [{ caseNo: 'TC001', draft: {} }, { caseNo: 'TC001', draft: {} }] }, input).items[0].error).toContain('AI 返回重复用例编号');
+  });
+
+  it('重复 caseNo 有成功草稿时仍返回重复编号中文错误', () => {
+    const result = normalizeAiDraftGroup({
+      items: [
+        {
+          caseNo: 'TC001',
+          draft: {
+            name: '新增用户',
+            startPath: '/user/list',
+            confidence: 'high',
+            warnings: [],
+            missingInfo: [],
+            steps: [
+              {
+                id: 'ai-1',
+                type: 'click',
+                text: '点击保存',
+                confidence: 'high',
+                warnings: []
+              }
+            ]
+          }
+        },
+        {
+          caseNo: 'TC001',
+          draft: {
+            name: '重复用户',
+            startPath: '/user/list',
+            confidence: 'high',
+            warnings: [],
+            missingInfo: [],
+            steps: [
+              {
+                id: 'ai-1',
+                type: 'click',
+                text: '点击新增',
+                confidence: 'high',
+                warnings: []
+              }
+            ]
+          }
+        }
+      ]
+    }, createGroupNormalizeInput());
+
+    expect(result.items[0]).toMatchObject({
+      caseNo: 'TC001',
+      error: 'AI 返回重复用例编号：TC001'
+    });
+    expect(result.items[0].draft).toBeUndefined();
+  });
+
   it('构造包含模板、数据和页面上下文的模型输入', () => {
     const input = buildCaseDraftInput({
       caseInfo: {
@@ -1130,3 +1488,102 @@ describe('AI 草稿生成服务', () => {
     await browser.close();
   }, 15000);
 });
+
+/**
+ * 创建分组归一化测试输入。
+ */
+function createGroupNormalizeInput(): DraftGroupInput {
+  return {
+    pageMap: {
+      mapId: 'pm-test',
+      targetUrl: '/user/list',
+      states: [
+        {
+          stateId: 'state-initial',
+          name: '初始页面',
+          context: {
+            page: { url: '/user/list', title: '用户管理', headings: ['用户管理'] },
+            elements: {
+              buttons: [{ text: '新增', locator: "getByRole('button', { name: '新增' })", unique: true }],
+              inputs: [],
+              selects: [],
+              links: [],
+              navigation: [],
+              tables: []
+            },
+            warnings: []
+          }
+        },
+        {
+          stateId: 'state-dialog',
+          name: '新增弹窗',
+          actionName: '新增',
+          context: {
+            page: { url: '/user/list', title: '新增用户', headings: ['新增用户'] },
+            elements: {
+              buttons: [{ text: '保存', locator: "getByRole('button', { name: '保存' })", unique: true }],
+              inputs: [{ label: '用户名称', locator: "getByLabel('用户名称')", unique: true }],
+              selects: [],
+              links: [],
+              navigation: [],
+              tables: []
+            },
+            warnings: []
+          }
+        }
+      ],
+      warnings: []
+    },
+    cases: [
+      {
+        caseInfo: {
+          caseNo: 'TC001',
+          caseName: '新增用户',
+          targetUrl: '/user/list',
+          precondition: '',
+          expectedResult: '',
+          note: ''
+        },
+        steps: [
+          {
+            caseNo: 'TC001',
+            stepNo: 1,
+            actionType: 'click',
+            targetType: 'button',
+            targetName: '保存',
+            actionText: '点击保存',
+            targetText: '保存按钮',
+            dataKeys: [],
+            note: ''
+          }
+        ],
+        data: []
+      },
+      {
+        caseInfo: {
+          caseNo: 'TC002',
+          caseName: '填写用户',
+          targetUrl: '/user/list',
+          precondition: '',
+          expectedResult: '',
+          note: ''
+        },
+        steps: [
+          {
+            caseNo: 'TC002',
+            stepNo: 1,
+            actionType: 'fill',
+            targetType: 'input',
+            targetName: '用户名称',
+            inputValue: '张三',
+            actionText: '填写用户名称',
+            targetText: '用户名称输入框',
+            dataKeys: [],
+            note: ''
+          }
+        ],
+        data: []
+      }
+    ]
+  };
+}

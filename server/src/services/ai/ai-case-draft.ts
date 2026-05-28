@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { stepTypes, type AiCaseDraft, type AiDebugInfo, type AiDraftStep, type AiLevel, type ImportCaseSource, type ImportDataSource, type ImportStepSource, type StepType, type TargetType } from '../../../../shared/types';
 import { AiJsonError, generateAiJson } from './ai-client';
 import type { PageContext, PageElement } from './page-context';
-import { buildAiCaseDraftSystemPrompt, buildAiCaseDraftUserPrompt } from '../../prompts/ai-case-draft-prompt';
+import { buildAiCaseDraftGroupSystemPrompt, buildAiCaseDraftGroupUserPrompt, buildAiCaseDraftSystemPrompt, buildAiCaseDraftUserPrompt } from '../../prompts/ai-case-draft-prompt';
 
 export interface DraftInput {
   caseInfo: ImportCaseSource;
@@ -11,14 +11,63 @@ export interface DraftInput {
   pageContext: PageContext;
 }
 
+export interface DraftCaseInput {
+  caseInfo: ImportCaseSource;
+  steps: ImportStepSource[];
+  data: ImportDataSource[];
+}
+
+export interface DraftPageState {
+  stateId: string;
+  name: string;
+  actionName?: string;
+  context: PageContext;
+}
+
+export interface DraftPageMap {
+  mapId: string;
+  targetUrl: string;
+  states: DraftPageState[];
+  warnings: string[];
+}
+
+export interface DraftGroupInput {
+  pageMap: DraftPageMap;
+  cases: DraftCaseInput[];
+}
+
 export interface DraftResult {
   draft: AiCaseDraft;
+  aiDebug: AiDebugInfo;
+}
+
+export interface DraftGroupItem {
+  caseNo: string;
+  draft?: AiCaseDraft;
+  error?: string;
+}
+
+export interface DraftGroupResult {
+  items: DraftGroupItem[];
+  groupErrors: string[];
   aiDebug: AiDebugInfo;
 }
 
 interface SelectorCompleteInput {
   steps: ImportStepSource[];
   pageContext: PageContext;
+  stateName?: string;
+}
+
+interface GroupSelectorInput {
+  steps: ImportStepSource[];
+  pageMap: DraftPageMap;
+}
+
+interface SelectorCandidate extends PageElement {
+  stateId?: string;
+  stateName?: string;
+  isInitial?: boolean;
 }
 
 export class AiDraftError extends Error {
@@ -83,6 +132,19 @@ export function buildCaseDraftInput(input: DraftInput) {
 }
 
 /**
+ * 构造 AI 分组草稿生成输入。
+ */
+export function buildCaseDraftGroupInput(input: DraftGroupInput) {
+  return {
+    system: buildAiCaseDraftGroupSystemPrompt(),
+    user: buildAiCaseDraftGroupUserPrompt({
+      pageMap: summarizePageMap(input.pageMap),
+      cases: input.cases
+    })
+  };
+}
+
+/**
  * 调用 AI 生成结构化用例草稿。
  */
 export async function generateCaseDraft(input: DraftInput) {
@@ -118,6 +180,54 @@ export async function generateCaseDraft(input: DraftInput) {
 }
 
 /**
+ * 调用 AI 按页面地图分组生成结构化用例草稿。
+ */
+export async function generateCaseDraftGroup(input: DraftGroupInput) {
+  if (process.env.NODE_ENV === 'test') {
+    const prompt = buildCaseDraftGroupInput(input);
+    const items = input.cases.map((item) => ({
+      caseNo: item.caseInfo.caseNo,
+      draft: completeDraftSelectorsFromPageMap(createTestDraft({
+        ...item,
+        pageContext: input.pageMap.states[0]?.context ?? createEmptyContext(input.pageMap.targetUrl)
+      }), {
+        steps: item.steps,
+        pageMap: input.pageMap
+      })
+    }));
+
+    return {
+      items,
+      groupErrors: [],
+      aiDebug: createDebugInfo(prompt, '测试环境固定分组草稿', { items })
+    } satisfies DraftGroupResult;
+  }
+
+  const prompt = buildCaseDraftGroupInput(input);
+
+  try {
+    const result = await generateAiJson<unknown>(prompt);
+    const draftGroup = normalizeAiDraftGroup(result.parsed, input);
+
+    return {
+      items: draftGroup.items,
+      groupErrors: draftGroup.groupErrors,
+      aiDebug: createDebugInfo(prompt, result.response, result.parsed)
+    } satisfies DraftGroupResult;
+  } catch (error) {
+    if (error instanceof AiDraftError) {
+      throw error;
+    }
+
+    if (error instanceof AiJsonError) {
+      throw new AiDraftError('AI 返回内容不是可用 JSON，请在详情查看模型输出', createDebugInfo(prompt, error.response, error.parsed, error.message));
+    }
+
+    throw error;
+  }
+}
+
+/**
  * 归一化 AI 草稿为平台可保存结构。
  */
 export function normalizeAiDraft(value: unknown): AiCaseDraft {
@@ -130,6 +240,86 @@ export function normalizeAiDraft(value: unknown): AiCaseDraft {
     confidence: draft.confidence,
     warnings: draft.warnings,
     missingInfo: draft.missingInfo
+  };
+}
+
+/**
+ * 归一化 AI 分组草稿输出，并把单条错误限制在对应用例内。
+ */
+export function normalizeAiDraftGroup(value: unknown, input: DraftGroupInput): { items: DraftGroupItem[]; groupErrors: string[] } {
+  const rawItems = readGroupItems(value);
+  const seen = new Set<string>();
+  const errors = new Map<string, string[]>();
+  const groupErrors: string[] = [];
+  const drafts = new Map<string, AiCaseDraft>();
+  const caseMap = new Map(input.cases.map((item) => [item.caseInfo.caseNo, item]));
+
+  rawItems.forEach((item, index) => {
+    const caseNo = readText((item as Record<string, unknown>)?.caseNo);
+
+    if (!caseNo) {
+      groupErrors.push(`AI 返回项缺少 caseNo（第 ${index + 1} 项）`);
+      return;
+    }
+
+    if (seen.has(caseNo)) {
+      pushFirstError(errors, caseNo, `AI 返回重复用例编号：${caseNo}`);
+      return;
+    }
+
+    seen.add(caseNo);
+
+    const caseInput = caseMap.get(caseNo);
+
+    if (!caseInput) {
+      groupErrors.push(`AI 返回未知用例编号：${caseNo}`);
+      return;
+    }
+
+    const error = readText((item as Record<string, unknown>).error);
+
+    if (error) {
+      pushError(errors, caseNo, error);
+      return;
+    }
+
+    try {
+      const draftValue = (item as Record<string, unknown>).draft ?? (item as Record<string, unknown>).result ?? (item as Record<string, unknown>).caseDraft;
+      const draft = normalizeAiDraft(draftValue);
+
+      drafts.set(caseNo, completeDraftSelectorsFromPageMap(draft, {
+        steps: caseInput.steps,
+        pageMap: input.pageMap
+      }));
+    } catch (errorValue) {
+      const message = errorValue instanceof Error ? errorValue.message : '结构不符合要求';
+
+      pushError(errors, caseNo, `AI 返回草稿结构不合法：${message}`);
+    }
+  });
+
+  const items = input.cases.map((item) => {
+    const caseNo = item.caseInfo.caseNo;
+    const draft = drafts.get(caseNo);
+    const itemErrors = errors.get(caseNo);
+
+    if (itemErrors?.[0]) {
+      return { caseNo, error: itemErrors[0] };
+    }
+
+    if (draft) {
+      return { caseNo, draft };
+    }
+
+    return {
+      caseNo,
+      error: itemErrors?.[0] ?? `AI 未返回该用例结果：${caseNo}`
+    };
+  });
+
+  return {
+    items,
+    groupErrors
   };
 }
 
@@ -157,6 +347,39 @@ function normalizeAiDraftWithDebug(value: unknown, prompt: { system: string; use
 }
 
 /**
+ * 读取 AI 分组输出中的 items 数组。
+ */
+function readGroupItems(value: unknown): unknown[] {
+  if (!value || typeof value !== 'object') {
+    return [];
+  }
+
+  const record = value as Record<string, unknown>;
+
+  return Array.isArray(record.items) ? record.items : [];
+}
+
+/**
+ * 记录分组归一化错误。
+ */
+function pushError(errors: Map<string, string[]>, caseNo: string | undefined, message: string) {
+  const key = caseNo ?? '';
+  const values = errors.get(key) ?? [];
+
+  errors.set(key, [...values, message]);
+}
+
+/**
+ * 在同一用例存在多类结构错误时，把更关键的错误放在前面。
+ */
+function pushFirstError(errors: Map<string, string[]>, caseNo: string | undefined, message: string) {
+  const key = caseNo ?? '';
+  const values = errors.get(key) ?? [];
+
+  errors.set(key, [message, ...values]);
+}
+
+/**
  * 创建 AI 调试信息，便于页面查看模型输入输出。
  */
 export function createDebugInfo(prompt: { system: string; user: string }, response: string, parsed?: unknown, error?: string): AiDebugInfo {
@@ -167,6 +390,25 @@ export function createDebugInfo(prompt: { system: string; user: string }, respon
     parsed,
     error,
     updatedAt: new Date().toISOString()
+  };
+}
+
+/**
+ * 压缩页面地图给模型读取，避免把无关运行字段暴露给 prompt。
+ */
+function summarizePageMap(pageMap: DraftPageMap) {
+  return {
+    mapId: pageMap.mapId,
+    targetUrl: pageMap.targetUrl,
+    warnings: pageMap.warnings,
+    states: pageMap.states.map((state) => ({
+      stateId: state.stateId,
+      name: state.name,
+      actionName: state.actionName,
+      page: state.context.page,
+      elements: state.context.elements,
+      warnings: state.context.warnings
+    }))
   };
 }
 
@@ -266,10 +508,60 @@ function completeStepSelector(step: AiDraftStep, source: ImportStepSource | unde
     ...fixedStep,
     selector: candidate.locator,
     confidence: candidate.unique ? fixedStep.confidence : lowerLevel(fixedStep.confidence),
-    warnings: candidate.unique
-      ? fixedStep.warnings
-      : uniqueWarnings([...fixedStep.warnings, '平台根据页面上下文自动补充 selector，但该定位器当前匹配不唯一，请人工确认。'])
+    warnings: buildSelectorWarnings(fixedStep.warnings, candidate, false)
   };
+}
+
+/**
+ * 根据多状态页面地图补全模型遗漏的 selector。
+ */
+export function completeDraftSelectorsFromPageMap(draft: AiCaseDraft, input: GroupSelectorInput): AiCaseDraft {
+  return {
+    ...draft,
+    steps: draft.steps.map((step, index) => completeStepSelectorFromPageMap(step, input.steps[index], input.pageMap))
+  };
+}
+
+/**
+ * 使用多状态页面地图补全单个步骤定位器。
+ */
+function completeStepSelectorFromPageMap(step: AiDraftStep, source: ImportStepSource | undefined, pageMap: DraftPageMap): AiDraftStep {
+  const kind = readSelectorKind(step, source);
+  const fixedStep = fixStepType(step, source);
+
+  if (fixedStep.selector || !source || !needsSelector(kind.type) || isLazyMenuStep(source)) {
+    return fixedStep;
+  }
+
+  const candidate = findSelectorCandidateFromPageMap(source, fixedStep, pageMap, kind);
+
+  if (!candidate) {
+    return fixedStep;
+  }
+
+  return {
+    ...fixedStep,
+    selector: candidate.locator,
+    confidence: candidate.unique ? fixedStep.confidence : lowerLevel(fixedStep.confidence),
+    warnings: buildSelectorWarnings(fixedStep.warnings, candidate, true)
+  };
+}
+
+/**
+ * 构造 selector 自动补全风险提示。
+ */
+function buildSelectorWarnings(warnings: string[], candidate: SelectorCandidate, includeState: boolean) {
+  const next = [...warnings];
+
+  if (!candidate.unique) {
+    next.push('平台根据页面上下文自动补充 selector，但该定位器当前匹配不唯一，请人工确认。');
+  }
+
+  if (includeState && candidate.stateName && !candidate.isInitial) {
+    next.push(`selector 候选来自页面状态：${candidate.stateName}。`);
+  }
+
+  return uniqueWarnings(next);
 }
 
 /**
@@ -337,6 +629,25 @@ function isLazyMenuStep(source: ImportStepSource) {
 function findSelectorCandidate(source: ImportStepSource, step: AiDraftStep, context: PageContext, kind: SelectorKind) {
   const target = `${readTargetName(source)} ${source.targetText} ${source.actionText} ${step.text}`;
   const items = getSelectorItems(kind, context).filter((item) => item.text && target.includes(item.text));
+
+  return items.sort((left, right) => (right.text?.length ?? 0) - (left.text?.length ?? 0))[0];
+}
+
+/**
+ * 从多状态页面地图查找与自然语言步骤匹配的元素候选。
+ */
+function findSelectorCandidateFromPageMap(source: ImportStepSource, step: AiDraftStep, pageMap: DraftPageMap, kind: SelectorKind) {
+  const target = `${readTargetName(source)} ${source.targetText} ${source.actionText} ${step.text}`;
+  const items = pageMap.states.flatMap((state, index) =>
+    getSelectorItems(kind, state.context)
+      .filter((item) => item.text && target.includes(item.text))
+      .map((item) => ({
+        ...item,
+        stateId: state.stateId,
+        stateName: state.name,
+        isInitial: index === 0
+      }))
+  );
 
   return items.sort((left, right) => (right.text?.length ?? 0) - (left.text?.length ?? 0))[0];
 }
@@ -510,6 +821,24 @@ function createTestDraft(input: DraftInput): AiCaseDraft {
     confidence: getMinLevel(actionSteps.map((step) => step.confidence)),
     warnings: [],
     missingInfo: []
+  };
+}
+
+/**
+ * 创建空页面上下文，供测试环境分组入口在缺少状态时兜底。
+ */
+function createEmptyContext(targetUrl: string): PageContext {
+  return {
+    page: { url: targetUrl, title: '', headings: [] },
+    elements: {
+      buttons: [],
+      inputs: [],
+      selects: [],
+      links: [],
+      navigation: [],
+      tables: []
+    },
+    warnings: []
   };
 }
 

@@ -18,6 +18,19 @@ const outputTemplate = {
   missingInfo: []
 };
 
+const groupOutputTemplate = {
+  items: [
+    {
+      caseNo: 'TC001',
+      draft: outputTemplate
+    },
+    {
+      caseNo: 'TC002',
+      error: '缺少页面元素，无法生成可靠草稿'
+    }
+  ]
+};
+
 /**
  * 构造 AI 自然语言导入的系统提示词。
  */
@@ -74,6 +87,29 @@ export function buildAiCaseDraftSystemPrompt() {
 }
 
 /**
+ * 构造 AI 分组自然语言导入的系统提示词。
+ */
+export function buildAiCaseDraftGroupSystemPrompt() {
+  return [
+    buildAiCaseDraftSystemPrompt(),
+    '',
+    '分组输出要求：',
+    '- 输入会提供同一页面地图下的多条 cases 和 pageMap 多状态摘要。',
+    '- 顶层必须返回 JSON 对象，且只包含 items 数组。',
+    '- items 必须按用例编号 caseNo 返回，每个输入用例都必须有且只能有一项。',
+    '- 某条用例能生成草稿时返回 { "caseNo": "...", "draft": { ... } }。',
+    '- 某条用例无法生成草稿时返回 { "caseNo": "...", "error": "中文失败原因" }。',
+    '- 单条用例失败不能影响同组其他用例继续生成草稿。',
+    '- 不要返回输入中不存在的 caseNo，也不要重复返回同一个 caseNo。',
+    '- selector 必须优先从 pageMap.states 的各状态候选中选择。',
+    '- 使用非初始状态候选时，在步骤 warnings 中说明候选来自哪个页面状态。',
+    '',
+    '分组输出 JSON 模板：',
+    JSON.stringify(groupOutputTemplate)
+  ].join('\n');
+}
+
+/**
  * 构造 AI 草稿生成的用户提示词。
  */
 export function buildAiCaseDraftUserPrompt(input: unknown) {
@@ -81,6 +117,20 @@ export function buildAiCaseDraftUserPrompt(input: unknown) {
     {
       ...input as Record<string, unknown>,
       outputRule: '返回 name、startPath、steps、confidence、warnings、missingInfo，steps 使用完整 StepType 列表；有 locator 候选时 steps 必须包含 selector；没有候选时也可以推理 selector，但必须标 low 并写 warnings。'
+    },
+    null,
+    2
+  );
+}
+
+/**
+ * 构造 AI 分组草稿生成的用户提示词。
+ */
+export function buildAiCaseDraftGroupUserPrompt(input: unknown) {
+  return JSON.stringify(
+    {
+      ...input as Record<string, unknown>,
+      outputRule: '返回 items 数组；每项必须包含输入用例的 caseNo；成功项返回 draft，失败项返回中文 error；不得遗漏、重复或新增 caseNo。'
     },
     null,
     2
