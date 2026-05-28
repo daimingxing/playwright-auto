@@ -22,14 +22,18 @@ import {
   formatMatchType,
   formatPageMapAge,
   formatPageMapCount,
+  formatPageMapState,
   formatPageMapStatus,
   formatTargetType,
+  getMapWarnings,
+  getMapStates,
   getActionSteps,
   getCheckSteps,
   getCheckSummary,
   getImportProgress,
   getItemIssueText,
   getStepSummary,
+  hasPageMapDebug,
   type ImportFilter
 } from './ai-import';
 
@@ -578,20 +582,23 @@ onBeforeUnmount(() => {
 
         <section class="detail-block">
           <h3>页面地图</h3>
-          <dl v-if="getItemMap(detailItem)" class="info-grid">
-            <dt>目标页面</dt>
-            <dd>{{ getItemMap(detailItem)?.targetUrl }}</dd>
-            <dt>环境</dt>
-            <dd>{{ getItemMap(detailItem)?.envKey }}</dd>
-            <dt>状态</dt>
-            <dd>{{ formatPageMapStatus(getItemMap(detailItem)?.status).label }}</dd>
-            <dt>状态数量</dt>
-            <dd>{{ formatPageMapCount(getItemMap(detailItem)?.stateCount) }}</dd>
-            <dt>更新时间</dt>
-            <dd>{{ formatImportTime(getItemMap(detailItem)?.updatedAt) }}</dd>
-            <dt>缓存状态</dt>
-            <dd>{{ formatPageMapAge(getItemMap(detailItem)?.updatedAt) }}</dd>
-          </dl>
+          <template v-if="getItemMap(detailItem)">
+            <dl class="info-grid">
+              <dt>目标页面</dt>
+              <dd>{{ getItemMap(detailItem)?.targetUrl }}</dd>
+              <dt>环境</dt>
+              <dd>{{ getItemMap(detailItem)?.envKey }}</dd>
+              <dt>状态</dt>
+              <dd>{{ formatPageMapStatus(getItemMap(detailItem)?.status).label }}</dd>
+              <dt>状态数量</dt>
+              <dd>{{ formatPageMapCount(getItemMap(detailItem)?.stateCount) }}</dd>
+              <dt>更新时间</dt>
+              <dd>{{ formatImportTime(getItemMap(detailItem)?.updatedAt) }}</dd>
+              <dt>缓存状态</dt>
+              <dd>{{ formatPageMapAge(getItemMap(detailItem)?.updatedAt) }}</dd>
+            </dl>
+            <el-button size="small" @click="openMap(getItemMap(detailItem)!)">查看页面状态</el-button>
+          </template>
           <el-empty v-else description="暂无页面地图缓存" />
         </section>
 
@@ -705,18 +712,49 @@ onBeforeUnmount(() => {
             <dt>状态</dt>
             <dd>{{ formatPageMapStatus(mapDetail.status).label }}</dd>
             <dt>状态数量</dt>
-            <dd>{{ formatPageMapCount(mapDetail.states.length) }}</dd>
+            <dd>{{ formatPageMapCount(getMapStates(mapDetail).length) }}</dd>
             <dt>更新时间</dt>
             <dd>{{ formatImportTime(mapDetail.updatedAt) }}</dd>
           </dl>
         </section>
+        <section v-if="getMapWarnings(mapDetail.warnings).length" class="detail-block">
+          <h3>采集提示</h3>
+          <ul class="issue-list">
+            <li v-for="warning in getMapWarnings(mapDetail.warnings)" :key="warning">{{ warning }}</li>
+          </ul>
+        </section>
         <section class="detail-block">
           <h3>页面状态</h3>
-          <el-table :data="mapDetail.states" border stripe empty-text="暂无状态">
-            <el-table-column prop="name" label="状态名称" min-width="140" />
+          <el-table :data="getMapStates(mapDetail)" border stripe empty-text="暂无状态">
+            <el-table-column label="状态名称" min-width="140">
+              <template #default="{ row }">
+                {{ formatPageMapState(row).name }}
+              </template>
+            </el-table-column>
+            <el-table-column label="来源动作" min-width="180">
+              <template #default="{ row }">
+                {{ formatPageMapState(row).action }}
+              </template>
+            </el-table-column>
             <el-table-column prop="url" label="页面地址" min-width="220" show-overflow-tooltip />
             <el-table-column prop="title" label="标题" min-width="140" show-overflow-tooltip />
+            <el-table-column label="状态提示" min-width="220" show-overflow-tooltip>
+              <template #default="{ row }">
+                {{ formatPageMapState(row).warning }}
+              </template>
+            </el-table-column>
           </el-table>
+        </section>
+        <section v-if="hasPageMapDebug(mapDetail)" class="detail-block">
+          <h3>页面地图调试信息</h3>
+          <el-collapse>
+            <el-collapse-item title="状态 JSON" name="states">
+              <pre class="debug-text">{{ JSON.stringify(getMapStates(mapDetail), null, 2) }}</pre>
+            </el-collapse-item>
+            <el-collapse-item v-if="getMapWarnings(mapDetail.warnings).length" title="采集提示 JSON" name="warnings">
+              <pre class="debug-text">{{ JSON.stringify(getMapWarnings(mapDetail.warnings), null, 2) }}</pre>
+            </el-collapse-item>
+          </el-collapse>
         </section>
       </div>
     </el-drawer>

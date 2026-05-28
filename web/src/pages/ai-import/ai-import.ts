@@ -7,6 +7,8 @@ import type {
   ImportStatus,
   ImportStepSource,
   MatchType,
+  PageMap,
+  PageState,
   PageMapStatus,
   StepType,
   TargetType
@@ -313,6 +315,51 @@ export function formatPageMapCount(count?: number) {
 }
 
 /**
+ * 格式化页面地图状态，统一用于预览详情和地图详情展示。
+ */
+export function formatPageMapState(state: PageState) {
+  return {
+    name: state.name || '未命名状态',
+    action: formatMapAction(state.sourceAction),
+    warning: getMapWarnings(state.warnings).join('；') || '-'
+  };
+}
+
+/**
+ * 读取页面地图 warning，避免页面直接渲染空值。
+ */
+export function getMapWarnings(warnings?: string[]) {
+  if (!Array.isArray(warnings)) {
+    return [];
+  }
+
+  return warnings
+    .filter((warning): warning is string => typeof warning === 'string')
+    .map((warning) => warning.trim())
+    .filter(Boolean);
+}
+
+/**
+ * 读取页面地图状态数组，兼容历史缓存和接口漂移的缺失字段。
+ */
+export function getMapStates(map?: Pick<PageMap, 'states'> | null) {
+  if (!Array.isArray(map?.states)) {
+    return [];
+  }
+
+  return map.states;
+}
+
+/**
+ * 判断页面地图是否有调试信息可展示。
+ */
+export function hasPageMapDebug(map?: PageMap | null) {
+  return Boolean(
+    map && (getMapWarnings(map.warnings).length > 0 || getMapStates(map).some((state) => getMapWarnings(state.warnings).length > 0))
+  );
+}
+
+/**
  * 判断草稿步骤是否为检查步骤。
  */
 function isCheckStep(step: AiDraftStep) {
@@ -337,4 +384,17 @@ function formatTypeText<T extends string>(type: T | string | null | undefined, m
 function isSummaryPart(value?: string) {
   // 新版结构化字段缺失时格式化函数会返回占位符，摘要中需要跳过占位符。
   return Boolean(value && value !== '-');
+}
+
+/**
+ * 格式化页面地图状态的来源动作。
+ */
+function formatMapAction(action?: PageState['sourceAction']) {
+  if (!action) {
+    return '直接打开目标页面';
+  }
+
+  const parts = [formatDraftStepType(action.type), formatTargetType(action.targetType), action.targetName].filter(isSummaryPart);
+
+  return parts.join(' ') || '探索动作';
 }

@@ -20,7 +20,11 @@ import {
   getItemIssueText,
   formatPageMapStatus,
   formatPageMapAge,
-  formatPageMapCount
+  formatPageMapCount,
+  formatPageMapState,
+  getMapWarnings,
+  getMapStates,
+  hasPageMapDebug
 } from '../../web/src/pages/ai-import/ai-import';
 
 describe('AI 导入页面工具', () => {
@@ -179,6 +183,82 @@ describe('AI 导入页面工具', () => {
     expect(formatPageMapCount(3)).toBe('3 个状态');
   });
 
+  it('格式化页面地图状态时显示状态名、来源动作和 warning', () => {
+    expect(
+      formatPageMapState({
+        stateId: 'state-action-1',
+        name: '菜单展开',
+        url: '/users#menu',
+        title: '用户管理',
+        snapshotPath: 'snapshot.json',
+        sourceAction: {
+          id: 'action-1',
+          type: 'click',
+          targetType: 'menu',
+          targetName: '系统管理',
+          path: ['系统管理']
+        },
+        warnings: ['探索动作后页面网络未在限定时间内完全空闲，已继续读取当前可见内容。'],
+        createdAt: '2026-05-28T00:00:00.000Z'
+      })
+    ).toEqual({
+      name: '菜单展开',
+      action: '点击 菜单 系统管理',
+      warning: '探索动作后页面网络未在限定时间内完全空闲，已继续读取当前可见内容。'
+    });
+
+    expect(
+      formatPageMapState({
+        stateId: 'state-initial',
+        name: '初始页面',
+        url: '/users',
+        title: '用户管理',
+        snapshotPath: 'snapshot.json',
+        warnings: [],
+        createdAt: '2026-05-28T00:00:00.000Z'
+      })
+    ).toEqual({ name: '初始页面', action: '直接打开目标页面', warning: '-' });
+  });
+
+  it('危险动作 warning 不会被误归类为生成失败', () => {
+    const item = makeItem('pendingReview', {
+      pageMap: {
+        mapId: 'map-1',
+        projectKey: 'crm',
+        envKey: 'default',
+        targetUrl: '/users',
+        authHash: 'auth',
+        viewport: { width: 1280, height: 720 },
+        status: 'ready',
+        stateCount: 1,
+        updatedAt: '2026-05-28T00:00:00.000Z'
+      }
+    });
+
+    expect(filterImportItems([item], 'failed')).toEqual([]);
+    expect(getItemIssueText(item)).toBe('-');
+    expect(getMapWarnings(['已跳过危险动作：保存'])).toEqual(['已跳过危险动作：保存']);
+  });
+
+  it('页面地图状态缺失或类型漂移时不会影响调试判断', () => {
+    expect(() => hasPageMapDebug(makeBrokenMap({ states: undefined }))).not.toThrow();
+    expect(() => hasPageMapDebug(makeBrokenMap({ states: 'bad states' }))).not.toThrow();
+    expect(getMapStates(makeBrokenMap({ states: undefined }))).toEqual([]);
+    expect(getMapStates(makeBrokenMap({ states: 'bad states' }))).toEqual([]);
+    expect(hasPageMapDebug(makeBrokenMap({ states: undefined }))).toBe(false);
+    expect(hasPageMapDebug(makeBrokenMap({ states: 'bad states', warnings: ['  采集异常  '] }))).toBe(true);
+  });
+
+  it('页面地图 warning 缺失或类型漂移时按空数组处理', () => {
+    expect(() => getMapWarnings(undefined)).not.toThrow();
+    expect(() => getMapWarnings('bad warnings' as unknown as string[])).not.toThrow();
+    expect(() => getMapWarnings(['  采集异常  ', 123, null] as unknown as string[])).not.toThrow();
+    expect(getMapWarnings(undefined)).toEqual([]);
+    expect(getMapWarnings('bad warnings' as unknown as string[])).toEqual([]);
+    expect(getMapWarnings(['  采集异常  ', ''])).toEqual(['采集异常']);
+    expect(getMapWarnings(['  采集异常  ', 123, null] as unknown as string[])).toEqual(['采集异常']);
+  });
+
   it('格式化页面地图更新时间用于摘要展示', () => {
     expect(formatImportTime('2026-05-28T08:30:00.000Z')).toBe('2026-05-28 08:30:00');
     expect(formatImportTime()).toBe('-');
@@ -220,6 +300,26 @@ function makeJob(patch: Partial<ImportJob> = {}): ImportJob {
     updatedAt: '2026-05-26T00:00:00.000Z',
     ...patch
   };
+}
+
+/**
+ * 创建字段异常的页面地图测试数据。
+ */
+function makeBrokenMap(patch: Record<string, unknown>) {
+  return {
+    mapId: 'map-1',
+    projectKey: 'crm',
+    envKey: 'default',
+    targetUrl: '/users',
+    authHash: 'auth',
+    viewport: { width: 1280, height: 720 },
+    status: 'ready',
+    states: [],
+    warnings: [],
+    createdAt: '2026-05-28T00:00:00.000Z',
+    updatedAt: '2026-05-28T00:00:00.000Z',
+    ...patch
+  } as never;
 }
 
 /**

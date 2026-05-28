@@ -14,6 +14,7 @@ import {
   formatPageMapAge,
   formatPageMapCount,
   formatPageMapStatus,
+  getMapStates,
   getImportProgress,
   getPendingCount
 } from './ai-import';
@@ -358,11 +359,11 @@ onBeforeUnmount(() => {
           <dt>状态</dt>
           <dd>{{ formatPageMapStatus(mapDetail.status).label }}</dd>
           <dt>状态数量</dt>
-          <dd>{{ formatPageMapCount(mapDetail.states.length) }}</dd>
+          <dd>{{ formatPageMapCount(getMapStates(mapDetail).length) }}</dd>
           <dt>更新时间</dt>
           <dd>{{ formatImportTime(mapDetail.updatedAt) }}</dd>
         </dl>
-        <el-table :data="mapDetail.states" border stripe empty-text="暂无状态">
+        <el-table :data="getMapStates(mapDetail)" border stripe empty-text="暂无状态">
           <el-table-column prop="name" label="状态名称" min-width="140" />
           <el-table-column prop="url" label="页面地址" min-width="220" show-overflow-tooltip />
           <el-table-column prop="title" label="标题" min-width="140" show-overflow-tooltip />
