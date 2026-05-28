@@ -16,6 +16,7 @@ import {
   filterImportItems,
   formatAiLevel,
   formatDraftStepType,
+  formatGroupState,
   formatImportItemStatus,
   formatImportStatus,
   formatImportTime,
@@ -30,6 +31,7 @@ import {
   getActionSteps,
   getCheckSteps,
   getCheckSummary,
+  getFallbackText,
   getImportProgress,
   getItemIssueText,
   getStepSummary,
@@ -455,6 +457,21 @@ onBeforeUnmount(() => {
               </el-tag>
             </template>
           </el-table-column>
+          <el-table-column label="分组生成" min-width="210" show-overflow-tooltip>
+            <template #default="{ row }">
+              <div class="group-cell">
+                <el-tag :type="formatGroupState(row, items).type" effect="light">
+                  {{ formatGroupState(row, items).label }}
+                </el-tag>
+                <span>{{ formatGroupState(row, items).url }}</span>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="降级提示" min-width="220" show-overflow-tooltip>
+            <template #default="{ row }">
+              {{ getFallbackText(row) }}
+            </template>
+          </el-table-column>
           <el-table-column label="问题提示" min-width="200" show-overflow-tooltip>
             <template #default="{ row }">
               {{ getItemIssueText(row) }}
@@ -531,6 +548,14 @@ onBeforeUnmount(() => {
             <dd>{{ detailItem.source.caseInfo.precondition || '-' }}</dd>
             <dt>预期结果</dt>
             <dd>{{ detailItem.source.caseInfo.expectedResult }}</dd>
+            <dt>分组状态</dt>
+            <dd>{{ formatGroupState(detailItem, items).label }}</dd>
+            <dt>同组 URL</dt>
+            <dd>{{ formatGroupState(detailItem, items).url }}</dd>
+            <dt>页面地图</dt>
+            <dd>{{ formatGroupState(detailItem, items).mapId }}</dd>
+            <dt>降级提示</dt>
+            <dd>{{ getFallbackText(detailItem) }}</dd>
           </dl>
         </section>
 
@@ -919,6 +944,20 @@ onBeforeUnmount(() => {
 
 .map-actions :deep(.el-button) {
   margin-left: 0;
+}
+
+.group-cell {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.group-cell span {
+  color: #64748b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .muted {

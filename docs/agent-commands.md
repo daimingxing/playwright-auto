@@ -12,6 +12,7 @@ npm run dev:web
 npm run typecheck
 npm run test
 npm test -- tests/web/case-editor.test.ts
+npm test -- tests/server/api-imports.test.ts tests/server/import-worker.test.ts tests/server/ai-case-draft.test.ts tests/web/ai-import.test.ts
 npm run build
 npm run build:web
 npm run test:e2e
@@ -28,6 +29,7 @@ npm run test:e2e
 - `npm run typecheck`：执行 TypeScript 类型检查。
 - `npm run test`：执行全部 Vitest 测试。
 - `npm test -- <测试文件>`：执行指定测试文件，适合局部迭代。
+- `npm test -- tests/server/api-imports.test.ts tests/server/import-worker.test.ts tests/server/ai-case-draft.test.ts tests/web/ai-import.test.ts`：验证 AI 导入接口、页面地图分组、草稿生成和预览工具。
 - `npm run build`：先执行类型检查，再构建前端产物。
 - `npm run build:web`：只构建前端产物。
 - `npm run test:e2e`：执行 Playwright 端到端测试。
@@ -55,6 +57,7 @@ npm run test:e2e
 - 发现端口已占用时，不要换端口重复启动服务
 - 服务端代码变更后，如果没有使用 `npm run dev:server:watch`，提醒开发人员重启已有服务
 - 前端结构拆分后，至少运行 `npm run typecheck`、相关 `tests/web/*.test.ts` 和必要时的 `npm run build`
+- 改 AI 导入分组、页面地图缓存、降级生成或预览展示后，至少运行 AI 导入专项测试、`npm run typecheck` 和 `npm run test`
 - 摘要类命令优先使用 `rtk`
 - Playwright 命令不要用 `rtk` 包裹
 - Playwright 运行和实测检查的子进程输出、退出码、启动错误和取消信号由 `server/src/services/playwright/playwright-cli.ts` 统一处理

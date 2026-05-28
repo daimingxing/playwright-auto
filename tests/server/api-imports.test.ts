@@ -1,5 +1,5 @@
 import ExcelJS from 'exceljs';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import request from 'supertest';
@@ -112,7 +112,7 @@ describe('AI 导入接口', () => {
     expect(normalizeUploadName('cases.xlsx')).toBe('cases.xlsx');
   });
 
-  it('手动重试失败导入项时重置重试次数', async () => {
+  it('手动重试失败导入项时清理旧错误和降级信息', async () => {
     const app = createApp();
     await request(app).post('/api/projects').send({
       name: 'CRM 系统',
@@ -127,6 +127,8 @@ describe('AI 导入接口', () => {
     await updateImportItem('crm', created.body.importId, items.body[0].itemId, {
       status: 'failed',
       errorMessage: '模型超时',
+      genMode: 'single',
+      fallbackReason: '分组生成失败：旧错误',
       retryCount: 1
     });
 
@@ -135,10 +137,19 @@ describe('AI 导入接口', () => {
     const nextItems = await waitItems(app, created.body.importId);
 
     expect(retried.status).toBe(200);
-    expect(nextItems.body[0]).toMatchObject({
-      status: 'pendingReview',
+    expect(retried.body).toMatchObject({
+      status: 'pending',
       retryCount: 0
     });
+    expect(retried.body.errorMessage).toBeUndefined();
+    expect(retried.body.fallbackReason).toBeUndefined();
+    expect(nextItems.body[0]).toMatchObject({
+      status: 'pendingReview',
+      genMode: 'single',
+      retryCount: 0
+    });
+    expect(nextItems.body[0].fallbackReason).toBeUndefined();
+    expect(typeof nextItems.body[0].genMode).toBe('string');
   });
 
   it('重复保存同一导入项时返回已有草稿且不重复创建用例', async () => {
@@ -166,6 +177,38 @@ describe('AI 导入接口', () => {
     expect(second.body.saved).toEqual(first.body.saved);
     expect(second.body.failed).toEqual([]);
     expect(cases.body).toHaveLength(1);
+  });
+
+  it('保存导入草稿时不会覆盖已有草稿用例', async () => {
+    const app = createApp();
+    await request(app).post('/api/projects').send({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    const manual = await request(app).post('/api/projects/crm/cases').send({
+      name: '手工草稿',
+      startPath: '/manual'
+    });
+    const created = await request(app)
+      .post('/api/projects/crm/imports/ai')
+      .attach('file', await createWorkbookBuffer(), 'cases.xlsx');
+    const items = await waitItems(app, created.body.importId);
+
+    const saved = await request(app)
+      .post(`/api/projects/crm/imports/${created.body.importId}/save`)
+      .send({ itemIds: [items.body[0].itemId] });
+    const manualCase = await request(app).get(`/api/projects/crm/cases/${manual.body.key}`);
+    const manualFile = await readFile(join(root, 'projects', 'crm', 'cases', manual.body.key, 'case.json'), 'utf-8');
+
+    expect(saved.status).toBe(200);
+    expect(saved.body.saved[0].caseKey).not.toBe(manual.body.key);
+    expect(manualCase.body).toMatchObject({
+      key: manual.body.key,
+      name: '手工草稿',
+      startPath: '/manual'
+    });
+    expect(manualFile).toContain('手工草稿');
   });
 
   it('删除导入记录时只移除导入任务且保留已保存草稿', async () => {

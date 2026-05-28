@@ -6,12 +6,26 @@ import { createImportJob, listImportItems } from '../../server/src/lib/import-st
 import { addProjectEnv, createProject } from '../../server/src/lib/project-store';
 import { setPageMapRunner } from '../../server/src/services/ai/page-context';
 import { enqueueImportJob, processImportItem } from '../../server/src/services/import/import-worker';
-import type { ImportCaseSource, ImportStepSource } from '../../shared/types';
+import type { AiDebugInfo, AiCaseDraft, ImportCaseSource, ImportStepSource } from '../../shared/types';
+
+interface MockGroupItem {
+  caseNo: string;
+  draft?: AiCaseDraft;
+  error?: string;
+}
 
 let root = '';
 let collectCount = 0;
 let failUrl = '';
 const authStats = vi.hoisted(() => ({ count: 0 }));
+const draftStats = vi.hoisted(() => ({
+  groupSizes: [] as number[],
+  singleCaseNos: [] as string[],
+  failGroupSizes: [] as number[],
+  failSingleCaseNos: [] as string[],
+  groupItems: undefined as MockGroupItem[] | undefined,
+  groupErrors: [] as string[]
+}));
 
 vi.mock('../../server/src/lib/path', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../server/src/lib/path')>();
@@ -26,6 +40,54 @@ vi.mock('../../server/src/lib/path', async (importOriginal) => {
   };
 });
 
+vi.mock('../../server/src/services/ai/ai-case-draft', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../server/src/services/ai/ai-case-draft')>();
+
+  return {
+    ...actual,
+    generateCaseDraftGroup: vi.fn(async (input: Parameters<typeof actual.generateCaseDraftGroup>[0]) => {
+      draftStats.groupSizes.push(input.cases.length);
+
+      if (draftStats.failGroupSizes.includes(input.cases.length)) {
+        throw new Error(`模拟分组失败 ${input.cases.length}`);
+      }
+
+      return {
+        items: draftStats.groupItems ?? input.cases.map((item) => ({
+          caseNo: item.caseInfo.caseNo,
+          draft: createMockDraft(item.caseInfo.caseNo, item.caseInfo.targetUrl)
+        })),
+        groupErrors: draftStats.groupErrors,
+        aiDebug: {
+          system: '测试分组系统提示词',
+          user: '测试分组用户输入',
+          response: '测试分组响应',
+          parsed: {},
+          updatedAt: new Date().toISOString()
+        }
+      };
+    }),
+    generateCaseDraft: vi.fn(async (input: Parameters<typeof actual.generateCaseDraft>[0]) => {
+      draftStats.singleCaseNos.push(input.caseInfo.caseNo);
+
+      if (draftStats.failSingleCaseNos.includes(input.caseInfo.caseNo)) {
+        throw new Error(`模拟单条失败 ${input.caseInfo.caseNo}`);
+      }
+
+      return {
+        draft: createMockDraft(input.caseInfo.caseNo, input.caseInfo.targetUrl),
+        aiDebug: {
+          system: '测试单条系统提示词',
+          user: '测试单条用户输入',
+          response: '测试单条响应',
+          parsed: {},
+          updatedAt: new Date().toISOString()
+        }
+      };
+    })
+  };
+});
+
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'playwright-auto-import-worker-'));
   process.env.DATA_ROOT = root;
@@ -33,6 +95,12 @@ beforeEach(async () => {
   collectCount = 0;
   failUrl = '';
   authStats.count = 0;
+  draftStats.groupSizes = [];
+  draftStats.singleCaseNos = [];
+  draftStats.failGroupSizes = [];
+  draftStats.failSingleCaseNos = [];
+  draftStats.groupItems = undefined;
+  draftStats.groupErrors = [];
   setPageMapRunner(async (input) => ({
     setDefaultTimeout() {},
     async open() {
@@ -213,6 +281,84 @@ describe('导入 worker 页面地图分组', () => {
     expect(sameGroupFailed?.pageMapId).toBeUndefined();
     expect(success?.status).toBe('pendingReview');
   });
+
+  it('分组生成失败后先拆批，拆批失败后降级为单条生成', async () => {
+    draftStats.failGroupSizes = [4, 2];
+    await createProject({ name: 'CRM 系统', key: 'crm', baseUrl: 'https://crm.test.local' });
+    const job = await createImportJob('crm', {
+      fileName: 'cases.xlsx',
+      fileHash: 'hash-group-fallback',
+      envKey: 'default',
+      cases: [createCase('TC001', '/users'), createCase('TC002', '/users'), createCase('TC003', '/users'), createCase('TC004', '/users')]
+    });
+
+    await enqueueImportJob('crm', job.importId);
+    const items = await waitItems('crm', job.importId, ['pendingReview', 'failed']);
+
+    expect(collectCount).toBe(1);
+    expect(draftStats.groupSizes).toEqual([4, 2, 2]);
+    expect(draftStats.singleCaseNos).toEqual(['TC001', 'TC002', 'TC003', 'TC004']);
+    expect(items.every((item) => item.status === 'pendingReview')).toBe(true);
+    expect(new Set(items.map((item) => item.pageMapId)).size).toBe(1);
+    expect(items.every((item) => item.genMode === 'single')).toBe(true);
+    expect(items.every((item) => item.fallbackReason?.includes('模拟分组失败'))).toBe(true);
+  });
+
+  it('单条降级失败不会影响同组其他用例保存草稿', async () => {
+    draftStats.failGroupSizes = [3, 2];
+    draftStats.failSingleCaseNos = ['TC002'];
+    await createProject({ name: 'CRM 系统', key: 'crm', baseUrl: 'https://crm.test.local' });
+    const job = await createImportJob('crm', {
+      fileName: 'cases.xlsx',
+      fileHash: 'hash-single-fallback-failed',
+      envKey: 'default',
+      cases: [createCase('TC001', '/users'), createCase('TC002', '/users'), createCase('TC003', '/users')]
+    });
+
+    await enqueueImportJob('crm', job.importId);
+    const items = await waitItems('crm', job.importId, ['pendingReview', 'failed']);
+    const success = items.filter((item) => item.status === 'pendingReview');
+    const failed = items.find((item) => item.caseNo === 'TC002');
+
+    expect(collectCount).toBe(1);
+    expect(success.map((item) => item.caseNo)).toEqual(['TC001', 'TC003']);
+    expect(success.every((item) => item.draft)).toBe(true);
+    expect(failed).toMatchObject({
+      status: 'failed',
+      genMode: 'single'
+    });
+    expect(failed?.errorMessage).toContain('模拟单条失败 TC002');
+  });
+
+  it('分组返回未知或缺失编号时失败项可见组级错误且不影响成功项', async () => {
+    draftStats.groupErrors = ['模型返回未知用例编号 TC999', '模型缺少用例编号 TC001'];
+    await createProject({ name: 'CRM 系统', key: 'crm', baseUrl: 'https://crm.test.local' });
+    const job = await createImportJob('crm', {
+      fileName: 'cases.xlsx',
+      fileHash: 'hash-group-visible-error',
+      envKey: 'default',
+      cases: [createCase('TC001', '/users'), createCase('TC002', '/users'), createCase('TC003', '/users')]
+    });
+    draftStats.groupItems = [
+      { caseNo: 'TC002', error: '字段缺失：步骤为空' },
+      { caseNo: 'TC003', draft: createMockDraft('TC003', '/users') },
+      { caseNo: 'TC999', error: '未知用例编号' }
+    ];
+
+    await enqueueImportJob('crm', job.importId);
+    const items = await waitItems('crm', job.importId, ['pendingReview', 'failed']);
+    const failedMissing = items.find((item) => item.caseNo === 'TC001');
+    const failedOwn = items.find((item) => item.caseNo === 'TC002');
+    const success = items.find((item) => item.caseNo === 'TC003');
+
+    expect(failedMissing?.errorMessage).toContain('模型返回未知用例编号 TC999');
+    expect(failedMissing?.errorMessage).toContain('模型缺少用例编号 TC001');
+    expect(failedOwn?.errorMessage).toContain('字段缺失：步骤为空');
+    expect(failedOwn?.errorMessage).toContain('模型返回未知用例编号 TC999');
+    expect(failedOwn?.aiDebug?.error).toContain('模型缺少用例编号 TC001');
+    expect(success?.status).toBe('pendingReview');
+    expect(success?.errorMessage).toBeUndefined();
+  });
 });
 
 /**
@@ -268,5 +414,28 @@ function createCase(caseNo: string, targetUrl: string) {
       stepRows: [1],
       dataRows: []
     }
+  };
+}
+
+/**
+ * 创建 mock AI 草稿，避免 worker 测试依赖真实模型输出。
+ */
+function createMockDraft(caseNo: string, targetUrl: string): AiCaseDraft {
+  return {
+    name: `${caseNo} 草稿`,
+    startPath: targetUrl,
+    confidence: 'medium' as const,
+    warnings: [],
+    missingInfo: [],
+    steps: [
+      {
+        id: 's1',
+        type: 'click' as const,
+        selector: "getByRole('button', { name: '新增' })",
+        text: '点击新增按钮',
+        confidence: 'medium' as const,
+        warnings: []
+      }
+    ]
   };
 }

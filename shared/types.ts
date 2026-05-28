@@ -91,6 +91,8 @@ export type ImportStatus = 'running' | 'pendingReview' | 'partialSaved' | 'compl
 
 export type ImportItemStatus = 'pending' | 'generating' | 'pendingReview' | 'failed' | 'saved' | 'skipped';
 
+export type ImportGenMode = 'group' | 'batch' | 'single';
+
 export type SavedCaseState = 'active' | 'missing';
 
 export type AiLevel = 'high' | 'medium' | 'low';
@@ -255,6 +257,8 @@ export interface ImportItem {
   review?: CaseReview;
   status: ImportItemStatus;
   errorMessage?: string;
+  genMode?: ImportGenMode;
+  fallbackReason?: string;
   savedCaseKey?: string;
   savedCaseState?: SavedCaseState;
   pageMapId?: string;

@@ -205,6 +205,39 @@ export function formatDraftStepType(type?: StepType | string | null) {
 }
 
 /**
+ * 格式化同组生成状态，便于预览页按页面地图理解批量生成进度。
+ */
+export function formatGroupState(item: ImportItem, items: ImportItem[]) {
+  const groupItems = item.groupId ? items.filter((value) => value.groupId === item.groupId) : [item];
+  const doneCount = groupItems.filter((value) => value.status === 'pendingReview' || value.status === 'saved').length;
+  const failedCount = groupItems.filter((value) => value.status === 'failed').length;
+  const type = failedCount > 0 ? 'warning' : doneCount === groupItems.length ? 'success' : 'primary';
+  const label = `${formatGenMode(item.genMode)} ${doneCount}/${groupItems.length}`;
+
+  return {
+    url: item.source.caseInfo.targetUrl,
+    mapId: item.pageMapId ?? item.groupId ?? '-',
+    label,
+    type
+  };
+}
+
+/**
+ * 读取降级提示文案。
+ */
+export function getFallbackText(item: ImportItem) {
+  if (!item.fallbackReason) {
+    return '-';
+  }
+
+  if (item.genMode === 'single') {
+    return `已降级为单条生成：${item.fallbackReason}`;
+  }
+
+  return `已拆小批次生成：${item.fallbackReason}`;
+}
+
+/**
  * 格式化导入步骤目标类型，避免在预览页暴露内部枚举值。
  */
 export function formatTargetType(type?: TargetType | string | null) {
@@ -364,6 +397,19 @@ export function hasPageMapDebug(map?: PageMap | null) {
  */
 function isCheckStep(step: AiDraftStep) {
   return step.type.startsWith('assert');
+}
+
+/**
+ * 格式化分组生成模式。
+ */
+function formatGenMode(mode: ImportItem['genMode']) {
+  const map: Record<NonNullable<ImportItem['genMode']>, string> = {
+    group: '分组生成',
+    batch: '小批生成',
+    single: '单条生成'
+  };
+
+  return mode ? map[mode] : '等待生成';
 }
 
 /**

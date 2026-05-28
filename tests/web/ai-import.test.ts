@@ -22,6 +22,8 @@ import {
   formatPageMapAge,
   formatPageMapCount,
   formatPageMapState,
+  formatGroupState,
+  getFallbackText,
   getMapWarnings,
   getMapStates,
   hasPageMapDebug
@@ -240,6 +242,36 @@ describe('AI 导入页面工具', () => {
     expect(getMapWarnings(['已跳过危险动作：保存'])).toEqual(['已跳过危险动作：保存']);
   });
 
+  it('格式化分组状态、页面地图和降级提示', () => {
+    const items: ImportItem[] = [
+      makeViewItem('pendingReview', {
+        groupId: 'pm-group',
+        groupIndex: 0,
+        pageMapId: 'pm-group',
+        genMode: 'group',
+        source: makeSource('/users')
+      }),
+      makeViewItem('failed', {
+        caseNo: 'TC002',
+        groupId: 'pm-group',
+        groupIndex: 1,
+        pageMapId: 'pm-group',
+        genMode: 'single',
+        fallbackReason: '分组生成失败：模型返回不可用',
+        source: makeSource('/users')
+      })
+    ];
+
+    expect(formatGroupState(items[0], items)).toEqual({
+      url: '/users',
+      mapId: 'pm-group',
+      label: '分组生成 1/2',
+      type: 'warning'
+    });
+    expect(getFallbackText(items[0])).toBe('-');
+    expect(getFallbackText(items[1])).toBe('已降级为单条生成：分组生成失败：模型返回不可用');
+  });
+
   it('页面地图状态缺失或类型漂移时不会影响调试判断', () => {
     expect(() => hasPageMapDebug(makeBrokenMap({ states: undefined }))).not.toThrow();
     expect(() => hasPageMapDebug(makeBrokenMap({ states: 'bad states' }))).not.toThrow();
@@ -333,22 +365,41 @@ function makeItem(status: ImportItem['status'], patch: Partial<ImportItem> = {})
     rowRefs: { caseRow: 2, stepRows: [2], dataRows: [] },
     sourceHash: 'hash',
     source: {
-      caseInfo: {
-        caseNo: 'TC001',
-        caseName: '新增用户',
-        targetUrl: '/user/list',
-        precondition: '',
-        expectedResult: '添加成功',
-        note: ''
-      },
-      steps: [],
-      data: []
+      ...makeSource('/user/list')
     },
     draft: makeDraft(),
     status,
     retryCount: 0,
     updatedAt: '2026-05-26T00:00:00.000Z',
     ...patch
+  };
+}
+
+/**
+ * 创建带预览扩展字段的导入项测试数据。
+ */
+function makeViewItem(status: ImportItem['status'], patch: Partial<ImportItem> = {}): ImportItem {
+  return {
+    ...makeItem(status, patch),
+    ...patch
+  };
+}
+
+/**
+ * 创建导入源测试数据。
+ */
+function makeSource(targetUrl: string): ImportItem['source'] {
+  return {
+    caseInfo: {
+      caseNo: 'TC001',
+      caseName: '新增用户',
+      targetUrl,
+      precondition: '',
+      expectedResult: '添加成功',
+      note: ''
+    },
+    steps: [],
+    data: []
   };
 }
 

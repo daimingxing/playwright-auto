@@ -1,4 +1,4 @@
-import type { CaseMeta, CaseStep, ImportItem, PageMap } from '../../../../shared/types';
+import type { AiDebugInfo, CaseMeta, CaseStep, ImportGenMode, ImportItem, PageMap } from '../../../../shared/types';
 import { getAppConfig } from '../../lib/app-config';
 import {
   getImportItem,
@@ -13,7 +13,7 @@ import { listProjects } from '../../lib/project-store';
 import { createPageMapId, createPageMapKey, getAuthHash } from '../../lib/path';
 import { readPageMapShot } from '../../lib/page-map-store';
 import { reviewCase } from '../case-review';
-import { AiDraftError, generateCaseDraft } from '../ai/ai-case-draft';
+import { AiDraftError, generateCaseDraft, generateCaseDraftGroup, type DraftPageMap } from '../ai/ai-case-draft';
 import { getPageMap } from '../ai/page-map';
 import { collectPageContext, PageContextError, type PageContext } from '../ai/page-context';
 
@@ -23,6 +23,16 @@ interface QueueTask {
   itemId: string;
   pageMapId?: string;
 }
+
+interface ImportGroup {
+  groupId: string;
+  pageMapId: string;
+  targetUrl: string;
+  authHash: string;
+  items: ImportItem[];
+}
+
+type GenMode = ImportGenMode;
 
 const queue: QueueTask[] = [];
 let runningCount = 0;
@@ -87,6 +97,8 @@ export async function processImportItem(projectKey: string, importId: string, it
       item = await updateImportItem(projectKey, importId, itemId, {
         status: 'generating',
         errorMessage: undefined,
+        genMode: 'single',
+        fallbackReason: undefined,
         retryCount: attempt
       });
 
@@ -107,6 +119,8 @@ export async function processImportItem(projectKey: string, importId: string, it
         aiDebug: result.aiDebug,
         review,
         errorMessage: undefined,
+        genMode: 'single',
+        fallbackReason: undefined,
         retryCount: 0
       });
       return;
@@ -117,6 +131,8 @@ export async function processImportItem(projectKey: string, importId: string, it
         await updateImportItem(projectKey, importId, itemId, {
           status: 'failed',
           errorMessage: message,
+          genMode: 'single',
+          fallbackReason: undefined,
           retryCount: attempt
         });
         return;
@@ -127,6 +143,8 @@ export async function processImportItem(projectKey: string, importId: string, it
           status: 'failed',
           errorMessage: message,
           aiDebug: error instanceof AiDraftError ? error.aiDebug : undefined,
+          genMode: 'single',
+          fallbackReason: undefined,
           retryCount: attempt
         });
         return;
@@ -166,7 +184,7 @@ function drainQueue() {
 async function createImportGroups(projectKey: string, importId: string, items: ImportItem[]) {
   const job = await getImportJob(projectKey, importId);
   const authHash = await getAuthHash(projectKey, job.envKey);
-  const groups = new Map<string, { groupId: string; pageMapId: string; targetUrl: string; authHash: string; items: ImportItem[] }>();
+  const groups = new Map<string, ImportGroup>();
 
   for (const item of items) {
     const key = createPageMapKey({
@@ -198,7 +216,7 @@ async function createImportGroups(projectKey: string, importId: string, items: I
 async function prepareGroupMap(
   projectKey: string,
   importId: string,
-  group: { groupId: string; pageMapId: string; targetUrl: string; authHash: string; items: ImportItem[] }
+  group: ImportGroup
 ) {
   try {
     const job = await getImportJob(projectKey, importId);
@@ -224,11 +242,260 @@ async function prepareGroupMap(
         groupIndex: index,
         pageMapId: pageMap.mapId
       });
-      queue.push({ projectKey, importId, itemId: item.itemId, pageMapId: pageMap.mapId });
     }
+
+    await processImportGroup(projectKey, importId, group, pageMap);
   } catch (error) {
     await failImportGroup(projectKey, importId, group, getPageMapError(error));
   }
+}
+
+/**
+ * 处理同一页面地图下的导入项，优先用分组生成，失败后逐级降级。
+ */
+async function processImportGroup(projectKey: string, importId: string, group: ImportGroup, pageMap: PageMap) {
+  const items = await Promise.all(group.items.map((item) => getImportItem(projectKey, importId, item.itemId)));
+  const pendingItems = items.filter((item) => item.status === 'pending' || item.status === 'failed');
+
+  if (pendingItems.length === 0) {
+    return;
+  }
+
+  const draftMap = await readDraftPageMap(projectKey, pageMap);
+  await generateGroupItems(projectKey, importId, pendingItems, draftMap, 'group');
+}
+
+/**
+ * 批量生成分组草稿；失败时先拆半批，再降级单条生成。
+ */
+async function generateGroupItems(
+  projectKey: string,
+  importId: string,
+  items: ImportItem[],
+  pageMap: DraftPageMap,
+  mode: GenMode,
+  reason?: string
+): Promise<void> {
+  if (items.length === 0) {
+    return;
+  }
+
+  try {
+    await markItemsGenerating(projectKey, importId, items, mode, reason);
+    const result = await generateCaseDraftGroup({
+      pageMap,
+      cases: items.map((item) => ({
+        caseInfo: item.source.caseInfo,
+        steps: item.source.steps,
+        data: item.source.data
+      }))
+    });
+    const errorText = formatGroupError(result.groupErrors);
+    const aiDebug = appendAiDebugError(result.aiDebug, errorText);
+
+    for (const item of items) {
+      const groupItem = result.items.find((value) => value.caseNo === item.caseNo);
+
+      if (groupItem?.draft) {
+        await saveDraftItem(projectKey, importId, item, groupItem.draft, aiDebug, mode, reason);
+        continue;
+      }
+
+      await patchImportItem(projectKey, importId, item.itemId, {
+        status: 'failed',
+        errorMessage: mergeErrorText(readGroupError(groupItem) ?? 'AI 未返回该用例草稿', errorText),
+        aiDebug,
+        genMode: mode,
+        fallbackReason: reason,
+        retryCount: 0
+      });
+    }
+  } catch (error) {
+    const message = getDraftError(error);
+
+    if (mode === 'group' && items.length > 1) {
+      await splitGroupItems(projectKey, importId, items, pageMap, `分组生成失败：${message}`);
+      return;
+    }
+
+    if (items.length > 1) {
+      for (const item of items) {
+        await generateSingleItem(projectKey, importId, item, pageMap, reason ?? `小批生成失败：${message}`);
+      }
+      return;
+    }
+
+    await generateSingleItem(projectKey, importId, items[0], pageMap, reason ?? `分组生成失败：${message}`);
+  }
+}
+
+/**
+ * 按用例数量把失败分组拆成小批次。
+ */
+async function splitGroupItems(projectKey: string, importId: string, items: ImportItem[], pageMap: DraftPageMap, reason: string) {
+  const size = Math.ceil(items.length / 2);
+  const batches = [items.slice(0, size), items.slice(size)].filter((batch) => batch.length > 0);
+
+  for (const batch of batches) {
+    await generateGroupItems(projectKey, importId, batch, pageMap, 'batch', reason);
+  }
+}
+
+/**
+ * 单条降级生成，复用同一页面地图初始快照，不重新采集页面。
+ */
+async function generateSingleItem(projectKey: string, importId: string, item: ImportItem, pageMap: DraftPageMap, reason: string) {
+  try {
+    const pageContext = pageMap.states[0]?.context ?? await readDraftPageContext(projectKey, (await getImportJob(projectKey, importId)).envKey, item, item.pageMapId);
+    const result = await generateCaseDraft({
+      caseInfo: item.source.caseInfo,
+      steps: item.source.steps,
+      data: item.source.data,
+      pageContext
+    });
+
+    await saveDraftItem(projectKey, importId, item, result.draft, result.aiDebug, 'single', reason);
+  } catch (error) {
+    await patchImportItem(projectKey, importId, item.itemId, {
+      status: 'failed',
+      errorMessage: getDraftError(error),
+      aiDebug: error instanceof AiDraftError ? error.aiDebug : undefined,
+      genMode: 'single',
+      fallbackReason: reason,
+      retryCount: 0
+    });
+  }
+}
+
+/**
+ * 标记一批导入项进入生成中状态。
+ */
+async function markItemsGenerating(projectKey: string, importId: string, items: ImportItem[], mode: GenMode, reason?: string) {
+  for (const item of items) {
+    await patchImportItem(projectKey, importId, item.itemId, {
+      status: 'generating',
+      errorMessage: undefined,
+      genMode: mode,
+      fallbackReason: reason,
+      retryCount: 0
+    });
+  }
+}
+
+/**
+ * 保存 AI 草稿并同步基础检查结果。
+ */
+async function saveDraftItem(
+  projectKey: string,
+  importId: string,
+  item: ImportItem,
+  draft: ImportItem['draft'],
+  aiDebug: ImportItem['aiDebug'],
+  mode: GenMode,
+  reason?: string
+) {
+  if (!draft) {
+    await patchImportItem(projectKey, importId, item.itemId, {
+      status: 'failed',
+      errorMessage: 'AI 未返回可用草稿',
+      draft: undefined,
+      aiDebug: undefined,
+      review: undefined,
+      genMode: mode,
+      fallbackReason: reason,
+      retryCount: 0
+    });
+    return;
+  }
+
+  const review = reviewCase(createReviewCase(draft));
+
+  await patchImportItem(projectKey, importId, item.itemId, {
+    status: 'pendingReview',
+    draft,
+    aiDebug,
+    review,
+    errorMessage: undefined,
+    genMode: mode,
+    fallbackReason: reason,
+    retryCount: 0
+  });
+}
+
+/**
+ * 读取页面地图所有状态快照，供分组生成复用。
+ */
+async function readDraftPageMap(projectKey: string, pageMap: PageMap): Promise<DraftPageMap> {
+  const states = await Promise.all(
+    pageMap.states.map(async (state) => ({
+      stateId: state.stateId,
+      name: state.name,
+      actionName: state.sourceAction?.targetName,
+      context: await readPageMapShot(projectKey, pageMap.mapId, state.stateId)
+    }))
+  );
+
+  return {
+    mapId: pageMap.mapId,
+    targetUrl: pageMap.targetUrl,
+    states,
+    warnings: pageMap.warnings
+  };
+}
+
+/**
+ * 读取草稿生成失败原因。
+ */
+function getDraftError(error: unknown) {
+  return error instanceof Error ? error.message : 'AI 草稿生成失败';
+}
+
+/**
+ * 更新带生成元信息的导入项，避免把阶段内字段扩散到共享类型。
+ */
+async function patchImportItem(projectKey: string, importId: string, itemId: string, patch: Partial<ImportItem>) {
+  return updateImportItem(projectKey, importId, itemId, patch);
+}
+
+/**
+ * 格式化分组级错误摘要，空数组不写入可见错误。
+ */
+function formatGroupError(errors: string[]) {
+  return errors.length > 0 ? `分组错误：${errors.join('；')}` : undefined;
+}
+
+/**
+ * 合并单项错误和分组错误，避免分组归因只留在调试原始输出里。
+ */
+function mergeErrorText(itemError: string, groupError: string | undefined) {
+  return groupError ? `${itemError}；${groupError}` : itemError;
+}
+
+/**
+ * 把分组级结构错误同步写入 AI 调试字段，保留原有模型错误说明。
+ */
+function appendAiDebugError(aiDebug: AiDebugInfo, groupError: string | undefined) {
+  if (!groupError) {
+    return aiDebug;
+  }
+
+  return {
+    ...aiDebug,
+    error: [aiDebug.error, groupError].filter(Boolean).join('；')
+  };
+}
+
+/**
+ * 读取分组返回项上的错误说明，兼容测试 mock 和模型归一化结果。
+ */
+function readGroupError(item: unknown) {
+  if (!item || typeof item !== 'object' || !('error' in item)) {
+    return undefined;
+  }
+
+  const error = item.error;
+
+  return typeof error === 'string' ? error : undefined;
 }
 
 /**
@@ -237,7 +504,7 @@ async function prepareGroupMap(
 async function failImportGroup(
   projectKey: string,
   importId: string,
-  group: { groupId: string; pageMapId: string; items: ImportItem[] },
+  group: ImportGroup,
   message: string
 ) {
   for (let index = 0; index < group.items.length; index += 1) {
@@ -250,6 +517,8 @@ async function failImportGroup(
       // 失败页面地图没有初始 snapshot，不能留下可被手动重试复用的页面地图标识。
       pageMapId: undefined,
       errorMessage: message,
+      genMode: 'group',
+      fallbackReason: undefined,
       retryCount: 0
     });
   }

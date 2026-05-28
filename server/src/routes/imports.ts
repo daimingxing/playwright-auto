@@ -153,6 +153,8 @@ importsRouter.post<ItemParams>('/:importId/items/:itemId/retry', async (req, res
       savedCaseKey: undefined,
       savedCaseState: undefined,
       savedAt: undefined,
+      genMode: undefined,
+      fallbackReason: undefined,
       retryCount: 0
     });
     enqueueImportItem(req.params.projectKey, req.params.importId, req.params.itemId);
