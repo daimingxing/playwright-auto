@@ -1,4 +1,15 @@
-import type { AiDraftStep, AiLevel, ImportItem, ImportItemStatus, ImportJob, ImportStatus, StepType } from '../../../../shared/types';
+import type {
+  AiDraftStep,
+  AiLevel,
+  ImportItem,
+  ImportItemStatus,
+  ImportJob,
+  ImportStatus,
+  ImportStepSource,
+  MatchType,
+  StepType,
+  TargetType
+} from '../../../../shared/types';
 import { formatDateTime } from '../../utils/time';
 
 export type ImportFilter = 'all' | ImportItemStatus | 'lowConfidence' | 'warning';
@@ -170,24 +181,76 @@ export function getCheckSteps(item: ImportItem) {
 /**
  * 格式化草稿步骤类型，面向测试人员隐藏内部实现术语。
  */
-export function formatDraftStepType(type: StepType) {
+export function formatDraftStepType(type?: StepType | string | null) {
   const map: Record<StepType, string> = {
     goto: '打开页面',
     click: '点击',
     rightClick: '右键点击',
     doubleClick: '双击',
     hover: '悬停',
-    fill: '输入',
-    select: '下拉选择',
+    fill: '填写',
+    select: '选择',
     wait: '等待',
     assertText: '检查文本',
-    assertVisible: '检查显示',
+    assertVisible: '检查可见',
     assertValue: '检查输入值',
     assertUrl: '检查页面地址',
     assertTitle: '检查页面标题'
   };
 
-  return map[type];
+  return formatTypeText(type, map);
+}
+
+/**
+ * 格式化导入步骤目标类型，避免在预览页暴露内部枚举值。
+ */
+export function formatTargetType(type?: TargetType | string | null) {
+  const map: Record<TargetType, string> = {
+    page: '页面',
+    button: '按钮',
+    input: '输入框',
+    select: '下拉框',
+    link: '链接',
+    menu: '菜单',
+    tab: '页签',
+    dialog: '弹窗',
+    text: '文本',
+    table: '表格',
+    tree: '树',
+    date: '日期控件',
+    region: '区域'
+  };
+
+  return formatTypeText(type, map);
+}
+
+/**
+ * 格式化检查匹配方式，面向测试人员展示中文含义。
+ */
+export function formatMatchType(type?: MatchType | string | null) {
+  const map: Record<MatchType, string> = {
+    contains: '包含',
+    equals: '等于',
+    regex: '正则'
+  };
+
+  return formatTypeText(type, map);
+}
+
+/**
+ * 生成源步骤摘要，优先使用新版两表结构化字段。
+ */
+export function getStepSummary(step: ImportStepSource) {
+  if (step.actionType || step.targetType || step.targetName || step.inputValue || step.matchType) {
+    const parts = [formatDraftStepType(step.actionType), formatTargetType(step.targetType), step.targetName].filter(isSummaryPart);
+    const valueText = step.inputValue ? `：${step.inputValue}` : '';
+    const matchText = step.matchType ? `，匹配方式：${formatMatchType(step.matchType)}` : '';
+
+    return `${parts.join(' ')}${valueText}${matchText}`;
+  }
+
+  // 旧三表导入项没有结构化字段，继续展示旧模板的自然语言描述。
+  return [step.actionText, step.targetText].filter(Boolean).join('，') || '-';
 }
 
 /**
@@ -202,4 +265,24 @@ export function formatImportTime(value?: string) {
  */
 function isCheckStep(step: AiDraftStep) {
   return step.type.startsWith('assert');
+}
+
+/**
+ * 格式化运行时枚举文本，兼容后端新增但前端尚未映射的值。
+ */
+function formatTypeText<T extends string>(type: T | string | null | undefined, map: Record<T, string>) {
+  if (!type) {
+    return '-';
+  }
+
+  // 运行时可能收到新枚举，直接展示原值，避免 Vue 渲染成空白。
+  return map[type as T] ?? type;
+}
+
+/**
+ * 判断摘要片段是否应参与拼接。
+ */
+function isSummaryPart(value?: string) {
+  // 新版结构化字段缺失时格式化函数会返回占位符，摘要中需要跳过占位符。
+  return Boolean(value && value !== '-');
 }

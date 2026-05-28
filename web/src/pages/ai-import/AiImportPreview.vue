@@ -18,11 +18,14 @@ import {
   formatImportItemStatus,
   formatImportStatus,
   formatImportTime,
+  formatMatchType,
+  formatTargetType,
   getActionSteps,
   getCheckSteps,
   getCheckSummary,
   getImportProgress,
   getItemIssueText,
+  getStepSummary,
   type ImportFilter
 } from './ai-import';
 
@@ -440,17 +443,40 @@ onBeforeUnmount(() => {
           <h3>原始步骤</h3>
           <el-table :data="detailItem.source.steps" border stripe>
             <el-table-column prop="stepNo" label="序号" width="80" />
-            <el-table-column prop="actionText" label="操作描述" min-width="220" />
-            <el-table-column prop="targetText" label="目标对象" min-width="140" />
-            <el-table-column label="数据引用" min-width="140">
+            <el-table-column label="动作" width="120">
               <template #default="{ row }">
-                {{ row.dataKeys.join(', ') || '-' }}
+                {{ formatDraftStepType(row.actionType) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="目标类型" width="120">
+              <template #default="{ row }">
+                {{ formatTargetType(row.targetType) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="目标名称" min-width="160">
+              <template #default="{ row }">
+                {{ row.targetName || row.targetText || '-' }}
+              </template>
+            </el-table-column>
+            <el-table-column label="输入/期望值" min-width="180">
+              <template #default="{ row }">
+                {{ row.inputValue || '-' }}
+              </template>
+            </el-table-column>
+            <el-table-column label="匹配方式" width="120">
+              <template #default="{ row }">
+                {{ formatMatchType(row.matchType) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="步骤摘要" min-width="240" show-overflow-tooltip>
+              <template #default="{ row }">
+                {{ getStepSummary(row) }}
               </template>
             </el-table-column>
           </el-table>
         </section>
 
-        <section class="detail-block">
+        <section v-if="detailItem.source.data.length > 0" class="detail-block">
           <h3>测试数据</h3>
           <el-table :data="detailItem.source.data" border stripe empty-text="暂无测试数据">
             <el-table-column prop="dataKey" label="数据标识" min-width="120" />

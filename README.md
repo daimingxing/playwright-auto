@@ -249,7 +249,7 @@ npm run test:e2e
 - `server/src/services/ai/ai-client.ts`：模型服务适配层。当前使用 Vercel AI SDK 的 OpenAI 兼容 provider，并把模型返回文本解析为 JSON；解析失败时会保留模型原始输出。
 - `server/src/services/ai/ai-case-draft.ts`：构造系统提示词和用户输入，定义 AI 草稿输出 schema，并把输出归一化为平台草稿步骤；这是大模型对话循环的核心入口。
 - `server/src/services/ai/page-context.ts`：用 Playwright 打开目标页面，采集压缩后的页面上下文摘要，不把完整 HTML 交给模型。
-- `server/src/services/import/import-excel.ts`：解析 Excel 三表模板，校验用例、步骤和测试数据关联。
+- `server/src/services/import/import-excel.ts`：解析新版两表 Excel 模板，并兼容旧三表模板输入。
 - `server/src/services/import/import-worker.ts`：本地后台队列，负责异步生成草稿、失败重试和服务启动后的任务恢复。
 - `server/src/lib/import-store.ts`：AI 导入任务和导入项的文件持久化。
 - `server/src/routes/imports.ts`：AI 导入 HTTP API，包括上传、列表、预览项、重试、跳过、保存草稿和放弃导入记录。

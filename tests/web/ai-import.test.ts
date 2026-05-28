@@ -1,12 +1,19 @@
 import { describe, expect, it } from 'vitest';
+import ExcelJS from 'exceljs';
+import { readFileSync } from 'node:fs';
 import type { ImportItem, ImportJob } from '../../shared/types';
+import { parseImportExcel } from '../../server/src/services/import/import-excel';
 import {
   canRetryImportItem,
   canSaveImportItem,
   canOpenSavedCase,
   filterImportItems,
+  formatMatchType,
+  formatTargetType,
   formatImportItemStatus,
   formatImportStatus,
+  formatDraftStepType,
+  getStepSummary,
   getImportProgress,
   getPendingCount,
   getItemIssueText
@@ -46,6 +53,99 @@ describe('AI 导入页面工具', () => {
     expect(formatImportItemStatus('pendingReview')).toEqual({ label: '待确认', type: 'warning' });
   });
 
+  it('格式化草稿和源步骤枚举时不显示裸英文', () => {
+    expect(formatDraftStepType('click')).toBe('点击');
+    expect(formatDraftStepType('fill')).toBe('填写');
+    expect(formatDraftStepType('select')).toBe('选择');
+    expect(formatDraftStepType('assertVisible')).toBe('检查可见');
+    expect(formatTargetType('button')).toBe('按钮');
+    expect(formatMatchType('contains')).toBe('包含');
+  });
+
+  it('格式化未知枚举时保留可见兜底文本', () => {
+    expect(formatDraftStepType()).toBe('-');
+    expect(formatTargetType()).toBe('-');
+    expect(formatMatchType()).toBe('-');
+    expect(formatDraftStepType(null)).toBe('-');
+    expect(formatTargetType(null)).toBe('-');
+    expect(formatMatchType(null)).toBe('-');
+    expect(formatDraftStepType('upload')).toBe('upload');
+    expect(formatTargetType('toast')).toBe('toast');
+    expect(formatMatchType('startsWith')).toBe('startsWith');
+  });
+
+  it('从新版源步骤生成步骤摘要', () => {
+    expect(
+      getStepSummary({
+        caseNo: 'TC001',
+        stepNo: 1,
+        actionType: 'fill',
+        targetType: 'input',
+        targetName: '用户名称',
+        inputValue: '测试用户001',
+        matchType: 'equals',
+        actionText: '',
+        targetText: '',
+        dataKeys: [],
+        note: ''
+      })
+    ).toBe('填写 输入框 用户名称：测试用户001，匹配方式：等于');
+  });
+
+  it('从部分缺失的新版源步骤生成步骤摘要时不拼入占位符', () => {
+    expect(
+      getStepSummary({
+        caseNo: 'TC001',
+        stepNo: 1,
+        actionType: 'fill',
+        targetType: undefined,
+        targetName: '用户名称',
+        inputValue: '测试用户001',
+        matchType: undefined,
+        actionText: '',
+        targetText: '',
+        dataKeys: [],
+        note: ''
+      })
+    ).toBe('填写 用户名称：测试用户001');
+  });
+
+  it('从旧三表源步骤生成步骤摘要', () => {
+    expect(
+      getStepSummary({
+        caseNo: 'TC001',
+        stepNo: 1,
+        actionText: '填写用户名称',
+        targetText: '用户名称输入框',
+        dataKeys: ['username'],
+        note: ''
+      })
+    ).toBe('填写用户名称，用户名称输入框');
+  });
+
+  it('真实 Excel 模板可以被解析为两表导入数据', async () => {
+    const buffer = readFileSync('docs/ai-case-import/AI自然语言用例导入模板.xlsx');
+    const result = await parseImportExcel(buffer);
+
+    expect(result).toHaveLength(2);
+    expect(result.map((item) => item.caseInfo.caseNo)).toEqual(['TC001', 'TC002']);
+    expect(result[0].steps.map((step) => step.stepNo)).toEqual([1, 2, 3, 4]);
+    expect(result[1].steps.map((step) => step.stepNo)).toEqual([1, 2]);
+  });
+
+  it('真实 Excel 模板保留两张业务表和中文英文动作值', async () => {
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(readFileSync('docs/ai-case-import/AI自然语言用例导入模板.xlsx') as unknown as ExcelJS.Buffer);
+    const steps = workbook.getWorksheet('步骤明细');
+
+    expect(workbook.getWorksheet('用例清单')).toBeTruthy();
+    expect(steps).toBeTruthy();
+    expect(workbook.getWorksheet('测试数据')).toBeUndefined();
+    expect(steps?.getColumn(3).values).toEqual(
+      expect.arrayContaining(['填写(fill)', '选择(select)', '检查可见(assertVisible)'])
+    );
+  });
+
   it('按状态、低置信和风险提示筛选导入项', () => {
     const normal = makeItem('pendingReview');
     const saved = makeItem('saved');
@@ -62,6 +162,22 @@ describe('AI 导入页面工具', () => {
     expect(getItemIssueText(makeItem('pendingReview', { draft: { ...makeDraft(), warnings: ['目标元素不唯一'] } }))).toBe(
       '目标元素不唯一'
     );
+  });
+
+  it('模板说明包含两表字段、示例和不推荐写法', () => {
+    const doc = readFileSync('docs/ai-case-import/AI自然语言用例导入模板说明.md', 'utf-8');
+
+    expect(doc).toContain('新用户默认使用两表模板');
+    expect(doc).toContain('用例清单');
+    expect(doc).toContain('步骤明细');
+    expect(doc).toContain('输入/期望值');
+    expect(doc).toContain('点击(click)');
+    expect(doc).toContain('填写(fill)');
+    expect(doc).not.toContain('输入(fill)');
+    expect(doc).not.toContain('下拉选择(select)');
+    expect(doc).not.toContain('检查显示(assertVisible)');
+    expect(doc).toContain('不推荐写法');
+    expect(doc).toContain('旧三表模板');
   });
 });
 

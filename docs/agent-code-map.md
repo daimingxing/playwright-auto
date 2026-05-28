@@ -26,6 +26,7 @@
 - 用例步骤编辑和批量操作：`web/src/pages/case-editor/CaseEditor.vue`、`web/src/pages/case-editor/case-editor.ts`、`web/src/pages/case-editor/case-editor-composables.ts`、`tests/web/case-editor.test.ts`、`tests/web/case-editor-composables.test.ts`
 - 用例步骤生成 Playwright spec：`server/src/services/case/case-generator.ts`
 - Playwright codegen 录制导入：`server/src/routes/record.ts`、`server/src/services/record/record-session.ts`、`server/src/services/record/codegen-parser.ts`
+- AI 自然语言用例导入：`shared/types.ts`、`server/src/services/import/import-excel.ts`、`server/src/services/import/import-worker.ts`、`server/src/services/ai/ai-case-draft.ts`、`server/src/services/ai/page-context.ts`、`web/src/pages/ai-import/AiImportList.vue`、`web/src/pages/ai-import/AiImportPreview.vue`、`web/src/pages/ai-import/ai-import.ts`，新版两表模板和说明见 `docs/ai-case-import/`
 - 运行项目与报告：`web/src/api/runs.ts`、`web/src/pages/run-center/RunCenter.vue`、`web/src/pages/run-center/run-center.ts`、`server/src/routes/runs.ts`、`server/src/services/run/runner.ts`、`server/src/lib/run-store.ts`
 - 登录态：`web/src/api/auth.ts`、`server/src/routes/auth.ts`、`server/src/services/auth-session.ts`
 - 本地应用配置、CORS 来源和步骤默认等待时间：`playwright-auto.config.json`、`shared/types.ts`、`server/src/lib/app-config.ts`、`server/src/app.ts`、`web/src/api/projects.ts`
@@ -69,3 +70,4 @@
 - 改运行报告时，同步检查 `runner.ts`、`run-store.ts`、`routes/runs.ts` 和 `tests/server/api-runs.test.ts`
 - 改登录态时，同步检查 `auth-session.ts`、`routes/auth.ts`、`web/src/pages/run-center/RunCenter.vue`、`tests/web/run-center.test.ts` 和 `tests/server/api-auth.test.ts`
 - 改开发启动顺序时，同步检查 `package.json`、`scripts/wait-for-server.ts`、`docs/agent-commands.md` 和 `tests/scripts/wait-for-server.test.ts`
+- 改 AI 导入模板、源字段或预览展示时，同步检查 `shared/types.ts`、`import-excel.ts`、`AiImportPreview.vue`、`ai-import.ts`、`tests/server/import-excel.test.ts`、`tests/web/ai-import.test.ts` 和 `docs/ai-case-import/`
