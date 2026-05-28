@@ -18,6 +18,24 @@ export const stepTypes = [
 
 export type StepType = typeof stepTypes[number];
 
+export const targetTypes = [
+  'page',
+  'button',
+  'input',
+  'select',
+  'link',
+  'menu',
+  'tab',
+  'dialog',
+  'text',
+  'table',
+  'tree',
+  'date',
+  'region'
+] as const;
+
+export type TargetType = typeof targetTypes[number];
+
 export type MatchType = 'contains' | 'equals' | 'regex';
 
 export type CaseStatus = 'draft' | 'ready' | 'active';
@@ -71,6 +89,11 @@ export type AiLevel = 'high' | 'medium' | 'low';
 export interface ImportStepSource {
   caseNo: string;
   stepNo: number;
+  actionType?: StepType;
+  targetType?: TargetType;
+  targetName?: string;
+  inputValue?: string;
+  matchType?: MatchType;
   actionText: string;
   targetText: string;
   dataKeys: string[];
