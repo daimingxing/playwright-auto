@@ -45,6 +45,12 @@ export interface CollectInput {
   data: ImportDataSource[];
 }
 
+export interface CollectPageInput {
+  projectKey: string;
+  envKey: string;
+  targetUrl: string;
+}
+
 interface PageResponse {
   url(): string;
   status(): number;
@@ -101,6 +107,26 @@ export async function collectPageContext(input: CollectInput): Promise<PageConte
   } finally {
     await browser.close();
   }
+}
+
+/**
+ * 按页面地址采集初始页面上下文。
+ */
+export async function collectInitialPage(input: CollectPageInput): Promise<PageContext> {
+  return collectPageContext({
+    projectKey: input.projectKey,
+    envKey: input.envKey,
+    caseInfo: {
+      caseNo: 'PAGE-MAP',
+      caseName: '初始页面',
+      targetUrl: input.targetUrl,
+      precondition: '',
+      expectedResult: '',
+      note: ''
+    },
+    steps: [],
+    data: []
+  });
 }
 
 /**
