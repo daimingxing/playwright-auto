@@ -13,10 +13,14 @@ import {
   formatImportItemStatus,
   formatImportStatus,
   formatDraftStepType,
+  formatImportTime,
   getStepSummary,
   getImportProgress,
   getPendingCount,
-  getItemIssueText
+  getItemIssueText,
+  formatPageMapStatus,
+  formatPageMapAge,
+  formatPageMapCount
 } from '../../web/src/pages/ai-import/ai-import';
 
 describe('AI 导入页面工具', () => {
@@ -162,6 +166,22 @@ describe('AI 导入页面工具', () => {
     expect(getItemIssueText(makeItem('pendingReview', { draft: { ...makeDraft(), warnings: ['目标元素不唯一'] } }))).toBe(
       '目标元素不唯一'
     );
+  });
+
+  it('格式化页面地图状态、缓存年龄和状态数量', () => {
+    expect(formatPageMapStatus('ready')).toEqual({ label: '可用', type: 'success' });
+    expect(formatPageMapStatus('stale')).toEqual({ label: '建议刷新', type: 'warning' });
+    expect(formatPageMapStatus('failed')).toEqual({ label: '采集失败', type: 'danger' });
+    expect(formatPageMapAge('2026-05-28T00:00:00.000Z', new Date('2026-05-28T00:30:00.000Z'))).toBe('30 分钟前');
+    expect(formatPageMapAge('2026-05-27T00:00:00.000Z', new Date('2026-05-28T01:00:00.000Z'))).toBe('1 天前');
+    expect(formatPageMapAge()).toBe('-');
+    expect(formatPageMapCount(0)).toBe('0 个状态');
+    expect(formatPageMapCount(3)).toBe('3 个状态');
+  });
+
+  it('格式化页面地图更新时间用于摘要展示', () => {
+    expect(formatImportTime('2026-05-28T08:30:00.000Z')).toBe('2026-05-28 08:30:00');
+    expect(formatImportTime()).toBe('-');
   });
 
   it('模板说明包含两表字段、示例和不推荐写法', () => {

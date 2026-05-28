@@ -1,13 +1,22 @@
 <script setup lang="ts">
-import { Back, RefreshRight, UploadFilled } from '@element-plus/icons-vue';
+import { Back, Delete, RefreshRight, UploadFilled, View } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import type { UploadFile } from 'element-plus';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import type { ImportJob } from '../../../../shared/types';
+import type { PageMap, PageMapSummary, ImportJob } from '../../../../shared/types';
 import { createAiImport, deleteImport, listImports } from '../../api/imports';
+import { deletePageMap, getPageMap, listPageMaps, refreshPageMap } from '../../api/page-maps';
 import { getErrorMessage } from '../../utils/error';
-import { formatImportStatus, formatImportTime, getImportProgress, getPendingCount } from './ai-import';
+import {
+  formatImportStatus,
+  formatImportTime,
+  formatPageMapAge,
+  formatPageMapCount,
+  formatPageMapStatus,
+  getImportProgress,
+  getPendingCount
+} from './ai-import';
 
 const route = useRoute();
 const router = useRouter();
@@ -15,6 +24,9 @@ const projectKey = String(route.params.projectKey);
 const loading = ref(false);
 const uploading = ref(false);
 const jobs = ref<ImportJob[]>([]);
+const maps = ref<PageMapSummary[]>([]);
+const mapDetail = ref<PageMap | null>(null);
+const mapOpen = ref(false);
 const file = ref<File | null>(null);
 let timer: ReturnType<typeof window.setInterval> | undefined;
 
@@ -28,6 +40,35 @@ async function loadJobs() {
 
   try {
     jobs.value = await listImports(projectKey);
+    syncPolling();
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error));
+  } finally {
+    loading.value = false;
+  }
+}
+
+/**
+ * 加载页面地图列表。
+ */
+async function loadMaps() {
+  try {
+    maps.value = await listPageMaps(projectKey);
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error));
+  }
+}
+
+/**
+ * 同时刷新导入任务和页面地图。
+ */
+async function loadAll() {
+  loading.value = true;
+
+  try {
+    const [nextJobs, nextMaps] = await Promise.all([listImports(projectKey), listPageMaps(projectKey)]);
+    jobs.value = nextJobs;
+    maps.value = nextMaps;
     syncPolling();
   } catch (error) {
     ElMessage.error(getErrorMessage(error));
@@ -123,7 +164,55 @@ async function removeJob(job: ImportJob) {
   }
 }
 
-onMounted(loadJobs);
+/**
+ * 打开页面地图详情。
+ */
+async function openMap(map: PageMapSummary) {
+  try {
+    mapDetail.value = await getPageMap(projectKey, map.mapId);
+    mapOpen.value = true;
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error));
+  }
+}
+
+/**
+ * 重新采集页面地图。
+ */
+async function refreshMap(map: PageMapSummary) {
+  try {
+    await refreshPageMap(projectKey, map.mapId);
+    await loadMaps();
+    ElMessage.success('页面地图已刷新');
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error));
+  }
+}
+
+/**
+ * 删除页面地图缓存。
+ */
+async function removeMap(map: PageMapSummary) {
+  const confirmed = await ElMessageBox.confirm('确认删除该页面地图缓存吗？已生成的导入草稿不会被删除。', '删除页面地图', {
+    confirmButtonText: '删除',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).catch(() => false);
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    await deletePageMap(projectKey, map.mapId);
+    await loadMaps();
+    ElMessage.success('页面地图已删除');
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error));
+  }
+}
+
+onMounted(loadAll);
 onBeforeUnmount(() => {
   if (timer) {
     window.clearInterval(timer);
@@ -139,7 +228,7 @@ onBeforeUnmount(() => {
         <h2>AI 导入</h2>
       </div>
       <div class="toolbar-actions btn-shadow-md">
-        <el-button :icon="RefreshRight" :loading="loading" @click="loadJobs">刷新</el-button>
+        <el-button :icon="RefreshRight" :loading="loading" @click="loadAll">刷新</el-button>
       </div>
     </div>
 
@@ -211,7 +300,75 @@ onBeforeUnmount(() => {
           </el-table>
         </div>
       </el-card>
+
+      <el-card class="map-card" shadow="never">
+        <template #header>
+          <div class="card-header">
+            <span>页面地图</span>
+            <span class="hint">刷新只更新缓存，不覆盖已有草稿</span>
+          </div>
+        </template>
+        <div class="table-wrap">
+          <el-table :data="maps" border stripe height="100%" empty-text="暂无页面地图">
+            <el-table-column prop="targetUrl" label="目标页面" min-width="220" show-overflow-tooltip />
+            <el-table-column prop="envKey" label="环境" width="120" />
+            <el-table-column label="状态" width="120">
+              <template #default="{ row }">
+                <el-tag :type="formatPageMapStatus(row.status).type" effect="light">
+                  {{ formatPageMapStatus(row.status).label }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="状态数量" width="110">
+              <template #default="{ row }">
+                {{ formatPageMapCount(row.stateCount) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="缓存年龄" width="120">
+              <template #default="{ row }">
+                {{ formatPageMapAge(row.updatedAt) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="更新时间" min-width="170">
+              <template #default="{ row }">
+                {{ formatImportTime(row.updatedAt) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="180">
+              <template #default="{ row }">
+                <div class="row-actions btn-shadow-sm">
+                  <el-button :icon="View" size="small" circle title="查看" @click="openMap(row)" />
+                  <el-button :icon="RefreshRight" size="small" circle title="刷新" @click="refreshMap(row)" />
+                  <el-button :icon="Delete" size="small" type="danger" plain circle title="删除" @click="removeMap(row)" />
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </el-card>
     </div>
+
+    <el-drawer v-model="mapOpen" size="560px" title="页面地图详情">
+      <div v-if="mapDetail" class="map-detail">
+        <dl class="info-grid">
+          <dt>目标页面</dt>
+          <dd>{{ mapDetail.targetUrl }}</dd>
+          <dt>环境</dt>
+          <dd>{{ mapDetail.envKey }}</dd>
+          <dt>状态</dt>
+          <dd>{{ formatPageMapStatus(mapDetail.status).label }}</dd>
+          <dt>状态数量</dt>
+          <dd>{{ formatPageMapCount(mapDetail.states.length) }}</dd>
+          <dt>更新时间</dt>
+          <dd>{{ formatImportTime(mapDetail.updatedAt) }}</dd>
+        </dl>
+        <el-table :data="mapDetail.states" border stripe empty-text="暂无状态">
+          <el-table-column prop="name" label="状态名称" min-width="140" />
+          <el-table-column prop="url" label="页面地址" min-width="220" show-overflow-tooltip />
+          <el-table-column prop="title" label="标题" min-width="140" show-overflow-tooltip />
+        </el-table>
+      </div>
+    </el-drawer>
   </section>
 </template>
 
@@ -260,17 +417,19 @@ onBeforeUnmount(() => {
   display: grid;
   flex: 1;
   gap: 20px;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) minmax(220px, 0.6fr);
   min-height: 0;
   overflow: hidden;
 }
 
 .upload-card,
-.list-card {
+.list-card,
+.map-card {
   min-height: 0;
 }
 
-.list-card :deep(.el-card__body) {
+.list-card :deep(.el-card__body),
+.map-card :deep(.el-card__body) {
   display: flex;
   flex-direction: column;
   height: calc(100% - 57px);
@@ -328,6 +487,43 @@ onBeforeUnmount(() => {
 
 .row-actions :deep(.el-button) {
   margin-left: 0;
+}
+
+.map-detail {
+  display: grid;
+  gap: 16px;
+}
+
+.info-grid {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  margin: 0;
+  overflow: hidden;
+}
+
+.info-grid dt,
+.info-grid dd {
+  border-bottom: 1px solid #edf2f7;
+  margin: 0;
+  padding: 10px 12px;
+}
+
+.info-grid dt {
+  background: #f8fafc;
+  color: #475569;
+  font-weight: 600;
+}
+
+.info-grid dd {
+  color: #1f2937;
+  word-break: break-word;
+}
+
+.info-grid dt:last-of-type,
+.info-grid dd:last-of-type {
+  border-bottom: 0;
 }
 
 @media (max-width: 760px) {

@@ -188,9 +188,10 @@ data/
       runs/
       auth/
       imports/
+      page-maps/
 ```
 
-`cases/` 是可用测试用例，`trash/` 是回收站，`runs/` 保存运行记录和报告，`auth/` 保存登录态，`imports/` 保存 AI 导入任务、原始 Excel 和导入项草稿。放弃导入记录只删除 `imports/` 下的过程数据，不删除已经保存到 `cases/` 的草稿用例。
+`cases/` 是可用测试用例，`trash/` 是回收站，`runs/` 保存运行记录和报告，`auth/` 保存登录态，`imports/` 保存 AI 导入任务、原始 Excel 和导入项草稿，`page-maps/` 保存 AI 导入使用的页面地图缓存。放弃导入记录只删除 `imports/` 下的过程数据，不删除已经保存到 `cases/` 的草稿用例；刷新页面地图只重新采集页面地图缓存，不覆盖已有草稿。
 
 每条测试用例保存为独立目录：
 
@@ -249,11 +250,15 @@ npm run test:e2e
 - `server/src/services/ai/ai-client.ts`：模型服务适配层。当前使用 Vercel AI SDK 的 OpenAI 兼容 provider，并把模型返回文本解析为 JSON；解析失败时会保留模型原始输出。
 - `server/src/services/ai/ai-case-draft.ts`：构造系统提示词和用户输入，定义 AI 草稿输出 schema，并把输出归一化为平台草稿步骤；这是大模型对话循环的核心入口。
 - `server/src/services/ai/page-context.ts`：用 Playwright 打开目标页面，采集压缩后的页面上下文摘要，不把完整 HTML 交给模型。
+- `server/src/services/ai/page-map.ts`：根据项目、环境、目标页面、登录态和视口创建或刷新页面地图缓存。
 - `server/src/services/import/import-excel.ts`：解析新版两表 Excel 模板，并兼容旧三表模板输入。
 - `server/src/services/import/import-worker.ts`：本地后台队列，负责异步生成草稿、失败重试和服务启动后的任务恢复。
 - `server/src/lib/import-store.ts`：AI 导入任务和导入项的文件持久化。
+- `server/src/lib/page-map-store.ts`：页面地图摘要和页面状态 snapshot 的文件持久化。
 - `server/src/routes/imports.ts`：AI 导入 HTTP API，包括上传、列表、预览项、重试、跳过、保存草稿和放弃导入记录。
-- `web/src/pages/ai-import/AiImportList.vue`：导入记录和上传页面。
-- `web/src/pages/ai-import/AiImportPreview.vue`：导入预览、筛选、详情、重试、跳过和批量保存页面；点开单条导入项详情，可以在“AI 调试信息”中查看系统提示词、用户输入、模型原始输出、解析后的 JSON 和结构错误。
+- `server/src/routes/page-maps.ts`：页面地图 HTTP API，包括列表、查看、刷新和删除。
+- `web/src/pages/ai-import/AiImportList.vue`：导入记录、上传页面和页面地图管理入口。
+- `web/src/pages/ai-import/AiImportPreview.vue`：导入预览、筛选、详情、重试、跳过、批量保存和页面地图摘要；点开单条导入项详情，可以在“AI 调试信息”中查看系统提示词、用户输入、模型原始输出、解析后的 JSON 和结构错误。
 - `web/src/api/imports.ts`：前端 AI 导入 API 封装。
+- `web/src/api/page-maps.ts`：前端页面地图 API 封装。
 - `docs/ai-case-import/`：测试人员使用的 Excel 模板和填写说明。

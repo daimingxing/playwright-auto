@@ -249,6 +249,7 @@ export interface ImportItem {
   errorMessage?: string;
   savedCaseKey?: string;
   savedCaseState?: SavedCaseState;
+  pageMap?: PageMapSummary;
   savedAt?: string;
   retryCount: number;
   updatedAt: string;

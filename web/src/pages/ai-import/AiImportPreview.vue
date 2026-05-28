@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { Back, RefreshRight } from '@element-plus/icons-vue';
+import { Back, Delete, RefreshRight, View } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import type { TableInstance } from 'element-plus';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import type { ImportItem, ImportJob } from '../../../../shared/types';
+import type { ImportItem, ImportJob, PageMap, PageMapSummary } from '../../../../shared/types';
 import { deleteImport, getImport, listImportItems, retryImportItem, saveImportItems, skipImportItem } from '../../api/imports';
+import { deletePageMap, getPageMap, listPageMaps, refreshPageMap } from '../../api/page-maps';
 import { getErrorMessage } from '../../utils/error';
 import {
   canOpenSavedCase,
@@ -19,6 +20,9 @@ import {
   formatImportStatus,
   formatImportTime,
   formatMatchType,
+  formatPageMapAge,
+  formatPageMapCount,
+  formatPageMapStatus,
   formatTargetType,
   getActionSteps,
   getCheckSteps,
@@ -37,6 +41,9 @@ const loading = ref(false);
 const saving = ref(false);
 const job = ref<ImportJob | null>(null);
 const items = ref<ImportItem[]>([]);
+const maps = ref<PageMapSummary[]>([]);
+const mapDetail = ref<PageMap | null>(null);
+const mapOpen = ref(false);
 const filter = ref<ImportFilter>('all');
 const page = ref(1);
 const pageSize = ref(20);
@@ -73,9 +80,14 @@ async function loadData() {
   loading.value = true;
 
   try {
-    const [nextJob, nextItems] = await Promise.all([getImport(projectKey, importId), listImportItems(projectKey, importId)]);
+    const [nextJob, nextItems, nextMaps] = await Promise.all([
+      getImport(projectKey, importId),
+      listImportItems(projectKey, importId),
+      listPageMaps(projectKey)
+    ]);
     job.value = nextJob;
     items.value = nextItems;
+    maps.value = nextMaps;
     selectedRows.value = selectedRows.value.filter((row) => nextItems.some((item) => item.itemId === row.itemId));
     syncPolling();
   } catch (error) {
@@ -284,6 +296,61 @@ function openSavedCase(item: ImportItem) {
   ElMessage.warning('草稿用例已不存在，请重新生成后再保存');
 }
 
+/**
+ * 读取导入项关联的页面地图摘要。
+ */
+function getItemMap(item: ImportItem) {
+  return item.pageMap ?? maps.value.find((map) => map.envKey === job.value?.envKey && map.targetUrl === item.source.caseInfo.targetUrl);
+}
+
+/**
+ * 打开导入项页面地图详情。
+ */
+async function openMap(map: PageMapSummary) {
+  try {
+    mapDetail.value = await getPageMap(projectKey, map.mapId);
+    mapOpen.value = true;
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error));
+  }
+}
+
+/**
+ * 重新采集导入项页面地图。
+ */
+async function refreshMap(map: PageMapSummary) {
+  try {
+    await refreshPageMap(projectKey, map.mapId);
+    await loadData();
+    ElMessage.success('页面地图已刷新');
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error));
+  }
+}
+
+/**
+ * 删除导入项页面地图。
+ */
+async function removeMap(map: PageMapSummary) {
+  const confirmed = await ElMessageBox.confirm('确认删除该页面地图缓存吗？已生成的导入草稿不会被删除。', '删除页面地图', {
+    confirmButtonText: '删除',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).catch(() => false);
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    await deletePageMap(projectKey, map.mapId);
+    await loadData();
+    ElMessage.success('页面地图已删除');
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error));
+  }
+}
+
 onMounted(loadData);
 onBeforeUnmount(() => {
   if (timer) {
@@ -389,6 +456,30 @@ onBeforeUnmount(() => {
               {{ getItemIssueText(row) }}
             </template>
           </el-table-column>
+          <el-table-column label="页面地图" min-width="320">
+            <template #default="{ row }">
+              <div v-if="getItemMap(row)" class="map-cell">
+                <div class="map-summary">
+                  <div class="map-title" :title="getItemMap(row)?.targetUrl">{{ getItemMap(row)?.targetUrl }}</div>
+                  <div class="map-meta">
+                    <el-tag :type="formatPageMapStatus(getItemMap(row)?.status).type" effect="light">
+                      {{ formatPageMapStatus(getItemMap(row)?.status).label }}
+                    </el-tag>
+                    <span>{{ getItemMap(row)?.envKey }}</span>
+                    <span>{{ formatPageMapCount(getItemMap(row)?.stateCount) }}</span>
+                    <span>{{ formatImportTime(getItemMap(row)?.updatedAt) }}</span>
+                    <span>{{ formatPageMapAge(getItemMap(row)?.updatedAt) }}</span>
+                  </div>
+                </div>
+                <div class="map-actions btn-shadow-sm">
+                  <el-button :icon="View" size="small" circle title="查看" @click="openMap(getItemMap(row)!)" />
+                  <el-button :icon="RefreshRight" size="small" circle title="刷新" @click="refreshMap(getItemMap(row)!)" />
+                  <el-button :icon="Delete" size="small" type="danger" plain circle title="删除" @click="removeMap(getItemMap(row)!)" />
+                </div>
+              </div>
+              <span v-else class="muted">未缓存</span>
+            </template>
+          </el-table-column>
           <el-table-column label="操作" width="250" fixed="right">
             <template #default="{ row }">
               <div class="row-actions btn-shadow-sm">
@@ -486,6 +577,25 @@ onBeforeUnmount(() => {
         </section>
 
         <section class="detail-block">
+          <h3>页面地图</h3>
+          <dl v-if="getItemMap(detailItem)" class="info-grid">
+            <dt>目标页面</dt>
+            <dd>{{ getItemMap(detailItem)?.targetUrl }}</dd>
+            <dt>环境</dt>
+            <dd>{{ getItemMap(detailItem)?.envKey }}</dd>
+            <dt>状态</dt>
+            <dd>{{ formatPageMapStatus(getItemMap(detailItem)?.status).label }}</dd>
+            <dt>状态数量</dt>
+            <dd>{{ formatPageMapCount(getItemMap(detailItem)?.stateCount) }}</dd>
+            <dt>更新时间</dt>
+            <dd>{{ formatImportTime(getItemMap(detailItem)?.updatedAt) }}</dd>
+            <dt>缓存状态</dt>
+            <dd>{{ formatPageMapAge(getItemMap(detailItem)?.updatedAt) }}</dd>
+          </dl>
+          <el-empty v-else description="暂无页面地图缓存" />
+        </section>
+
+        <section class="detail-block">
           <h3>AI 生成步骤</h3>
           <el-table :data="getActionSteps(detailItem)" border stripe empty-text="暂无生成步骤">
             <el-table-column label="序号" width="80">
@@ -580,6 +690,33 @@ onBeforeUnmount(() => {
             :closable="false"
           />
           <el-button v-else type="primary" @click="openSavedCase(detailItem)">打开草稿用例</el-button>
+        </section>
+      </div>
+    </el-drawer>
+
+    <el-drawer v-model="mapOpen" size="560px" title="页面地图详情">
+      <div v-if="mapDetail" class="detail">
+        <section class="detail-block">
+          <dl class="info-grid">
+            <dt>目标页面</dt>
+            <dd>{{ mapDetail.targetUrl }}</dd>
+            <dt>环境</dt>
+            <dd>{{ mapDetail.envKey }}</dd>
+            <dt>状态</dt>
+            <dd>{{ formatPageMapStatus(mapDetail.status).label }}</dd>
+            <dt>状态数量</dt>
+            <dd>{{ formatPageMapCount(mapDetail.states.length) }}</dd>
+            <dt>更新时间</dt>
+            <dd>{{ formatImportTime(mapDetail.updatedAt) }}</dd>
+          </dl>
+        </section>
+        <section class="detail-block">
+          <h3>页面状态</h3>
+          <el-table :data="mapDetail.states" border stripe empty-text="暂无状态">
+            <el-table-column prop="name" label="状态名称" min-width="140" />
+            <el-table-column prop="url" label="页面地址" min-width="220" show-overflow-tooltip />
+            <el-table-column prop="title" label="标题" min-width="140" show-overflow-tooltip />
+          </el-table>
         </section>
       </div>
     </el-drawer>
@@ -697,6 +834,58 @@ onBeforeUnmount(() => {
 
 .row-actions :deep(.el-button) {
   margin-left: 0;
+}
+
+.map-cell {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.map-meta {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.map-summary {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 6px;
+  min-width: 0;
+}
+
+.map-title {
+  color: #1f2937;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-meta span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.map-actions {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
+.map-actions :deep(.el-button) {
+  margin-left: 0;
+}
+
+.muted {
+  color: #94a3b8;
+  font-size: 13px;
 }
 
 .pager {

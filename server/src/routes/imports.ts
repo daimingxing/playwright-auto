@@ -21,6 +21,7 @@ import {
 } from '../lib/import-store';
 import { createCaseDraft } from '../lib/case-store';
 import { getCasePath } from '../lib/path';
+import { listPageMaps } from '../lib/page-map-store';
 import { getProject } from '../lib/project-store';
 import { envKeySchema } from '../lib/schema';
 import { parseImportExcel } from '../services/import/import-excel';
@@ -267,9 +268,12 @@ async function doSaveImportItem(projectKey: string, importId: string, itemId: st
  */
 async function readImportItems(projectKey: string, importId: string) {
   const items = await listImportItems(projectKey, importId);
+  const job = await getImportJob(projectKey, importId);
+  const maps = await listPageMaps(projectKey);
 
   return items.map((item) => ({
     ...item,
+    pageMap: maps.find((map) => map.envKey === job.envKey && map.targetUrl === item.source.caseInfo.targetUrl),
     savedCaseState: readSavedCaseState(projectKey, item.savedCaseKey)
   }));
 }

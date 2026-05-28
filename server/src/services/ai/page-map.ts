@@ -1,6 +1,6 @@
 import type { PageMap, PageState } from '../../../../shared/types';
 import { getAppConfig } from '../../lib/app-config';
-import { HttpError } from '../../lib/http-error';
+import { badRequest, HttpError } from '../../lib/http-error';
 import { createPageMapKey, createPageMapId, getAuthHash, getPageMapShotFile } from '../../lib/path';
 import { createPageMap, markPageMapStale, readPageMap, writePageMapShot } from '../../lib/page-map-store';
 import { collectInitialPage, PageContextError, type PageContext } from './page-context';
@@ -65,6 +65,24 @@ export async function getPageMap(input: PageMapInput) {
 }
 
 /**
+ * 按已有页面地图关键字段重新采集并覆盖页面地图缓存。
+ */
+export async function refreshPageMap(projectKey: string, mapId: string, now = new Date()) {
+  const oldMap = await readPageMap(projectKey, mapId);
+
+  return createInitialMap({
+    projectKey: oldMap.projectKey,
+    envKey: oldMap.envKey,
+    targetUrl: oldMap.targetUrl,
+    authHash: oldMap.authHash,
+    viewport: oldMap.viewport,
+    mapId: oldMap.mapId,
+    now,
+    saveFailed: false
+  });
+}
+
+/**
  * 创建未落盘的页面地图不可用结果。
  */
 function createMissingMap(input: {
@@ -109,6 +127,7 @@ async function createInitialMap(input: {
   };
   mapId: string;
   now: Date;
+  saveFailed?: boolean;
 }) {
   try {
     const context = await collectInitialPage({
@@ -135,6 +154,11 @@ async function createInitialMap(input: {
     return createPageMap(map);
   } catch (error) {
     const warning = getErrorText(error);
+
+    if (input.saveFailed === false) {
+      throw badRequest(`页面地图刷新失败：${warning}`);
+    }
+
     const map: PageMap = {
       mapId: input.mapId,
       projectKey: input.projectKey,

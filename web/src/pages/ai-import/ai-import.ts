@@ -7,6 +7,7 @@ import type {
   ImportStatus,
   ImportStepSource,
   MatchType,
+  PageMapStatus,
   StepType,
   TargetType
 } from '../../../../shared/types';
@@ -258,6 +259,57 @@ export function getStepSummary(step: ImportStepSource) {
  */
 export function formatImportTime(value?: string) {
   return formatDateTime(value);
+}
+
+/**
+ * 格式化页面地图状态。
+ */
+export function formatPageMapStatus(status?: PageMapStatus) {
+  const map: Record<PageMapStatus, { label: string; type: 'success' | 'warning' | 'danger' }> = {
+    ready: { label: '可用', type: 'success' },
+    stale: { label: '建议刷新', type: 'warning' },
+    failed: { label: '采集失败', type: 'danger' }
+  };
+
+  return status ? map[status] : { label: '未缓存', type: 'warning' as const };
+}
+
+/**
+ * 格式化页面地图缓存年龄。
+ */
+export function formatPageMapAge(value?: string, now = new Date()) {
+  if (!value) {
+    return '-';
+  }
+
+  const time = new Date(value).getTime();
+
+  if (!Number.isFinite(time)) {
+    return '-';
+  }
+
+  const diffMs = Math.max(now.getTime() - time, 0);
+  const minuteMs = 60 * 1000;
+  const hourMs = 60 * minuteMs;
+  const dayMs = 24 * hourMs;
+
+  if (diffMs < hourMs) {
+    // 页面地图是缓存资源，分钟级年龄足够判断是否刚刷新。
+    return `${Math.max(Math.floor(diffMs / minuteMs), 1)} 分钟前`;
+  }
+
+  if (diffMs < dayMs) {
+    return `${Math.floor(diffMs / hourMs)} 小时前`;
+  }
+
+  return `${Math.floor(diffMs / dayMs)} 天前`;
+}
+
+/**
+ * 格式化页面地图状态数量。
+ */
+export function formatPageMapCount(count?: number) {
+  return `${count ?? 0} 个状态`;
 }
 
 /**
