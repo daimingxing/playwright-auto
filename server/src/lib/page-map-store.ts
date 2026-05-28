@@ -86,6 +86,19 @@ export async function writePageMapShot(projectKey: string, mapId: string, stateI
 }
 
 /**
+ * 批量写入页面状态快照，避免多状态采集方重复处理目录创建细节。
+ */
+export async function writePageMapShots(projectKey: string, mapId: string, snapshots: Array<{ stateId: string; snapshot: PageContext }>) {
+  const paths: Record<string, string> = {};
+
+  for (const item of snapshots) {
+    paths[item.stateId] = await writePageMapShot(projectKey, mapId, item.stateId, item.snapshot);
+  }
+
+  return paths;
+}
+
+/**
  * 读取页面状态快照。
  */
 export async function readPageMapShot(projectKey: string, mapId: string, stateId: string) {

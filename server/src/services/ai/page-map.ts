@@ -1,9 +1,10 @@
-import type { PageMap, PageState } from '../../../../shared/types';
+import type { ImportStepSource, PageAction, PageMap, PageState } from '../../../../shared/types';
 import { getAppConfig } from '../../lib/app-config';
 import { badRequest, HttpError } from '../../lib/http-error';
 import { createPageMapKey, createPageMapId, getAuthHash, getPageMapShotFile } from '../../lib/path';
-import { createPageMap, markPageMapStale, readPageMap, writePageMapShot } from '../../lib/page-map-store';
-import { collectInitialPage, PageContextError, type PageContext } from './page-context';
+import { createPageMap, markPageMapStale, readPageMap, writePageMapShots } from '../../lib/page-map-store';
+import { buildPageActions } from './page-action';
+import { collectInitialPage, collectPageMapStates, PageContextError, type CollectedPageState, type PageContext } from './page-context';
 
 interface PageMapInput {
   projectKey: string;
@@ -14,6 +15,7 @@ interface PageMapInput {
     height: number;
   };
   staleDays?: number;
+  steps?: ImportStepSource[];
   now?: Date;
 }
 
@@ -60,7 +62,8 @@ export async function getPageMap(input: PageMapInput) {
     authHash: key.authHash,
     viewport: key.viewport,
     mapId,
-    now
+    now,
+    steps: input.steps
   });
 }
 
@@ -127,15 +130,28 @@ async function createInitialMap(input: {
   };
   mapId: string;
   now: Date;
+  steps?: ImportStepSource[];
   saveFailed?: boolean;
 }) {
   try {
-    const context = await collectInitialPage({
+    const pageMapConfig = getAppConfig().ai.pageMap;
+    // maxDepth 限制动作路径层级，避免菜单、弹窗、树节点组合后出现指数级状态扩散。
+    const maxDepth = pageMapConfig.maxDepth;
+    const actionResult = buildPageActions({ steps: input.steps ?? [], maxDepth });
+    // maxActions 限制本次真实浏览器动作数量，避免大模板拖慢导入和页面地图生成。
+    const maxActions = pageMapConfig.maxActions;
+    const actions = actionResult.actions.slice(0, maxActions);
+    const limitWarnings = actionResult.actions.length > maxActions ? [`已截断超过 ${maxActions} 个的页面探索动作。`] : [];
+    // timeoutMs 是单次页面地图采集的浏览器等待上限，防止网络空闲或控件动画长期阻塞后台任务。
+    const timeoutMs = pageMapConfig.timeoutMs;
+    const collected = await collectMapStates({
       projectKey: input.projectKey,
       envKey: input.envKey,
-      targetUrl: input.targetUrl
+      targetUrl: input.targetUrl,
+      actions,
+      timeoutMs
     });
-    await writePageMapShot(input.projectKey, input.mapId, initialStateId, context);
+    const states = await toPageStates(input.projectKey, input.mapId, collected.states, input.now);
 
     const map: PageMap = {
       mapId: input.mapId,
@@ -145,8 +161,8 @@ async function createInitialMap(input: {
       authHash: input.authHash,
       viewport: input.viewport,
       status: 'ready',
-      states: [toInitialState(input.projectKey, input.mapId, context, input.now)],
-      warnings: context.warnings,
+      states,
+      warnings: uniqueWarnings([...actionResult.warnings, ...limitWarnings, ...collected.warnings]),
       createdAt: input.now.toISOString(),
       updatedAt: input.now.toISOString()
     };
@@ -178,18 +194,68 @@ async function createInitialMap(input: {
 }
 
 /**
- * 把页面上下文包装为初始页面状态。
+ * 根据是否存在探索动作采集页面地图状态。
  */
-function toInitialState(projectKey: string, mapId: string, context: PageContext, now: Date): PageState {
+async function collectMapStates(input: {
+  projectKey: string;
+  envKey: string;
+  targetUrl: string;
+  actions: PageAction[];
+  timeoutMs: number;
+}) {
+  if (input.actions.length === 0) {
+    const context = await collectInitialPage({
+      projectKey: input.projectKey,
+      envKey: input.envKey,
+      targetUrl: input.targetUrl
+    });
+
+    return {
+      states: [{ context }],
+      warnings: context.warnings
+    };
+  }
+
+  return collectPageMapStates(input);
+}
+
+/**
+ * 把采集结果包装为页面状态并写入快照。
+ */
+async function toPageStates(projectKey: string, mapId: string, states: CollectedPageState[], now: Date): Promise<PageState[]> {
+  const pageStates = states.map((state, index) => toPageState(projectKey, mapId, state, index, now));
+
+  await writePageMapShots(projectKey, mapId, pageStates.map((state, index) => ({
+    stateId: state.stateId,
+    snapshot: states[index].context
+  })));
+
+  return pageStates;
+}
+
+/**
+ * 把单个采集结果包装为页面状态。
+ */
+function toPageState(projectKey: string, mapId: string, state: CollectedPageState, index: number, now: Date): PageState {
+  const stateId = index === 0 ? initialStateId : `state-action-${index}`;
+
   return {
-    stateId: initialStateId,
-    name: '初始页面',
-    url: context.page.url,
-    title: context.page.title,
-    snapshotPath: getPageMapShotFile(projectKey, mapId, initialStateId),
-    warnings: context.warnings,
+    stateId,
+    name: state.action ? state.context.page.title || `${state.action.targetName}后页面` : '初始页面',
+    url: state.context.page.url,
+    title: state.context.page.title,
+    snapshotPath: getPageMapShotFile(projectKey, mapId, stateId),
+    ...(state.action ? { sourceAction: state.action } : {}),
+    warnings: state.context.warnings,
     createdAt: now.toISOString()
   };
+}
+
+/**
+ * 去重页面地图风险提示。
+ */
+function uniqueWarnings(values: string[]) {
+  return Array.from(new Set(values));
 }
 
 /**
