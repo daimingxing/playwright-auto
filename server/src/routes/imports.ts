@@ -23,7 +23,7 @@ import { createCaseDraft } from '../lib/case-store';
 import { getCasePath } from '../lib/path';
 import { listPageMaps } from '../lib/page-map-store';
 import { getProject } from '../lib/project-store';
-import { envKeySchema } from '../lib/schema';
+import { envKeySchema, uiLibrarySchema } from '../lib/schema';
 import { getAppConfig } from '../lib/app-config';
 import { parseImportExcel } from '../services/import/import-excel';
 import { enqueueImportItem, enqueueImportJob } from '../services/import/import-worker';
@@ -58,8 +58,9 @@ importsRouter.post<ProjectParams>('/ai', upload.single('file') as RequestHandler
     }
 
     const envKey = await readImportEnvKey(req.params.projectKey, req.body?.envKey);
+    const uiLibrary = readUiLibrary(req.body?.uiLibrary);
     const fileHash = createHash('sha256').update(req.file.buffer).digest('hex');
-    const existing = await findImportByHash(req.params.projectKey, fileHash, envKey);
+    const existing = await findImportByHash(req.params.projectKey, fileHash, envKey, uiLibrary);
 
     if (existing) {
       res.json({ ...existing, reused: true });
@@ -71,6 +72,7 @@ importsRouter.post<ProjectParams>('/ai', upload.single('file') as RequestHandler
       fileName: normalizeUploadName(req.file.originalname),
       fileHash,
       envKey,
+      uiLibrary,
       cases
     });
 
@@ -108,6 +110,20 @@ async function readImportEnvKey(projectKey: string, value: unknown) {
 
   if (!project.envs.some((env) => env.key === parsed.data)) {
     throw badRequest('导入环境不存在');
+  }
+
+  return parsed.data;
+}
+
+/**
+ * 读取导入控件库策略，缺省使用自动识别兼容旧调用方。
+ */
+function readUiLibrary(value: unknown) {
+  const uiLibrary = typeof value === 'string' && value.trim() ? value.trim() : 'auto';
+  const parsed = uiLibrarySchema.safeParse(uiLibrary);
+
+  if (!parsed.success) {
+    throw badRequest('导入控件库不合法');
   }
 
   return parsed.data;

@@ -225,6 +225,33 @@ describe('导入 worker 页面地图分组', () => {
     expect(new Set(items.map((item) => item.pageMapId)).size).toBe(3);
   });
 
+  it('控件库不同的导入任务不会误共用页面地图缓存', async () => {
+    await createProject({ name: 'CRM 系统', key: 'crm', baseUrl: 'https://crm.test.local' });
+    const first = await createImportJob('crm', {
+      fileName: 'cases.xlsx',
+      fileHash: 'hash-auto-ui',
+      envKey: 'default',
+      uiLibrary: 'auto',
+      cases: [createCase('TC001', '/users')]
+    });
+
+    await enqueueImportJob('crm', first.importId);
+    const firstItems = await waitItems('crm', first.importId, ['pendingReview', 'failed']);
+    const second = await createImportJob('crm', {
+      fileName: 'cases.xlsx',
+      fileHash: 'hash-kendo-ui',
+      envKey: 'default',
+      uiLibrary: 'kendo',
+      cases: [createCase('TC002', '/users')]
+    });
+
+    await enqueueImportJob('crm', second.importId);
+    const secondItems = await waitItems('crm', second.importId, ['pendingReview', 'failed']);
+
+    expect(collectCount).toBe(2);
+    expect(firstItems[0].pageMapId).not.toBe(secondItems[0].pageMapId);
+  });
+
   it('页面地图失败时同组项失败且其他组继续生成', async () => {
     await createProject({ name: 'CRM 系统', key: 'crm', baseUrl: 'https://crm.test.local' });
     failUrl = '/missing';

@@ -1,4 +1,4 @@
-import type { CaseMeta, CaseStep, ImportItem, PageMap } from '../../../../shared/types';
+import type { CaseMeta, CaseStep, ImportItem, PageMap, UiLibrary } from '../../../../shared/types';
 import { getAppConfig } from '../../lib/app-config';
 import {
   getImportItem,
@@ -30,6 +30,7 @@ interface ImportGroup {
   pageMapId: string;
   targetUrl: string;
   authHash: string;
+  uiLibrary: UiLibrary;
   items: ImportItem[];
 }
 
@@ -104,7 +105,8 @@ export async function processImportItem(projectKey: string, importId: string, it
         caseInfo: item.source.caseInfo,
         steps: item.source.steps,
         data: item.source.data,
-        pageContext
+        pageContext,
+        uiLibrary: job.uiLibrary ?? pageContext.uiLibrary ?? 'auto'
       };
       const result = await generateCaseDraft(draftInput);
       const review = reviewCase(createReviewCase(result.draft));
@@ -180,7 +182,8 @@ async function createImportGroups(projectKey: string, importId: string, items: I
       envKey: job.envKey,
       targetUrl: item.source.caseInfo.targetUrl,
       authHash,
-      viewport: defaultViewport
+      viewport: defaultViewport,
+      uiLibrary: job.uiLibrary ?? 'auto'
     });
     const groupId = createPageMapId(key);
     const group = groups.get(groupId) ?? {
@@ -188,6 +191,7 @@ async function createImportGroups(projectKey: string, importId: string, items: I
       pageMapId: groupId,
       targetUrl: key.targetUrl,
       authHash,
+      uiLibrary: key.uiLibrary,
       items: []
     };
 
@@ -214,6 +218,7 @@ async function prepareGroupMap(
       targetUrl: group.targetUrl,
       viewport: defaultViewport,
       authHash: group.authHash,
+      uiLibrary: group.uiLibrary,
       steps: group.items.flatMap((item) => item.source.steps)
     });
 
@@ -277,7 +282,8 @@ async function readDraftPageMap(projectKey: string, pageMap: PageMap): Promise<D
     mapId: pageMap.mapId,
     targetUrl: pageMap.targetUrl,
     states,
-    warnings: pageMap.warnings
+    warnings: pageMap.warnings,
+    uiLibrary: pageMap.uiLibrary ?? 'auto'
   };
 }
 

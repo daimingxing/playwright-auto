@@ -161,3 +161,8 @@
 - 经验：录制脚本是可执行代码，用例数据是平台结构化步骤，两者不能逐行等价保存。codegen 入口导航应作为 `startPath` 的来源或校验信息，而不是测试动作本身。
 
 ---
+## 2026-05-29 PowerShell 不支持 Unix `head`
+
+- 现象：在 Windows PowerShell 中执行 `rtk rg ... | head -80` 报 `head` 不是可识别命令。
+- 原因：项目当前 shell 是 PowerShell，不能默认使用 Unix 工具链命令。
+- 处理：后续截断输出使用 `Select-Object -First`，或让 `rtk` 自身压缩输出。

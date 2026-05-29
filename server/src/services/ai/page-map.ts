@@ -1,4 +1,4 @@
-import type { ImportStepSource, PageAction, PageMap, PageState } from '../../../../shared/types';
+import type { ImportStepSource, PageAction, PageMap, PageState, UiLibrary } from '../../../../shared/types';
 import { getAppConfig } from '../../lib/app-config';
 import { badRequest, HttpError } from '../../lib/http-error';
 import { createPageMapKey, createPageMapId, getAuthHash, getPageMapShotFile } from '../../lib/path';
@@ -15,6 +15,7 @@ interface PageMapInput {
     height: number;
   };
   authHash?: string;
+  uiLibrary?: UiLibrary;
   staleDays?: number;
   steps?: ImportStepSource[];
   now?: Date;
@@ -35,7 +36,8 @@ export async function getPageMap(input: PageMapInput) {
     envKey: input.envKey,
     targetUrl: input.targetUrl,
     authHash: input.authHash ?? await getAuthHash(input.projectKey, input.envKey),
-    viewport: input.viewport
+    viewport: input.viewport,
+    uiLibrary: input.uiLibrary ?? 'auto'
   });
   const mapId = createPageMapId(key);
   const cached = await readCache(input.projectKey, mapId);
@@ -51,6 +53,7 @@ export async function getPageMap(input: PageMapInput) {
       targetUrl: key.targetUrl,
       authHash: key.authHash,
       viewport: key.viewport,
+      uiLibrary: key.uiLibrary,
       mapId,
       now
     });
@@ -62,6 +65,7 @@ export async function getPageMap(input: PageMapInput) {
     targetUrl: key.targetUrl,
     authHash: key.authHash,
     viewport: key.viewport,
+    uiLibrary: key.uiLibrary,
     mapId,
     now,
     steps: input.steps
@@ -80,6 +84,7 @@ export async function refreshPageMap(projectKey: string, mapId: string, now = ne
     targetUrl: oldMap.targetUrl,
     authHash: oldMap.authHash,
     viewport: oldMap.viewport,
+    uiLibrary: oldMap.uiLibrary ?? 'auto',
     mapId: oldMap.mapId,
     now,
     saveFailed: false
@@ -98,6 +103,7 @@ function createMissingMap(input: {
     width: number;
     height: number;
   };
+  uiLibrary: UiLibrary;
   mapId: string;
   now: Date;
 }): PageMap {
@@ -108,6 +114,7 @@ function createMissingMap(input: {
     targetUrl: input.targetUrl,
     authHash: input.authHash,
     viewport: input.viewport,
+    uiLibrary: input.uiLibrary,
     status: 'failed',
     states: [],
     // 自动创建关闭时只能返回内存态诊断结果，避免误写 map.json 或 snapshot。
@@ -129,6 +136,7 @@ async function createInitialMap(input: {
     width: number;
     height: number;
   };
+  uiLibrary: UiLibrary;
   mapId: string;
   now: Date;
   steps?: ImportStepSource[];
@@ -150,7 +158,8 @@ async function createInitialMap(input: {
       envKey: input.envKey,
       targetUrl: input.targetUrl,
       actions,
-      timeoutMs
+      timeoutMs,
+      uiLibrary: input.uiLibrary
     });
     const states = await toPageStates(input.projectKey, input.mapId, collected.states, input.now);
 
@@ -161,6 +170,7 @@ async function createInitialMap(input: {
       targetUrl: input.targetUrl,
       authHash: input.authHash,
       viewport: input.viewport,
+      uiLibrary: input.uiLibrary,
       status: 'ready',
       states,
       warnings: uniqueWarnings([...actionResult.warnings, ...limitWarnings, ...collected.warnings]),
@@ -183,6 +193,7 @@ async function createInitialMap(input: {
       targetUrl: input.targetUrl,
       authHash: input.authHash,
       viewport: input.viewport,
+      uiLibrary: input.uiLibrary,
       status: 'failed',
       states: [],
       warnings: [warning],
@@ -203,12 +214,14 @@ async function collectMapStates(input: {
   targetUrl: string;
   actions: PageAction[];
   timeoutMs: number;
+  uiLibrary: UiLibrary;
 }) {
   if (input.actions.length === 0) {
     const context = await collectInitialPage({
       projectKey: input.projectKey,
       envKey: input.envKey,
-      targetUrl: input.targetUrl
+      targetUrl: input.targetUrl,
+      uiLibrary: input.uiLibrary
     });
 
     return {

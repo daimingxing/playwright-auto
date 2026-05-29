@@ -4,7 +4,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import type { UploadFile } from 'element-plus';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import type { PageMap, PageMapSummary, ImportJob } from '../../../../shared/types';
+import type { PageMap, PageMapSummary, ImportJob, UiLibrary } from '../../../../shared/types';
 import { createAiImport, deleteImport, listImports } from '../../api/imports';
 import { deletePageMap, getPageMap, listPageMaps, refreshPageMap } from '../../api/page-maps';
 import { getErrorMessage } from '../../utils/error';
@@ -29,6 +29,7 @@ const maps = ref<PageMapSummary[]>([]);
 const mapDetail = ref<PageMap | null>(null);
 const mapOpen = ref(false);
 const file = ref<File | null>(null);
+const uiLibrary = ref<UiLibrary>('auto');
 let timer: ReturnType<typeof window.setInterval> | undefined;
 
 const hasRunning = computed(() => jobs.value.some((job) => job.status === 'running'));
@@ -104,7 +105,7 @@ async function uploadFile() {
   uploading.value = true;
 
   try {
-    const job = await createAiImport(projectKey, file.value);
+    const job = await createAiImport(projectKey, file.value, { uiLibrary: uiLibrary.value });
     ElMessage.success(job.reused ? '检测到已有导入任务，已打开原任务' : '导入任务已创建');
     await router.push(`/projects/${projectKey}/imports/${job.importId}`);
   } catch (error) {
@@ -252,6 +253,11 @@ onBeforeUnmount(() => {
             <div class="upload-text">拖入或选择 Excel 模板文件</div>
           </el-upload>
           <div class="upload-actions btn-shadow-md">
+            <el-select v-model="uiLibrary" class="ui-select" size="large" aria-label="控件库">
+              <el-option label="自动识别" value="auto" />
+              <el-option label="Kendo UI" value="kendo" />
+              <el-option label="原生控件" value="native" />
+            </el-select>
             <el-button type="primary" size="large" :loading="uploading" @click="uploadFile">创建导入任务</el-button>
           </div>
         </div>
@@ -461,6 +467,11 @@ onBeforeUnmount(() => {
 .upload-actions {
   align-items: center;
   display: flex;
+  gap: 12px;
+}
+
+.ui-select {
+  width: 160px;
 }
 
 .card-header {

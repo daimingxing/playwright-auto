@@ -17,11 +17,13 @@ describe('AI 导入前端 API', () => {
     const fetchMock = vi.fn().mockResolvedValue(makeResponse({ importId: 'import-20260526-120000-ab12' }));
     vi.stubGlobal('fetch', fetchMock);
 
-    await createAiImport('crm', new File(['demo'], 'cases.xlsx'), 'default');
+    await createAiImport('crm', new File(['demo'], 'cases.xlsx'), { envKey: 'default', uiLibrary: 'kendo' });
 
     const [, init] = fetchMock.mock.calls[0];
     expect(init.method).toBe('POST');
     expect(init.body).toBeInstanceOf(FormData);
+    expect((init.body as FormData).get('envKey')).toBe('default');
+    expect((init.body as FormData).get('uiLibrary')).toBe('kendo');
     expect(init.headers).toEqual({});
   });
 

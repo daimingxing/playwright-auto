@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { stepTypes, type AiCaseDraft, type AiDebugInfo, type AiDraftStep, type AiLevel, type ImportCaseSource, type ImportDataSource, type ImportStepSource, type StepType, type TargetType } from '../../../../shared/types';
+import { stepTypes, type AiCaseDraft, type AiDebugInfo, type AiDraftStep, type AiLevel, type ImportCaseSource, type ImportDataSource, type ImportStepSource, type StepType, type TargetType, type UiLibrary } from '../../../../shared/types';
 import { AiJsonError, generateAiJson } from './ai-client';
 import type { PageContext, PageElement } from './page-context';
 import { buildAiCaseDraftGroupSystemPrompt, buildAiCaseDraftGroupUserPrompt, buildAiCaseDraftSystemPrompt, buildAiCaseDraftUserPrompt } from '../../prompts/ai-case-draft-prompt';
@@ -9,6 +9,7 @@ export interface DraftInput {
   steps: ImportStepSource[];
   data: ImportDataSource[];
   pageContext: PageContext;
+  uiLibrary?: UiLibrary;
 }
 
 export interface DraftCaseInput {
@@ -29,6 +30,7 @@ export interface DraftPageMap {
   targetUrl: string;
   states: DraftPageState[];
   warnings: string[];
+  uiLibrary?: UiLibrary;
 }
 
 export interface DraftGroupInput {
@@ -121,13 +123,16 @@ interface SelectorKind {
  * 构造 AI 草稿生成输入。
  */
 export function buildCaseDraftInput(input: DraftInput) {
+  const uiLibrary = input.uiLibrary ?? input.pageContext.uiLibrary ?? 'auto';
+
   return {
-    system: buildAiCaseDraftSystemPrompt(),
+    system: buildAiCaseDraftSystemPrompt(uiLibrary),
     user: buildAiCaseDraftUserPrompt({
       caseInfo: input.caseInfo,
       steps: input.steps,
       data: input.data,
-      pageContext: input.pageContext
+      pageContext: input.pageContext,
+      uiLibrary
     })
   };
 }
@@ -136,8 +141,10 @@ export function buildCaseDraftInput(input: DraftInput) {
  * 构造 AI 分组草稿生成输入。
  */
 export function buildCaseDraftGroupInput(input: DraftGroupInput) {
+  const uiLibrary = input.pageMap.uiLibrary ?? 'auto';
+
   return {
-    system: buildAiCaseDraftGroupSystemPrompt(),
+    system: buildAiCaseDraftGroupSystemPrompt(uiLibrary),
     user: buildAiCaseDraftGroupUserPrompt({
       pageMap: summarizePageMap(input.pageMap),
       cases: input.cases
@@ -402,6 +409,7 @@ function summarizePageMap(pageMap: DraftPageMap) {
     mapId: pageMap.mapId,
     targetUrl: pageMap.targetUrl,
     warnings: pageMap.warnings,
+    uiLibrary: pageMap.uiLibrary ?? 'auto',
     states: pageMap.states.map((state) => ({
       stateId: state.stateId,
       name: state.name,

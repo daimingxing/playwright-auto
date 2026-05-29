@@ -76,6 +76,16 @@ export const matchTypeLabels: Record<MatchType, string> = {
   regex: '正则'
 };
 
+export const uiLibraries = ['auto', 'native', 'kendo'] as const;
+
+export type UiLibrary = typeof uiLibraries[number];
+
+export const uiLibraryLabels: Record<UiLibrary, string> = {
+  auto: '自动识别',
+  native: '原生控件',
+  kendo: 'Kendo UI'
+};
+
 /**
  * 格式化动作类型中文名。
  */
@@ -257,6 +267,7 @@ export interface PageMapSummary {
     width: number;
     height: number;
   };
+  uiLibrary?: UiLibrary;
   status: PageMapStatus;
   stateCount: number;
   updatedAt: string;
@@ -272,6 +283,7 @@ export interface PageMap {
     width: number;
     height: number;
   };
+  uiLibrary?: UiLibrary;
   status: PageMapStatus;
   states: PageState[];
   warnings: string[];
@@ -284,6 +296,7 @@ export interface ImportJob {
   fileName: string;
   fileHash: string;
   envKey: string;
+  uiLibrary?: UiLibrary;
   status: ImportStatus;
   totalCount: number;
   generatedCount: number;

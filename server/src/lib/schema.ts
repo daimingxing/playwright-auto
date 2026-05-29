@@ -20,6 +20,8 @@ export const createProjectSchema = z.object({
 
 export const envKeySchema = projectKeySchema;
 
+export const uiLibrarySchema = z.enum(['auto', 'native', 'kendo']);
+
 export const createEnvSchema = z.object({
   name: z.string().min(1).max(80),
   key: envKeySchema,

@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { readdir, rm } from 'node:fs/promises';
 import { createHash, randomBytes } from 'node:crypto';
 import { join } from 'node:path';
-import type { ImportItem, ImportJob } from '../../../shared/types';
+import type { ImportItem, ImportJob, UiLibrary } from '../../../shared/types';
 import type { ParsedImportCase } from '../services/import/import-excel';
 import { ensureDir, readJson, writeJson } from './fs';
 import { getImportItemPath, getImportPath, getImportsPath } from './path';
@@ -12,6 +12,7 @@ export interface CreateImportJobInput {
   fileName: string;
   fileHash: string;
   envKey: string;
+  uiLibrary?: UiLibrary;
   cases: ParsedImportCase[];
 }
 
@@ -26,6 +27,7 @@ export async function createImportJob(projectKey: string, input: CreateImportJob
     fileName: input.fileName,
     fileHash: input.fileHash,
     envKey: input.envKey,
+    uiLibrary: input.uiLibrary ?? 'auto',
     status: 'running',
     totalCount: input.cases.length,
     generatedCount: 0,
@@ -88,8 +90,13 @@ export async function listImportJobs(projectKey: string) {
 /**
  * 根据文件 hash 和导入环境查找已有导入任务。
  */
-export async function findImportByHash(projectKey: string, fileHash: string, envKey: string) {
-  return (await listImportJobs(projectKey)).find((job) => job.fileHash === fileHash && job.envKey === envKey);
+export async function findImportByHash(projectKey: string, fileHash: string, envKey: string, uiLibrary: UiLibrary = 'auto') {
+  return (await listImportJobs(projectKey)).find((job) =>
+    job.fileHash === fileHash &&
+    job.envKey === envKey &&
+    // 历史导入任务没有 uiLibrary，按 auto 参与去重，避免升级后重复打开旧任务。
+    (job.uiLibrary ?? 'auto') === uiLibrary
+  );
 }
 
 /**

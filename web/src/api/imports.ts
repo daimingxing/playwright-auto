@@ -1,15 +1,24 @@
-import type { ImportItem, ImportJob, ImportSaveResult } from '../../../shared/types';
+import type { ImportItem, ImportJob, ImportSaveResult, UiLibrary } from '../../../shared/types';
 import { requestJson } from './http';
+
+interface CreateAiImportOptions {
+  envKey?: string;
+  uiLibrary?: UiLibrary;
+}
 
 /**
  * 上传 Excel 并创建 AI 导入任务。
  */
-export function createAiImport(projectKey: string, file: File, envKey?: string) {
+export function createAiImport(projectKey: string, file: File, options: CreateAiImportOptions = {}) {
   const form = new FormData();
   form.append('file', file);
 
-  if (envKey) {
-    form.append('envKey', envKey);
+  if (options.envKey) {
+    form.append('envKey', options.envKey);
+  }
+
+  if (options.uiLibrary) {
+    form.append('uiLibrary', options.uiLibrary);
   }
 
   return requestJson<ImportJob & { reused?: boolean }>(`/api/projects/${projectKey}/imports/ai`, {

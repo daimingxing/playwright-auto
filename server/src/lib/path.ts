@@ -25,6 +25,7 @@ interface PageMapKeyInput {
     width: number;
     height: number;
   };
+  uiLibrary?: 'auto' | 'native' | 'kendo';
 }
 
 /**
@@ -164,7 +165,9 @@ export function createPageMapKey(input: PageMapKeyInput) {
     viewport: {
       width: input.viewport.width,
       height: input.viewport.height
-    }
+    },
+    // 旧缓存没有控件库字段，统一归入 auto，保证历史页面地图仍可读可匹配。
+    uiLibrary: input.uiLibrary ?? 'auto'
   };
 }
 

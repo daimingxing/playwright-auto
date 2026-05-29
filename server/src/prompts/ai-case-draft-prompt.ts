@@ -1,4 +1,4 @@
-import { stepTypes } from '../../../shared/types';
+import { stepTypes, type UiLibrary } from '../../../shared/types';
 
 const outputTemplate = {
   name: '用例名称',
@@ -34,7 +34,7 @@ const groupOutputTemplate = {
 /**
  * 构造 AI 自然语言导入的系统提示词。
  */
-export function buildAiCaseDraftSystemPrompt() {
+export function buildAiCaseDraftSystemPrompt(uiLibrary: UiLibrary = 'auto') {
   return [
     '你是自动化测试用例草稿生成助手。',
     '你的任务是把测试人员导入的自然语言用例转换为平台结构化草稿步骤。',
@@ -51,6 +51,7 @@ export function buildAiCaseDraftSystemPrompt() {
     '- pageContext 是平台用 Playwright 打开真实页面后采集的压缩上下文，不是完整 DOM。',
     '- pageContext.elements.buttons/inputs/selects/links/navigation 中的 locator 是平台现场采集到的候选定位器。',
     '- pageContext.elements.tables 只提供表格摘要，不代表可直接点击。',
+    '- uiLibrary 表示本次导入选择的控件库策略，可取 auto、native、kendo；auto 表示平台会自动识别常见控件。',
     '',
     '输出结构要求：',
     '- 只返回 JSON 对象，不要输出 Markdown、解释文字或代码块。',
@@ -67,6 +68,7 @@ export function buildAiCaseDraftSystemPrompt() {
     '- 优先使用 pageContext 中已有 locator，能匹配自然语言目标时必须原样写入 selector。',
     '- 页面上下文没有可匹配 locator 时，可以基于自然语言尝试推理 Playwright selector。',
     '- 推理 selector 必须把 targetType 当作主要依据：targetType=button 优先 getByRole("button", { name })；targetType=input 优先 getByLabel(name) 或 getByPlaceholder(name)；targetType=select 优先 getByLabel(name)，但没有 DOM 证明是原生 select 时必须提示可能是自定义下拉框。',
+    ...buildUiRules(uiLibrary),
     '- targetType 已给出时，不要把 button/input/select 一律退化成 getByText；只有 targetType 缺失且没有更合适信息时才使用 getByText。',
     '- 推理 selector 时 confidence 必须为 low，并在 warnings 说明 selector 为 AI 推测，需要人工确认。',
     '- 如果步骤明显依赖先点击父菜单后才出现的子菜单，也可以生成低置信推测 selector，但必须在 warnings 说明该元素可能是懒加载或展开后出现。',
@@ -91,9 +93,9 @@ export function buildAiCaseDraftSystemPrompt() {
 /**
  * 构造 AI 分组自然语言导入的系统提示词。
  */
-export function buildAiCaseDraftGroupSystemPrompt() {
+export function buildAiCaseDraftGroupSystemPrompt(uiLibrary: UiLibrary = 'auto') {
   return [
-    buildAiCaseDraftSystemPrompt(),
+    buildAiCaseDraftSystemPrompt(uiLibrary),
     '',
     '分组输出要求：',
     '- 输入会提供同一页面地图下的多条 cases 和 pageMap 多状态摘要。',
@@ -109,6 +111,29 @@ export function buildAiCaseDraftGroupSystemPrompt() {
     '分组输出 JSON 模板：',
     JSON.stringify(groupOutputTemplate)
   ].join('\n');
+}
+
+/**
+ * 按控件库生成最小差异规则，避免无关 UI 库规范干扰模型选择。
+ */
+function buildUiRules(uiLibrary: UiLibrary) {
+  if (uiLibrary === 'kendo') {
+    return [
+      '- 当前控件库为 Kendo UI；Kendo 下拉框通常不是原生 select，而是 k-dropdownlist/k-picker/role=combobox。',
+      '- Kendo 选择下拉项的真实执行顺序是先点击下拉控件，再点击展开面板中的选项文本，不要默认生成 selectOption()。'
+    ];
+  }
+
+  if (uiLibrary === 'native') {
+    return [
+      '- 当前控件库为原生控件；targetType=select 且 pageContext 有原生 select 候选时，优先使用该候选并可按 selectOption 语义理解。',
+      '- 原生控件场景不要主动假设自定义下拉，除非 pageContext 明确显示目标不是原生 select。'
+    ];
+  }
+
+  return [
+    '- 当前控件库为自动识别；遇到 targetType=select 时，先依据 pageContext 判断是原生 select 还是自定义 combobox，再选择合适 selector。'
+  ];
 }
 
 /**

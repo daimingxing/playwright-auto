@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { parseJsonObject } from '../../server/src/services/ai/ai-client';
 import { buildCaseDraftGroupInput, buildCaseDraftInput, completeDraftSelectors, normalizeAiDraft, normalizeAiDraftGroup } from '../../server/src/services/ai/ai-case-draft';
 import type { DraftGroupInput } from '../../server/src/services/ai/ai-case-draft';
-import { assertPageAvailable, readPageSnapshot, resolveUnique, waitForPageReady } from '../../server/src/services/ai/page-context';
+import { assertPageAvailable, readPageSnapshot, resolveUnique, runPageAction, waitForPageReady } from '../../server/src/services/ai/page-context';
 import { getChromePath } from '../../server/src/services/playwright/vendor-browser';
 
 describe('AI 草稿生成服务', () => {
@@ -109,6 +109,92 @@ describe('AI 草稿生成服务', () => {
     expect(input.user).toContain('"cases"');
     expect(input.user).toContain('"TC001"');
     expect(input.user).toContain('"TC002"');
+  });
+
+  it('单条 prompt 按控件库动态补充系统规则', () => {
+    const kendoInput = buildCaseDraftInput({
+      caseInfo: {
+        caseNo: 'TC001',
+        caseName: '选择取样类别',
+        targetUrl: '/web/IMQM07',
+        precondition: '',
+        expectedResult: '',
+        note: ''
+      },
+      steps: [
+        {
+          caseNo: 'TC001',
+          stepNo: 1,
+          actionType: 'select',
+          targetType: 'select',
+          targetName: '取样类别',
+          inputValue: '采购',
+          actionText: '选择',
+          targetText: '下拉框',
+          dataKeys: [],
+          note: ''
+        }
+      ],
+      data: [],
+      pageContext: {
+        page: { url: '/web/IMQM07', title: '取样规则管理', headings: [] },
+        elements: { buttons: [], inputs: [], selects: [], links: [], navigation: [], tables: [] },
+        warnings: []
+      },
+      uiLibrary: 'kendo'
+    });
+    const nativeInput = buildCaseDraftInput({
+      caseInfo: {
+        caseNo: 'TC001',
+        caseName: '选择取样类别',
+        targetUrl: '/web/IMQM07',
+        precondition: '',
+        expectedResult: '',
+        note: ''
+      },
+      steps: [],
+      data: [],
+      pageContext: {
+        page: { url: '/web/IMQM07', title: '取样规则管理', headings: [] },
+        elements: { buttons: [], inputs: [], selects: [], links: [], navigation: [], tables: [] },
+        warnings: []
+      },
+      uiLibrary: 'native'
+    });
+
+    expect(kendoInput.system).toContain('uiLibrary');
+    expect(kendoInput.system).toContain('Kendo');
+    expect(kendoInput.system).toContain('先点击下拉控件');
+    expect(JSON.parse(kendoInput.user).uiLibrary).toBe('kendo');
+    expect(nativeInput.system).toContain('原生控件');
+    expect(nativeInput.system).toContain('selectOption');
+    expect(nativeInput.system).not.toContain('Kendo');
+    expect(JSON.parse(nativeInput.user).uiLibrary).toBe('native');
+  });
+
+  it('分组 prompt 按页面地图控件库动态补充系统规则', () => {
+    const base = createGroupPromptInput();
+    const nativeInput = buildCaseDraftGroupInput({
+      ...base,
+      pageMap: {
+        ...base.pageMap,
+        uiLibrary: 'native'
+      }
+    });
+    const kendoInput = buildCaseDraftGroupInput({
+      ...base,
+      pageMap: {
+        ...base.pageMap,
+        uiLibrary: 'kendo'
+      }
+    });
+
+    expect(nativeInput.system).toContain('原生控件');
+    expect(nativeInput.system).not.toContain('Kendo');
+    expect(JSON.parse(nativeInput.user).pageMap.uiLibrary).toBe('native');
+    expect(kendoInput.system).toContain('Kendo');
+    expect(kendoInput.system).toContain('先点击下拉控件');
+    expect(JSON.parse(kendoInput.user).pageMap.uiLibrary).toBe('kendo');
   });
 
   it('模型返回部分失败时成功项进入待确认，失败项保留错误信息', () => {
@@ -1564,12 +1650,90 @@ describe('AI 草稿生成服务', () => {
     expect(context.elements.navigation[0].locator).toBe("getByText('物流管控', { exact: true })");
     await browser.close();
   }, 15000);
+
+  it('读取 Kendo 下拉作为下拉上下文', async () => {
+    const browser = await chromium.launch({ executablePath: getChromePath() });
+    const page = await browser.newPage();
+
+    await page.setContent(`
+      <div class="k-form-field">
+        <span class="field-label">取样类别</span>
+        <span class="k-dropdownlist k-picker" role="combobox" aria-label="取样类别">
+          <span class="k-input-value-text">---请选择---</span>
+          <button class="k-input-button" aria-label="select" type="button"></button>
+        </span>
+      </div>
+    `);
+
+    const context = await readPageSnapshot(page, []);
+
+    expect(context.elements.selects).toContainEqual({
+      label: '取样类别',
+      text: '---请选择---',
+      locator: "getByLabel('取样类别')",
+      unique: true
+    });
+    await browser.close();
+  }, 15000);
+
+  it('执行 Kendo 下拉选择时点击控件本体后再点击选项', async () => {
+    const browser = await chromium.launch({ executablePath: getChromePath() });
+    const page = await browser.newPage();
+
+    await page.setContent(`
+      <div class="k-form-field">
+        <span class="field-label">取样类别</span>
+        <span id="sampleKind" class="k-dropdownlist k-picker" role="combobox" aria-label="取样类别" tabindex="0">
+          <span class="k-input-value-text">---请选择---</span>
+          <button class="k-input-button" aria-label="select" type="button"></button>
+        </span>
+      </div>
+      <ul id="sampleOptions" class="k-list" role="listbox" hidden>
+        <li class="k-list-item" role="option">采购</li>
+        <li class="k-list-item" role="option">生产</li>
+      </ul>
+      <script>
+        const trigger = document.querySelector('#sampleKind');
+        const options = document.querySelector('#sampleOptions');
+        trigger.addEventListener('click', () => {
+          trigger.setAttribute('data-opened', 'true');
+          options.hidden = false;
+        });
+        options.addEventListener('click', (event) => {
+          if (event.target.matches('[role="option"]')) {
+            trigger.querySelector('.k-input-value-text').textContent = event.target.textContent;
+            trigger.setAttribute('data-value', event.target.textContent);
+          }
+        });
+      </script>
+    `);
+
+    await runPageAction(page, {
+      id: 'action-1',
+      type: 'select',
+      targetType: 'select',
+      targetName: '取样类别',
+      value: '采购',
+      path: ['取样类别']
+    });
+
+    expect(await page.locator('#sampleKind').getAttribute('data-opened')).toBe('true');
+    expect(await page.locator('#sampleKind').getAttribute('data-value')).toBe('采购');
+    await browser.close();
+  }, 15000);
 });
 
 /**
  * 创建分组归一化测试输入。
  */
 function createGroupNormalizeInput(): DraftGroupInput {
+  return createGroupPromptInput();
+}
+
+/**
+ * 创建分组 prompt 测试输入。
+ */
+function createGroupPromptInput(): DraftGroupInput {
   return {
     pageMap: {
       mapId: 'pm-test',

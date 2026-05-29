@@ -1,5 +1,5 @@
 import { chromium, type Locator, type Page } from '@playwright/test';
-import type { ImportCaseSource, ImportDataSource, ImportStepSource, PageAction } from '../../../../shared/types';
+import type { ImportCaseSource, ImportDataSource, ImportStepSource, PageAction, UiLibrary } from '../../../../shared/types';
 import { buildStartUrl } from '../../../../shared/url';
 import { getProject } from '../../lib/project-store';
 import { getBrowserPath } from '../playwright/browser-path';
@@ -34,6 +34,7 @@ export interface PageContext {
     tables: TableElement[];
   };
   aria?: string;
+  uiLibrary?: UiLibrary;
   warnings: string[];
 }
 
@@ -43,12 +44,14 @@ export interface CollectInput {
   caseInfo: ImportCaseSource;
   steps: ImportStepSource[];
   data: ImportDataSource[];
+  uiLibrary?: UiLibrary;
 }
 
 export interface CollectPageInput {
   projectKey: string;
   envKey: string;
   targetUrl: string;
+  uiLibrary?: UiLibrary;
 }
 
 export interface CollectPageMapInput extends CollectPageInput {
@@ -132,7 +135,7 @@ export async function collectPageContext(input: CollectInput): Promise<PageConte
     await waitForPageReady(page, warnings);
 
     // 必须等待快照读取完成后再进入 finally 关闭浏览器，否则真实页面读取标题或元素时会遇到页面已关闭。
-    return await readPageSnapshot(page, warnings);
+    return await readPageSnapshot(page, warnings, input.uiLibrary);
   } finally {
     await browser.close();
   }
@@ -154,7 +157,8 @@ export async function collectInitialPage(input: CollectPageInput): Promise<PageC
       note: ''
     },
     steps: [],
-    data: []
+    data: [],
+    uiLibrary: input.uiLibrary
   });
 }
 
@@ -239,7 +243,7 @@ async function createBrowserRunner(input: CollectPageMapInput): Promise<PageMapR
       await waitForPageReady(page);
     },
     snapshot(warnings) {
-      return readPageSnapshot(page, warnings);
+      return readPageSnapshot(page, warnings, input.uiLibrary);
     },
     action(action) {
       return runPageAction(page, action);
@@ -304,7 +308,7 @@ export async function waitForPageReady(page: Page, warnings: string[] = []) {
         const bodyText = document.body?.innerText?.trim() ?? '';
         const title = document.title.trim();
         const visibleCount = Array.from(document.querySelectorAll(
-          'button,a,input,textarea,select,table,[role="button"],[role="menuitem"],.el-menu-item,.el-sub-menu__title'
+          'button,a,input,textarea,select,table,[role="button"],[role="menuitem"],[role="combobox"],.el-menu-item,.el-sub-menu__title,.k-dropdownlist,.k-combobox,.k-picker'
         )).filter((element) => {
           const rect = element.getBoundingClientRect();
           const style = window.getComputedStyle(element);
@@ -332,7 +336,7 @@ async function buildPageReadyWarning(page: Page) {
   const info = await page.evaluate(() => {
     const bodyText = document.body?.innerText?.trim() ?? '';
     const visibleCount = Array.from(document.querySelectorAll(
-      'button,a,input,textarea,select,table,[role="button"],[role="menuitem"],.el-menu-item,.el-sub-menu__title'
+      'button,a,input,textarea,select,table,[role="button"],[role="menuitem"],[role="combobox"],.el-menu-item,.el-sub-menu__title,.k-dropdownlist,.k-combobox,.k-picker'
     )).filter((element) => {
       const rect = element.getBoundingClientRect();
       const style = window.getComputedStyle(element);
@@ -354,7 +358,7 @@ async function buildPageReadyWarning(page: Page) {
 /**
  * 执行单个页面地图安全探索动作。
  */
-async function runPageAction(page: Page, action: PageAction) {
+export async function runPageAction(page: Page, action: PageAction) {
   const locator = getActionLocator(page, action);
 
   if (action.type === 'hover') {
@@ -363,17 +367,53 @@ async function runPageAction(page: Page, action: PageAction) {
   }
 
   if (action.type === 'select' && action.value) {
-    if (await locator.evaluate((element) => element.tagName.toLowerCase() === 'select').catch(() => false)) {
-      await locator.selectOption({ label: action.value });
-      return;
-    }
-
-    await locator.click();
-    await page.getByText(action.value, { exact: true }).click();
+    await runSelectAction(page, action, locator);
     return;
   }
 
   await locator.click();
+}
+
+/**
+ * 执行下拉选择动作，原生 select 和 Kendo 等自定义下拉分开处理。
+ */
+async function runSelectAction(page: Page, action: PageAction, locator: Locator) {
+  if (await locator.evaluate((element) => element.tagName.toLowerCase() === 'select').catch(() => false)) {
+    await locator.selectOption({ label: action.value });
+    return;
+  }
+
+  const trigger = await findSelectTrigger(page, action);
+
+  await trigger.click();
+  await findSelectOption(page, action.value ?? '').click();
+}
+
+/**
+ * 查找下拉触发控件，避免 targetName 文本命中左侧标签。
+ */
+async function findSelectTrigger(page: Page, action: PageAction) {
+  const name = action.targetName;
+  const labeled = page.getByLabel(name).locator('xpath=ancestor-or-self::*[self::select or @role="combobox" or contains(concat(" ", normalize-space(@class), " "), " k-dropdownlist ") or contains(concat(" ", normalize-space(@class), " "), " k-combobox ") or contains(concat(" ", normalize-space(@class), " "), " k-picker ")]').first();
+
+  if (await labeled.count()) {
+    return labeled;
+  }
+
+  const nearLabel = page.getByText(name, { exact: true }).locator('xpath=ancestor::*[1]/following-sibling::*//*[self::select or @role="combobox" or contains(concat(" ", normalize-space(@class), " "), " k-dropdownlist ") or contains(concat(" ", normalize-space(@class), " "), " k-combobox ") or contains(concat(" ", normalize-space(@class), " "), " k-picker ")][1] | ancestor::*[1]/following-sibling::*[self::select or @role="combobox" or contains(concat(" ", normalize-space(@class), " "), " k-dropdownlist ") or contains(concat(" ", normalize-space(@class), " "), " k-combobox ") or contains(concat(" ", normalize-space(@class), " "), " k-picker ")][1] | ancestor::*[2]//*[self::select or @role="combobox" or contains(concat(" ", normalize-space(@class), " "), " k-dropdownlist ") or contains(concat(" ", normalize-space(@class), " "), " k-combobox ") or contains(concat(" ", normalize-space(@class), " "), " k-picker ")][1]').first();
+
+  if (await nearLabel.count()) {
+    return nearLabel;
+  }
+
+  throw new Error(`未找到下拉控件：${name}`);
+}
+
+/**
+ * 查找展开后的下拉选项，优先使用选项角色和 Kendo 列表项。
+ */
+function findSelectOption(page: Page, value: string) {
+  return page.getByRole('option', { name: value }).or(page.locator('.k-list-item,.k-item').filter({ hasText: value })).or(page.getByText(value, { exact: true })).first();
 }
 
 /**
@@ -409,7 +449,7 @@ function getActionLocator(page: Page, action: PageAction) {
   }
 
   if (action.targetType === 'select') {
-    return page.getByLabel(name).or(page.getByText(name, { exact: true })).first();
+    return page.locator('select').filter({ hasText: name }).or(page.getByLabel(name)).or(page.getByText(name, { exact: true })).first();
   }
 
   if (action.targetType === 'button') {
@@ -430,7 +470,7 @@ function getActionLocator(page: Page, action: PageAction) {
 /**
  * 读取当前页面的压缩上下文快照。
  */
-export async function readPageSnapshot(page: Page, warnings: string[] = []): Promise<PageContext> {
+export async function readPageSnapshot(page: Page, warnings: string[] = [], uiLibrary: UiLibrary = 'auto'): Promise<PageContext> {
   return {
     page: {
       url: page.url(),
@@ -440,11 +480,12 @@ export async function readPageSnapshot(page: Page, warnings: string[] = []): Pro
     elements: {
       buttons: await readButtons(page),
       inputs: await readInputs(page),
-      selects: await readSelects(page),
+      selects: await readSelects(page, uiLibrary),
       links: await readLinks(page),
       navigation: await readNavigation(page),
       tables: await readTables(page)
     },
+    uiLibrary,
     warnings
   };
 }
@@ -491,8 +532,86 @@ async function readInputs(page: Page) {
 /**
  * 读取下拉框元素摘要。
  */
-async function readSelects(page: Page) {
-  return readAttrs(page, page.locator('select'), 'aria-label', 'getByLabel');
+async function readSelects(page: Page, uiLibrary: UiLibrary) {
+  const nativeItems = await readAttrs(page, page.locator('select'), 'aria-label', 'getByLabel');
+
+  if (uiLibrary === 'native') {
+    return nativeItems;
+  }
+
+  return [...nativeItems, ...await readKendoSelects(page)];
+}
+
+/**
+ * 读取 Kendo 自定义下拉摘要，补足非原生 select 的页面上下文。
+ */
+async function readKendoSelects(page: Page): Promise<PageElement[]> {
+  const values: Array<Omit<PageElement, 'unique'>> = [];
+  const counts: number[] = [];
+  const locator = page.locator('.k-dropdownlist,.k-combobox,.k-picker,[role="combobox"]');
+  const count = Math.min(await locator.count(), maxItems);
+
+  for (let index = 0; index < count; index += 1) {
+    const item = locator.nth(index);
+
+    if (!(await item.isVisible().catch(() => false))) {
+      continue;
+    }
+
+    const info = await item.evaluate((element) => {
+      const attrLabel = element.getAttribute('aria-label')?.trim() || element.getAttribute('title')?.trim() || '';
+      const valueText = element.querySelector('.k-input-value-text,.k-input-inner,.k-input')?.textContent?.trim() || element.textContent?.trim() || '';
+      const labelText = attrLabel || findNearLabel(element);
+
+      return {
+        label: labelText,
+        text: valueText
+      };
+
+      /**
+       * 在同一表单行或前序兄弟中寻找字段标签。
+       */
+      function findNearLabel(target: Element) {
+        const row = target.closest('.k-form-field,.form-row,.el-form-item,.ant-form-item,.field-row,td,li,div');
+        const rowLabel = row?.querySelector('label,.field-label,.label,.el-form-item__label,.ant-form-item-label')?.textContent?.trim();
+
+        if (rowLabel) {
+          return rowLabel.replace(/[:：]$/, '').trim();
+        }
+
+        let previous = target.previousElementSibling;
+
+        while (previous) {
+          const text = previous.textContent?.trim().replace(/[:：]$/, '').trim();
+
+          if (text) {
+            return text;
+          }
+
+          previous = previous.previousElementSibling;
+        }
+
+        return '';
+      }
+    });
+    const label = normalizeText(info.label);
+    const text = normalizeText(info.text);
+
+    if (!label && !text) {
+      continue;
+    }
+
+    const key = label || text;
+
+    values.push({
+      label: label || undefined,
+      text: text || undefined,
+      locator: `getByLabel('${escapeText(key)}')`
+    });
+    counts.push(label ? await page.getByLabel(label).count() : await page.getByText(text, { exact: true }).count());
+  }
+
+  return resolveUnique(values, counts);
 }
 
 /**
@@ -619,6 +738,7 @@ function createTestContext(caseInfo: ImportCaseSource): PageContext {
       navigation: [],
       tables: []
     },
+    uiLibrary: 'auto',
     warnings: []
   };
 }

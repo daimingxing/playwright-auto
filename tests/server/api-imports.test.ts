@@ -111,6 +111,31 @@ describe('AI 导入接口', () => {
     expect(second.body.importId).not.toBe(first.body.importId);
   });
 
+  it('同一文件在同环境但控件库不同时创建不同导入任务', async () => {
+    const app = createApp();
+    await request(app).post('/api/projects').send({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    const buffer = await createWorkbookBuffer();
+
+    const first = await request(app)
+      .post('/api/projects/crm/imports/ai')
+      .field('uiLibrary', 'auto')
+      .attach('file', buffer, 'cases.xlsx');
+    const second = await request(app)
+      .post('/api/projects/crm/imports/ai')
+      .field('uiLibrary', 'kendo')
+      .attach('file', buffer, 'cases.xlsx');
+
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(201);
+    expect(first.body.uiLibrary).toBe('auto');
+    expect(second.body.uiLibrary).toBe('kendo');
+    expect(second.body.importId).not.toBe(first.body.importId);
+  });
+
   it('还原上传时被 latin1 误读的中文文件名', () => {
     const mojibake = Buffer.from('AI自然语言用例导入模板.xlsx', 'utf8').toString('latin1');
 
