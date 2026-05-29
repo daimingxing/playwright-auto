@@ -1,4 +1,4 @@
-import type { CaseMeta, CaseReviewItem, CaseStatus, CaseStep, CheckStatus, EnvMeta, PracticalReviewSummary, StepTimeoutConfig, StepType } from '../../../../shared/types';
+import { hasStepSelector, hasStepTimeout, hasStepValue, readStepTimeout, type CaseMeta, type CaseReviewItem, type CaseStatus, type CaseStep, type CheckStatus, type EnvMeta, type PracticalReviewSummary, type StepTimeoutConfig, type StepType } from '../../../../shared/types';
 import { buildStartUrl } from '../../../../shared/url';
 import { formatDateTime } from '../../utils/time';
 
@@ -97,19 +97,7 @@ export function createStep(type: StepType, timeouts: StepTimeoutConfig = stepTim
  * 读取步骤默认等待时间。
  */
 export function readTimeout(type: StepType, timeouts: StepTimeoutConfig) {
-  if (type === 'goto') {
-    return timeouts.navigation;
-  }
-
-  if (type === 'wait') {
-    return timeouts.wait;
-  }
-
-  if (hasTimeout(type)) {
-    return timeouts.action;
-  }
-
-  return undefined;
+  return readStepTimeout(type, timeouts);
 }
 
 /**
@@ -284,21 +272,21 @@ export function getInsertIndex(steps: CaseStep[], selectedId?: string) {
  * 判断当前步骤是否需要选择器。
  */
 export function hasSelector(type: StepType) {
-  return !['goto', 'assertUrl', 'assertTitle', 'wait'].includes(type);
+  return hasStepSelector(type);
 }
 
 /**
  * 判断当前步骤是否需要值输入。
  */
 export function hasValue(type: StepType) {
-  return ['goto', 'fill', 'select', 'assertText', 'assertValue', 'assertUrl', 'assertTitle'].includes(type);
+  return hasStepValue(type);
 }
 
 /**
  * 判断当前步骤是否需要等待时间。
  */
 export function hasTimeout(type: StepType) {
-  return ['goto', 'click', 'rightClick', 'doubleClick', 'hover', 'fill', 'select', 'wait'].includes(type);
+  return hasStepTimeout(type);
 }
 
 /**

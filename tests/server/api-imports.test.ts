@@ -53,10 +53,15 @@ describe('AI 导入接口', () => {
       .post(`/api/projects/crm/imports/${created.body.importId}/save`)
       .send({ itemIds: [items.body[0].itemId] });
     const cases = await request(app).get('/api/projects/crm/cases');
+    const savedCase = JSON.parse(await readFile(join(root, 'projects', 'crm', 'cases', saved.body.saved[0].caseKey, 'case.json'), 'utf-8'));
 
     expect(saved.status).toBe(200);
     expect(saved.body.saved).toHaveLength(1);
     expect(cases.body[0].status).toBe('draft');
+    expect(savedCase.steps[0]).toMatchObject({
+      type: 'click',
+      timeout: 2000
+    });
   });
 
   it('上传时拒绝不存在的环境且不创建导入任务', async () => {

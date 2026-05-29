@@ -501,6 +501,46 @@ export interface StepConfig {
   timeouts: StepTimeoutConfig;
 }
 
+/**
+ * 判断当前步骤是否需要选择器。
+ */
+export function hasStepSelector(type: StepType) {
+  return !['goto', 'assertUrl', 'assertTitle', 'wait'].includes(type);
+}
+
+/**
+ * 判断当前步骤是否需要值输入。
+ */
+export function hasStepValue(type: StepType) {
+  return ['goto', 'fill', 'select', 'assertText', 'assertValue', 'assertUrl', 'assertTitle'].includes(type);
+}
+
+/**
+ * 判断当前步骤是否需要超时时间。
+ */
+export function hasStepTimeout(type: StepType) {
+  return ['goto', 'click', 'rightClick', 'doubleClick', 'hover', 'fill', 'select', 'wait'].includes(type);
+}
+
+/**
+ * 按步骤类型读取统一默认超时时间。
+ */
+export function readStepTimeout(type: StepType, timeouts: StepTimeoutConfig) {
+  if (type === 'goto') {
+    return timeouts.navigation;
+  }
+
+  if (type === 'wait') {
+    return timeouts.wait;
+  }
+
+  if (hasStepTimeout(type)) {
+    return timeouts.action;
+  }
+
+  return undefined;
+}
+
 export interface FullAppConfig {
   server: ServerConfig;
   web: WebConfig;

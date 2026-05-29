@@ -5,7 +5,7 @@ import type { RequestHandler } from 'express';
 import { createHash } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { CaseStep } from '../../../shared/types';
+import { readStepTimeout, type CaseStep } from '../../../shared/types';
 import { badRequest } from '../lib/http-error';
 import { ensureDir } from '../lib/fs';
 import { getImportPath } from '../lib/path';
@@ -24,6 +24,7 @@ import { getCasePath } from '../lib/path';
 import { listPageMaps } from '../lib/page-map-store';
 import { getProject } from '../lib/project-store';
 import { envKeySchema } from '../lib/schema';
+import { getAppConfig } from '../lib/app-config';
 import { parseImportExcel } from '../services/import/import-excel';
 import { enqueueImportItem, enqueueImportJob } from '../services/import/import-worker';
 import type { ImportItem, PageMapSummary } from '../../../shared/types';
@@ -325,12 +326,14 @@ function parseItemIds(body: unknown): string[] {
  * 转换 AI 草稿步骤为平台用例步骤。
  */
 function toCaseStep(step: CaseStep & { text?: string; confidence?: unknown; warnings?: unknown }): CaseStep {
+  const timeouts = getAppConfig().steps.timeouts;
+
   return {
     id: step.id,
     type: step.type,
     selector: step.selector,
     value: step.value,
-    timeout: step.timeout,
+    timeout: step.timeout ?? readStepTimeout(step.type, timeouts),
     match: step.match
   };
 }

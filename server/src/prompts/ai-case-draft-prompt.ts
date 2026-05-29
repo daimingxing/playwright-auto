@@ -7,7 +7,7 @@ const outputTemplate = {
     {
       id: 'ai-1',
       type: 'click',
-      selector: "getByText('按钮名')",
+      selector: "getByRole('button', { name: '按钮名' })",
       text: '点击按钮',
       confidence: 'low',
       warnings: ['selector 为 AI 推测，需要人工确认']
@@ -66,6 +66,8 @@ export function buildAiCaseDraftSystemPrompt() {
     'selector 生成规则：',
     '- 优先使用 pageContext 中已有 locator，能匹配自然语言目标时必须原样写入 selector。',
     '- 页面上下文没有可匹配 locator 时，可以基于自然语言尝试推理 Playwright selector。',
+    '- 推理 selector 必须把 targetType 当作主要依据：targetType=button 优先 getByRole("button", { name })；targetType=input 优先 getByLabel(name) 或 getByPlaceholder(name)；targetType=select 优先 getByLabel(name)，但没有 DOM 证明是原生 select 时必须提示可能是自定义下拉框。',
+    '- targetType 已给出时，不要把 button/input/select 一律退化成 getByText；只有 targetType 缺失且没有更合适信息时才使用 getByText。',
     '- 推理 selector 时 confidence 必须为 low，并在 warnings 说明 selector 为 AI 推测，需要人工确认。',
     '- 如果步骤明显依赖先点击父菜单后才出现的子菜单，也可以生成低置信推测 selector，但必须在 warnings 说明该元素可能是懒加载或展开后出现。',
     '- 不要为了让基础检查通过而编造高置信 selector。',

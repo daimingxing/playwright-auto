@@ -110,6 +110,7 @@ const mediumScoreMin = 0.4;
 const percentScoreMax = 100;
 const assertTypes: StepType[] = ['assertText', 'assertVisible', 'assertValue', 'assertUrl', 'assertTitle'];
 const typeFixWarning = '平台按模板动作类型修正 AI 返回步骤类型，请确认草稿步骤。';
+const selectorFixWarning = '平台按模板目标类型修正 AI 推测 selector，请人工确认。';
 
 interface SelectorKind {
   type: StepType;
@@ -493,22 +494,25 @@ function normalizeStep(step: z.infer<typeof draftStepSchema>, index: number): Ai
 function completeStepSelector(step: AiDraftStep, source: ImportStepSource | undefined, context: PageContext): AiDraftStep {
   const kind = readSelectorKind(step, source);
   const fixedStep = fixStepType(step, source);
+  const typeFixedStep = fixSelectorByTarget(fixedStep, source);
 
-  if (fixedStep.selector || !source || !needsSelector(kind.type) || isLazyMenuStep(source)) {
-    return fixedStep;
+  if (typeFixedStep.selector || !source || !needsSelector(kind.type) || isLazyMenuStep(source)) {
+    return typeFixedStep;
   }
 
-  const candidate = findSelectorCandidate(source, fixedStep, context, kind);
+  const candidate = findSelectorCandidate(source, typeFixedStep, context, kind);
 
   if (!candidate) {
-    return fixedStep;
+    const fallback = inferSelectorByTarget(source, kind.type);
+
+    return fallback ? applySelectorFix(typeFixedStep, fallback) : typeFixedStep;
   }
 
   return {
-    ...fixedStep,
+    ...typeFixedStep,
     selector: candidate.locator,
-    confidence: candidate.unique ? fixedStep.confidence : lowerLevel(fixedStep.confidence),
-    warnings: buildSelectorWarnings(fixedStep.warnings, candidate, false)
+    confidence: candidate.unique ? typeFixedStep.confidence : lowerLevel(typeFixedStep.confidence),
+    warnings: buildSelectorWarnings(typeFixedStep.warnings, candidate, false)
   };
 }
 
@@ -528,22 +532,94 @@ export function completeDraftSelectorsFromPageMap(draft: AiCaseDraft, input: Gro
 function completeStepSelectorFromPageMap(step: AiDraftStep, source: ImportStepSource | undefined, pageMap: DraftPageMap): AiDraftStep {
   const kind = readSelectorKind(step, source);
   const fixedStep = fixStepType(step, source);
+  const typeFixedStep = fixSelectorByTarget(fixedStep, source);
 
-  if (fixedStep.selector || !source || !needsSelector(kind.type) || isLazyMenuStep(source)) {
-    return fixedStep;
+  if (typeFixedStep.selector || !source || !needsSelector(kind.type) || isLazyMenuStep(source)) {
+    return typeFixedStep;
   }
 
-  const candidate = findSelectorCandidateFromPageMap(source, fixedStep, pageMap, kind);
+  const candidate = findSelectorCandidateFromPageMap(source, typeFixedStep, pageMap, kind);
 
   if (!candidate) {
-    return fixedStep;
+    const fallback = inferSelectorByTarget(source, kind.type);
+
+    return fallback ? applySelectorFix(typeFixedStep, fallback) : typeFixedStep;
   }
 
   return {
-    ...fixedStep,
+    ...typeFixedStep,
     selector: candidate.locator,
-    confidence: candidate.unique ? fixedStep.confidence : lowerLevel(fixedStep.confidence),
-    warnings: buildSelectorWarnings(fixedStep.warnings, candidate, true)
+    confidence: candidate.unique ? typeFixedStep.confidence : lowerLevel(typeFixedStep.confidence),
+    warnings: buildSelectorWarnings(typeFixedStep.warnings, candidate, true)
+  };
+}
+
+/**
+ * 按模板目标类型修正明显不匹配的 AI 推测 selector。
+ */
+function fixSelectorByTarget(step: AiDraftStep, source: ImportStepSource | undefined): AiDraftStep {
+  if (!source || !step.selector || !isInferredSelectorMismatch(step.selector, source.targetType)) {
+    return step;
+  }
+
+  const fallback = inferSelectorByTarget(source, source.actionType ?? step.type);
+
+  return fallback ? applySelectorFix(step, fallback) : step;
+}
+
+/**
+ * 判断 selector 是否与结构化目标类型明显冲突。
+ */
+function isInferredSelectorMismatch(selector: string, target: TargetType | undefined) {
+  if (target === 'button') {
+    return /^getByText\(/.test(selector);
+  }
+
+  if (target === 'input') {
+    return /^getByText\(|^getByRole\('button'/.test(selector);
+  }
+
+  if (target === 'select') {
+    return /^getByText\(|^getByRole\('button'/.test(selector);
+  }
+
+  return false;
+}
+
+/**
+ * 根据结构化目标类型生成低置信兜底 selector。
+ */
+function inferSelectorByTarget(source: ImportStepSource, type: StepType) {
+  const name = readTargetName(source);
+
+  if (!name || !needsSelector(type)) {
+    return undefined;
+  }
+
+  if (source.targetType === 'button') {
+    return `getByRole('button', { name: '${escapeSelectorText(name)}' })`;
+  }
+
+  if (source.targetType === 'input') {
+    return `getByLabel('${escapeSelectorText(name)}')`;
+  }
+
+  if (source.targetType === 'select') {
+    return `getByLabel('${escapeSelectorText(name)}')`;
+  }
+
+  return undefined;
+}
+
+/**
+ * 应用目标类型兜底 selector，并保留低置信提示。
+ */
+function applySelectorFix(step: AiDraftStep, selector: string): AiDraftStep {
+  return {
+    ...step,
+    selector,
+    confidence: 'low',
+    warnings: uniqueWarnings([...step.warnings, selectorFixWarning])
   };
 }
 
@@ -980,6 +1056,13 @@ function usesMatch(type: StepType) {
 function readTargetName(step: ImportStepSource) {
   // targetName 是新版两表的人读对象名；旧字段仅在存量模板缺失时兜底。
   return step.targetName || step.targetText || step.actionText;
+}
+
+/**
+ * 转义 selector 字符串中的单引号和反斜杠。
+ */
+function escapeSelectorText(value: string) {
+  return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
 
 /**

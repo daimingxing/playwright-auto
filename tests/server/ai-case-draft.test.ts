@@ -784,6 +784,61 @@ describe('AI 草稿生成服务', () => {
     expect(result.steps[0].warnings).toContain('平台按模板动作类型修正 AI 返回步骤类型，请确认草稿步骤。');
   });
 
+  it('模型按文本返回按钮 selector 时按结构化目标类型修正为按钮定位', () => {
+    const draft = normalizeAiDraft({
+      name: '新增用户',
+      startPath: '/user/list',
+      confidence: 'low',
+      warnings: [],
+      missingInfo: [],
+      steps: [
+        {
+          id: 'ai-1',
+          type: 'click',
+          selector: "getByText('新增', { exact: true })",
+          text: '点击新增按钮',
+          confidence: 'low',
+          warnings: ['selector 为 AI 推测，需要人工确认']
+        }
+      ]
+    });
+
+    const result = completeDraftSelectors(draft, {
+      steps: [
+        {
+          caseNo: 'TEST-TYPE',
+          stepNo: 1,
+          actionType: 'click',
+          targetType: 'button',
+          targetName: '新增',
+          actionText: '点击(click)',
+          targetText: '按钮(button)',
+          dataKeys: [],
+          note: '打开新增弹窗'
+        }
+      ],
+      pageContext: {
+        page: { url: '/user/list', title: '用户管理', headings: [] },
+        elements: {
+          buttons: [],
+          inputs: [],
+          selects: [],
+          links: [],
+          navigation: [],
+          tables: []
+        },
+        warnings: []
+      }
+    });
+
+    expect(result.steps[0]).toMatchObject({
+      type: 'click',
+      selector: "getByRole('button', { name: '新增' })",
+      confidence: 'low'
+    });
+    expect(result.steps[0].warnings).toContain('平台按模板目标类型修正 AI 推测 selector，请人工确认。');
+  });
+
   it('assertVisible 按结构化目标类型选择输入框候选', () => {
     const draft = normalizeAiDraft({
       name: '检查用户名称可见',
@@ -1460,6 +1515,28 @@ describe('AI 草稿生成服务', () => {
     await waitForPageReady(page);
 
     expect(await page.locator('body').innerText()).toContain('物流管控');
+    await browser.close();
+  }, 15000);
+
+  it('等待页面脱离 Vite 空壳后再认为上下文可采集', async () => {
+    const browser = await chromium.launch({ executablePath: getChromePath() });
+    const page = await browser.newPage();
+
+    await page.setContent(`
+      <title>Vite App</title>
+      <div id="app"><button>加载中</button></div>
+      <script>
+        setTimeout(() => {
+          document.title = '取样规则管理(IMQM07)';
+          document.querySelector('#app').innerHTML = '<button>新增</button><input placeholder="取样名称" />';
+        }, 200);
+      </script>
+    `);
+
+    await waitForPageReady(page);
+
+    expect(await page.title()).toBe('取样规则管理(IMQM07)');
+    expect(await page.getByRole('button', { name: '新增' }).count()).toBe(1);
     await browser.close();
   }, 15000);
 

@@ -91,7 +91,7 @@ export class PageContextError extends Error {
 const maxItems = 20;
 const maxText = 80;
 const readyTimeoutMs = 12000;
-const minReadyTextLength = 2;
+const minReadyTextLength = 50;
 let pageMapRunnerFactory: PageMapRunnerFactory | undefined;
 
 /**
@@ -302,19 +302,53 @@ export async function waitForPageReady(page: Page, warnings: string[] = []) {
     await page.waitForFunction(
       (minLength) => {
         const bodyText = document.body?.innerText?.trim() ?? '';
-        const hasUsefulElement = Boolean(document.querySelector(
-          'button,a,input,textarea,select,[role="button"],[role="menuitem"],.el-menu-item,.el-sub-menu__title'
-        ));
+        const title = document.title.trim();
+        const visibleCount = Array.from(document.querySelectorAll(
+          'button,a,input,textarea,select,table,[role="button"],[role="menuitem"],.el-menu-item,.el-sub-menu__title'
+        )).filter((element) => {
+          const rect = element.getBoundingClientRect();
+          const style = window.getComputedStyle(element);
+
+          return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+        }).length;
+        const hasBusinessTitle = title !== 'Vite App';
+        const hasEnoughText = bodyText.length >= minLength;
 
         // 很多 Vite/Vue 页面在 domcontentloaded 时只有空壳，需要等真实业务文本或交互元素出现。
-        return bodyText.length >= minLength || hasUsefulElement;
+        return hasBusinessTitle && (hasEnoughText || visibleCount > 0);
       },
       minReadyTextLength,
       { timeout: readyTimeoutMs }
     );
   } catch {
-    warnings.push('页面在等待后仍缺少可见文本或交互元素，可能未登录、页面渲染失败或目标 URL 不正确。');
+    warnings.push(await buildPageReadyWarning(page));
   }
+}
+
+/**
+ * 构造页面等待超时诊断信息。
+ */
+async function buildPageReadyWarning(page: Page) {
+  const info = await page.evaluate(() => {
+    const bodyText = document.body?.innerText?.trim() ?? '';
+    const visibleCount = Array.from(document.querySelectorAll(
+      'button,a,input,textarea,select,table,[role="button"],[role="menuitem"],.el-menu-item,.el-sub-menu__title'
+    )).filter((element) => {
+      const rect = element.getBoundingClientRect();
+      const style = window.getComputedStyle(element);
+
+      return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+    }).length;
+
+    return {
+      title: document.title || '',
+      bodyLength: bodyText.length,
+      visibleCount,
+      url: location.href
+    };
+  }).catch(() => ({ title: '', bodyLength: 0, visibleCount: 0, url: page.url() }));
+
+  return `页面在等待后仍未达到业务可读状态，可能未登录、页面渲染失败或目标 URL 不正确。当前标题：${info.title || '空'}；正文长度：${info.bodyLength}；可见元素数：${info.visibleCount}；URL：${info.url}`;
 }
 
 /**
@@ -329,7 +363,13 @@ async function runPageAction(page: Page, action: PageAction) {
   }
 
   if (action.type === 'select' && action.value) {
-    await locator.selectOption({ label: action.value });
+    if (await locator.evaluate((element) => element.tagName.toLowerCase() === 'select').catch(() => false)) {
+      await locator.selectOption({ label: action.value });
+      return;
+    }
+
+    await locator.click();
+    await page.getByText(action.value, { exact: true }).click();
     return;
   }
 
@@ -370,6 +410,14 @@ function getActionLocator(page: Page, action: PageAction) {
 
   if (action.targetType === 'select') {
     return page.getByLabel(name).or(page.getByText(name, { exact: true })).first();
+  }
+
+  if (action.targetType === 'button') {
+    return page.getByRole('button', { name }).or(page.locator('button,[role="button"],input[type="button"],input[type="submit"]').filter({ hasText: name })).first();
+  }
+
+  if (action.targetType === 'input') {
+    return page.getByLabel(name).or(page.getByPlaceholder(name)).first();
   }
 
   if (action.targetType === 'dialog') {
