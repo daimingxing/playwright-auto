@@ -223,7 +223,7 @@ onMounted(async () => {
     </div>
     <div class="content">
       <div class="run-area">
-        <el-card class="run-card" shadow="never">
+        <el-card class="run-card workspace-card" shadow="never">
           <template #header>
             <span>运行设置</span>
           </template>
@@ -283,7 +283,7 @@ onMounted(async () => {
           />
         </el-card>
 
-        <el-card class="case-card" shadow="never">
+        <el-card class="case-card workspace-card" shadow="never">
           <template #header>
             <div class="card-header">
               <span>测试用例</span>
@@ -312,7 +312,7 @@ onMounted(async () => {
         </el-card>
       </div>
 
-      <el-card class="report-card" shadow="never">
+      <el-card class="report-card workspace-card" shadow="never">
         <template #header>
           <div class="card-header">
             <span>测试报告</span>
@@ -370,7 +370,7 @@ onMounted(async () => {
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  padding: 28px;
+  padding: 22px 28px 18px;
   box-sizing: border-box;
   overflow: hidden;
 }
@@ -380,7 +380,7 @@ onMounted(async () => {
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 20px;
+  margin-bottom: 14px;
   align-items: flex-end;
 }
 
@@ -409,15 +409,15 @@ onMounted(async () => {
 }
 
 .result {
-  margin-top: 16px;
+  margin-top: 10px;
 }
 
 .content {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-rows: minmax(260px, 42vh) minmax(180px, 1fr);
-  gap: 20px;
+  grid-template-rows: minmax(240px, 40vh) minmax(180px, 1fr);
+  gap: 10px;
   overflow: hidden;
 }
 
@@ -430,15 +430,15 @@ onMounted(async () => {
 .actions {
   display: flex;
   gap: 12px;
-  margin-top: 18px;
+  margin-top: 10px;
   flex-wrap: wrap;
 }
 
 .run-area {
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(320px, 0.8fr) minmax(360px, 1.2fr);
-  gap: 20px;
+  grid-template-columns: minmax(260px, 0.75fr) minmax(0, 1.25fr);
+  gap: 10px;
   overflow: hidden;
 }
 
@@ -569,7 +569,7 @@ onMounted(async () => {
   }
 }
 
-@media (max-width: 820px) {
+@media (max-width: 680px) {
   .content {
     grid-template-rows: minmax(0, auto) minmax(180px, 1fr);
     overflow: auto;

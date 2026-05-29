@@ -58,6 +58,7 @@ import {
   mergeStepReviewState,
   type StepReviewPreview,
   stepGroups,
+  editorPanels,
   stepLabels,
   stepTimeouts,
 } from "./case-editor";
@@ -80,6 +81,7 @@ const highlightId = ref("");
 const locatorDrawerOpen = ref(false);
 const locatorStepId = ref("");
 const stepReviewPreview = ref(new Map<string, StepReviewPreview>());
+const openPanels = ref<string[]>(editorPanels.filter((panel) => panel.defaultOpen).map((panel) => panel.key));
 const stepFlashMs = 180;
 const reviewDebounceMs = 400;
 // 浏览器环境下 `window.setTimeout` 返回数值型定时器句柄，避免与 Node 的 `Timeout` 类型混淆。
@@ -576,122 +578,135 @@ onMounted(loadCase);
     </div>
 
     <div class="content">
-      <div class="meta">
-        <el-alert
-          v-if="isRecording"
-          class="record-alert"
-          title="正在录制，请在有头浏览器中完成操作和断言，完成后点击停止录制。"
-          type="warning"
-          show-icon
-          :closable="false"
-        />
-
-        <div class="meta-grid">
-          <el-form label-width="90px">
-            <el-form-item label="用例状态">
-              <div class="case-state-row">
-                <el-select
-                  :model-value="item.status"
-                  class="case-state-select"
-                  @change="(value) => changeCaseStatus(value as CaseStatus)"
-                >
-                  <el-option label="草稿" value="draft" />
-                  <el-option label="待启用" value="ready" />
-                  <el-option label="启用" value="active" />
-                </el-select>
-                <el-tag :type="formatCaseStatus(item.status).type" effect="light">
-                  {{ formatCaseStatus(item.status).label }}
-                </el-tag>
-                <el-tag :type="formatCheckStatus(item).type" effect="light">
-                  {{ formatCheckStatus(item).label }}
-                </el-tag>
-              </div>
-            </el-form-item>
-            <el-form-item label="用例名称">
-              <el-input v-model="item.name" />
-            </el-form-item>
-            <el-form-item label="起始路径">
-              <el-input v-model="item.startPath" />
-            </el-form-item>
-            <el-form-item label="实际地址">
-              <div class="start-preview">{{ startPreview || "-" }}</div>
-            </el-form-item>
-            <el-form-item label="登录态">
-              <div class="auth-status-wrap btn-shadow-md">
-                <el-tag :type="hasAuth ? 'success' : 'info'" effect="light" class="auth-tag">
-                  {{ hasAuth ? "已保存" : "未保存" }}
-                </el-tag>
-                <el-tooltip v-if="authPath" :content="authPath" placement="top">
-                  <el-icon class="auth-help"><InfoFilled /></el-icon>
-                </el-tooltip>
-                <el-button :loading="loadingLogin" @click="openLogin">打开浏览器登录</el-button>
-                <el-button
-                  :disabled="!loginId"
-                  :loading="savingLogin"
-                  type="primary"
-                  plain
-                  @click="saveAuth"
-                >
-                  我已完成登录，保存登录态
-                </el-button>
-              </div>
-            </el-form-item>
-          </el-form>
-
-          <section class="practical-panel">
-            <div class="panel-head">
-              <strong>实测检查</strong>
-              <el-tag :type="getPracticalReviewTagType(item.practicalReview)" effect="light">
-                {{ formatPracticalReviewStatus(item.practicalReview) }}
-              </el-tag>
+      <el-collapse v-model="openPanels" class="minor-collapse meta-collapse">
+        <el-collapse-item name="meta">
+          <template #title>
+            <div class="collapse-title">
+              <span>用例配置与实测检查</span>
+              <span class="hint">
+                {{ formatCaseStatus(item.status).label }} / {{ formatCheckStatus(item).label }} /
+                实测{{ formatPracticalReviewStatus(item.practicalReview) }}
+              </span>
             </div>
+          </template>
+          <div class="meta">
+            <el-alert
+              v-if="isRecording"
+              class="record-alert"
+              title="正在录制，请在有头浏览器中完成操作和断言，完成后点击停止录制。"
+              type="warning"
+              show-icon
+              :closable="false"
+            />
 
-            <div class="practical-grid">
-              <label class="practical-field">
-                <span>检查环境</span>
-                <el-select v-model="selectedEnv" class="practical-env-select" @change="changeEnv">
-                  <el-option
-                    v-for="env in envs"
-                    :key="env.key"
-                    :label="`${env.name}（${env.key}）`"
-                    :value="env.key"
-                  />
-                </el-select>
-              </label>
-              <label class="practical-field">
-                <span>运行方式</span>
-                <el-segmented
-                  v-model="practicalMode"
-                  class="practical-mode"
-                  block
-                  :options="[
-                    { label: '无头运行', value: 'headless' },
-                    { label: '可视调试', value: 'headed' }
-                  ]"
-                />
-              </label>
-            </div>
+            <div class="meta-grid">
+              <el-form label-width="90px">
+                <el-form-item label="用例状态">
+                  <div class="case-state-row">
+                    <el-select
+                      :model-value="item.status"
+                      class="case-state-select"
+                      @change="(value) => changeCaseStatus(value as CaseStatus)"
+                    >
+                      <el-option label="草稿" value="draft" />
+                      <el-option label="待启用" value="ready" />
+                      <el-option label="启用" value="active" />
+                    </el-select>
+                    <el-tag :type="formatCaseStatus(item.status).type" effect="light">
+                      {{ formatCaseStatus(item.status).label }}
+                    </el-tag>
+                    <el-tag :type="formatCheckStatus(item).type" effect="light">
+                      {{ formatCheckStatus(item).label }}
+                    </el-tag>
+                  </div>
+                </el-form-item>
+                <el-form-item label="用例名称">
+                  <el-input v-model="item.name" />
+                </el-form-item>
+                <el-form-item label="起始路径">
+                  <el-input v-model="item.startPath" />
+                </el-form-item>
+                <el-form-item label="实际地址">
+                  <div class="start-preview">{{ startPreview || "-" }}</div>
+                </el-form-item>
+                <el-form-item label="登录态">
+                  <div class="auth-status-wrap btn-shadow-md">
+                    <el-tag :type="hasAuth ? 'success' : 'info'" effect="light" class="auth-tag">
+                      {{ hasAuth ? "已保存" : "未保存" }}
+                    </el-tag>
+                    <el-tooltip v-if="authPath" :content="authPath" placement="top">
+                      <el-icon class="auth-help"><InfoFilled /></el-icon>
+                    </el-tooltip>
+                    <el-button :loading="loadingLogin" @click="openLogin">打开浏览器登录</el-button>
+                    <el-button
+                      :disabled="!loginId"
+                      :loading="savingLogin"
+                      type="primary"
+                      plain
+                      @click="saveAuth"
+                    >
+                      我已完成登录，保存登录态
+                    </el-button>
+                  </div>
+                </el-form-item>
+              </el-form>
 
-            <div class="practical-result">
-              <span>最后实测时间</span>
-              <strong>{{ formatDateTime(item.practicalReview?.checkedAt) }}</strong>
+              <section class="practical-panel">
+                <div class="panel-head">
+                  <strong>实测检查</strong>
+                  <el-tag :type="getPracticalReviewTagType(item.practicalReview)" effect="light">
+                    {{ formatPracticalReviewStatus(item.practicalReview) }}
+                  </el-tag>
+                </div>
+
+                <div class="practical-grid">
+                  <label class="practical-field">
+                    <span>检查环境</span>
+                    <el-select v-model="selectedEnv" class="practical-env-select" @change="changeEnv">
+                      <el-option
+                        v-for="env in envs"
+                        :key="env.key"
+                        :label="`${env.name}（${env.key}）`"
+                        :value="env.key"
+                      />
+                    </el-select>
+                  </label>
+                  <label class="practical-field">
+                    <span>运行方式</span>
+                    <el-segmented
+                      v-model="practicalMode"
+                      class="practical-mode"
+                      block
+                      :options="[
+                        { label: '无头运行', value: 'headless' },
+                        { label: '可视调试', value: 'headed' }
+                      ]"
+                    />
+                  </label>
+                </div>
+
+                <div class="practical-result">
+                  <span>最后实测时间</span>
+                  <strong>{{ formatDateTime(item.practicalReview?.checkedAt) }}</strong>
+                </div>
+                <p v-if="item.practicalReview?.status === 'failed'" class="failure-summary">
+                  第 {{ (item.practicalReview.failedStepIndex ?? 0) + 1 }} 步：{{
+                    item.practicalReview.failureMessage
+                  }}
+                </p>
+                <div class="panel-actions btn-shadow-md">
+                  <el-button type="success" :loading="practicalReviewing" @click="runPracticalCheck"
+                    >开始实测检查</el-button
+                  >
+                  <el-button @click="openPracticalHistory">查看历史</el-button>
+                  <span style="flex-grow: 1"></span>
+                  <el-button :icon="Delete" type="danger" plain @click="clearPracticalHistory">清理历史</el-button>
+                </div>
+              </section>
             </div>
-            <p v-if="item.practicalReview?.status === 'failed'" class="failure-summary">
-              第 {{ (item.practicalReview.failedStepIndex ?? 0) + 1 }} 步：{{
-                item.practicalReview.failureMessage
-              }}
-            </p>
-            <div class="panel-actions btn-shadow-md">
-              <el-button type="success" :loading="practicalReviewing" @click="runPracticalCheck"
-                >开始实测检查</el-button
-              >
-              <el-button @click="openPracticalHistory">查看历史</el-button>
-              <span style="flex-grow: 1"></span>
-              <el-button :icon="Delete" type="danger" plain @click="clearPracticalHistory">清理历史</el-button>
-            </div>
-          </section>
-        </div>
-      </div>
+          </div>
+        </el-collapse-item>
+      </el-collapse>
       <div class="step-actions btn-shadow-md">
         <el-dropdown trigger="click" @command="(type) => addStep(type as StepType)">
           <el-button type="primary">
@@ -963,7 +978,7 @@ onMounted(loadCase);
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  padding: 28px;
+  padding: 22px 28px 18px;
   box-sizing: border-box;
   overflow: hidden;
   background: #f4f8fc;
@@ -984,7 +999,7 @@ onMounted(loadCase);
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 20px;
+  margin-bottom: 10px;
   align-items: flex-end;
 }
 
@@ -1016,14 +1031,56 @@ onMounted(loadCase);
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-rows: minmax(0, auto) auto minmax(180px, 1fr);
-  gap: 16px;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 8px;
   overflow: hidden;
+}
+
+.minor-collapse {
+  --el-collapse-border-color: #dbe4ef;
+  background: #ffffff;
+  border: 1px solid #dbe4ef;
+  border-radius: 6px;
+  flex: 0 0 auto;
+  overflow: hidden;
+}
+
+.minor-collapse :deep(.el-collapse-item__header) {
+  border-bottom: 0;
+  height: 40px;
+  padding: 0 18px;
+}
+
+.minor-collapse :deep(.el-collapse-item__content) {
+  padding: 0 18px 16px;
+}
+
+.minor-collapse :deep(.el-collapse-item__wrap) {
+  border-bottom: 0;
+}
+
+.collapse-title {
+  align-items: center;
+  display: flex;
+  flex: 1;
+  gap: 16px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.collapse-title > span:first-child {
+  color: #1f2937;
+  font-weight: 600;
+}
+
+.hint {
+  color: #64748b;
+  font-size: 13px;
 }
 
 .meta {
   min-height: 0;
-  max-height: min(320px, 42vh);
+  max-height: min(300px, 38vh);
   overflow: auto;
   padding-right: 4px;
 }
@@ -1155,7 +1212,7 @@ onMounted(loadCase);
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
-  margin: 16px 0;
+  margin: 2px 0;
 }
 
 .insert-hint {

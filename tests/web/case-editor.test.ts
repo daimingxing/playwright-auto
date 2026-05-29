@@ -63,6 +63,16 @@ function makePracticalSummary(status: PracticalReviewSummary['status']): Practic
 }
 
 describe('用例编辑器步骤工具', () => {
+  it('默认把实测检查作为次要区域收起', async () => {
+    const { editorPanels } = await import('../../web/src/pages/case-editor/case-editor');
+
+    expect(editorPanels.map((panel) => [panel.key, panel.defaultOpen])).toEqual([
+      ['meta', false],
+      ['steps', true],
+      ['history', false]
+    ]);
+  });
+
   it('会显示用例状态和检查状态', () => {
     expect(formatCaseStatus('draft')).toEqual({ label: '草稿', type: 'info' });
     expect(formatCaseStatus('ready')).toEqual({ label: '待启用', type: 'warning' });

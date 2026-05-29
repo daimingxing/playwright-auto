@@ -33,6 +33,7 @@ const uiLibrary = ref<UiLibrary>('auto');
 let timer: ReturnType<typeof window.setInterval> | undefined;
 
 const hasRunning = computed(() => jobs.value.some((job) => job.status === 'running'));
+const mapCountText = computed(() => `共 ${maps.value.length} 条缓存`);
 
 /**
  * 加载 AI 导入任务列表。
@@ -235,35 +236,78 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="content">
-      <el-card class="upload-card" shadow="never">
-        <template #header>
-          <span>上传模板</span>
-        </template>
-        <div class="upload-row">
-          <el-upload
-            class="upload-box"
-            drag
-            :auto-upload="false"
-            :limit="1"
-            accept=".xlsx"
-            :on-change="changeFile"
-            :on-remove="removeFile"
-          >
-            <el-icon class="upload-icon"><UploadFilled /></el-icon>
-            <div class="upload-text">拖入或选择 Excel 模板文件</div>
-          </el-upload>
-          <div class="upload-actions btn-shadow-md">
-            <el-select v-model="uiLibrary" class="ui-select" size="large" aria-label="控件库">
-              <el-option label="自动识别" value="auto" />
-              <el-option label="Kendo UI" value="kendo" />
-              <el-option label="原生控件" value="native" />
-            </el-select>
-            <el-button type="primary" size="large" :loading="uploading" @click="uploadFile">创建导入任务</el-button>
+      <div class="assist-grid">
+        <el-card class="upload-card workspace-card" shadow="never">
+          <template #header>
+            <span>上传模板</span>
+          </template>
+          <div class="upload-row">
+            <el-upload
+              class="upload-box"
+              drag
+              :auto-upload="false"
+              :limit="1"
+              accept=".xlsx"
+              :on-change="changeFile"
+              :on-remove="removeFile"
+            >
+              <el-icon class="upload-icon"><UploadFilled /></el-icon>
+              <div class="upload-text">拖入或选择 Excel 模板文件</div>
+            </el-upload>
+            <div class="upload-actions btn-shadow-md">
+              <el-select v-model="uiLibrary" class="ui-select" size="large" aria-label="控件库">
+                <el-option label="自动识别" value="auto" />
+                <el-option label="Kendo UI" value="kendo" />
+                <el-option label="原生控件" value="native" />
+              </el-select>
+              <el-button type="primary" size="large" :loading="uploading" @click="uploadFile">创建导入任务</el-button>
+            </div>
           </div>
-        </div>
-      </el-card>
+        </el-card>
 
-      <el-card class="list-card" shadow="never">
+        <el-card class="map-card workspace-card" shadow="never">
+          <template #header>
+            <div class="card-header">
+              <span>页面地图</span>
+              <span class="hint">{{ mapCountText }}，刷新只更新缓存</span>
+            </div>
+          </template>
+          <div class="table-wrap map-table-wrap">
+            <el-table :data="maps" border stripe height="100%" empty-text="暂无页面地图">
+              <el-table-column prop="targetUrl" label="目标页面" min-width="170" show-overflow-tooltip />
+              <el-table-column prop="envKey" label="环境" width="90" />
+              <el-table-column label="状态" width="100">
+                <template #default="{ row }">
+                  <el-tag :type="formatPageMapStatus(row.status).type" effect="light">
+                    {{ formatPageMapStatus(row.status).label }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="状态数" width="90">
+                <template #default="{ row }">
+                  {{ formatPageMapCount(row.stateCount) }}
+                </template>
+              </el-table-column>
+              <el-table-column label="年龄" width="90">
+                <template #default="{ row }">
+                  {{ formatPageMapAge(row.updatedAt) }}
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="150">
+                <template #default="{ row }">
+                  <div class="row-actions btn-shadow-sm">
+                    <el-button :icon="View" size="small" circle title="查看" @click="openMap(row)" />
+                    <el-button :icon="RefreshRight" size="small" circle title="刷新" @click="refreshMap(row)" />
+                    <el-button :icon="Delete" size="small" type="danger" plain circle title="删除" @click="removeMap(row)" />
+                  </div>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </el-card>
+      </div>
+
+      <el-card class="list-card workspace-card" shadow="never">
         <template #header>
           <div class="card-header">
             <span>导入记录</span>
@@ -307,52 +351,6 @@ onBeforeUnmount(() => {
           </el-table>
         </div>
       </el-card>
-
-      <el-card class="map-card" shadow="never">
-        <template #header>
-          <div class="card-header">
-            <span>页面地图</span>
-            <span class="hint">刷新只更新缓存，不覆盖已有草稿</span>
-          </div>
-        </template>
-        <div class="table-wrap">
-          <el-table :data="maps" border stripe height="100%" empty-text="暂无页面地图">
-            <el-table-column prop="targetUrl" label="目标页面" min-width="220" show-overflow-tooltip />
-            <el-table-column prop="envKey" label="环境" width="120" />
-            <el-table-column label="状态" width="120">
-              <template #default="{ row }">
-                <el-tag :type="formatPageMapStatus(row.status).type" effect="light">
-                  {{ formatPageMapStatus(row.status).label }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="状态数量" width="110">
-              <template #default="{ row }">
-                {{ formatPageMapCount(row.stateCount) }}
-              </template>
-            </el-table-column>
-            <el-table-column label="缓存年龄" width="120">
-              <template #default="{ row }">
-                {{ formatPageMapAge(row.updatedAt) }}
-              </template>
-            </el-table-column>
-            <el-table-column label="更新时间" min-width="170">
-              <template #default="{ row }">
-                {{ formatImportTime(row.updatedAt) }}
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="180">
-              <template #default="{ row }">
-                <div class="row-actions btn-shadow-sm">
-                  <el-button :icon="View" size="small" circle title="查看" @click="openMap(row)" />
-                  <el-button :icon="RefreshRight" size="small" circle title="刷新" @click="refreshMap(row)" />
-                  <el-button :icon="Delete" size="small" type="danger" plain circle title="删除" @click="removeMap(row)" />
-                </div>
-              </template>
-            </el-table-column>
-          </el-table>
-        </div>
-      </el-card>
     </div>
 
     <el-drawer v-model="mapOpen" size="560px" title="页面地图详情">
@@ -387,7 +385,7 @@ onBeforeUnmount(() => {
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  padding: 28px;
+  padding: 22px 28px 18px;
 }
 
 .toolbar {
@@ -396,7 +394,7 @@ onBeforeUnmount(() => {
   flex: 0 0 auto;
   gap: 16px;
   justify-content: space-between;
-  margin-bottom: 20px;
+  margin-bottom: 14px;
 }
 
 .toolbar h2 {
@@ -423,8 +421,8 @@ onBeforeUnmount(() => {
 .content {
   display: grid;
   flex: 1;
-  gap: 20px;
-  grid-template-rows: auto minmax(0, 1fr) minmax(220px, 0.6fr);
+  gap: 10px;
+  grid-template-rows: minmax(176px, 28vh) minmax(280px, 1fr);
   min-height: 0;
   overflow: hidden;
 }
@@ -439,19 +437,44 @@ onBeforeUnmount(() => {
 .map-card :deep(.el-card__body) {
   display: flex;
   flex-direction: column;
-  height: calc(100% - 57px);
+  height: calc(100% - 44px);
   min-height: 0;
 }
 
-.upload-row {
-  align-items: center;
+.assist-grid {
   display: grid;
-  gap: 20px;
-  grid-template-columns: minmax(320px, 520px) 1fr;
+  gap: 10px;
+  grid-template-columns: minmax(300px, 0.72fr) minmax(0, 1.28fr);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.upload-card :deep(.el-card__body) {
+  height: calc(100% - 44px);
+}
+
+.upload-row {
+  align-content: center;
+  align-items: stretch;
+  display: grid;
+  gap: 10px;
+  grid-template-rows: minmax(0, 1fr) auto;
+  height: 100%;
+  min-height: 0;
 }
 
 .upload-box {
-  max-width: 520px;
+  min-width: 0;
+}
+
+.upload-box :deep(.el-upload-dragger) {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  justify-content: center;
+  min-height: 104px;
+  padding: 14px 12px;
 }
 
 .upload-icon {
@@ -468,10 +491,18 @@ onBeforeUnmount(() => {
   align-items: center;
   display: flex;
   gap: 12px;
+  justify-content: center;
+  min-width: 0;
 }
 
 .ui-select {
-  width: 160px;
+  flex: 0 0 160px;
+}
+
+.upload-actions :deep(.el-button) {
+  flex: 1;
+  margin-left: 0;
+  min-width: 150px;
 }
 
 .card-header {
@@ -489,6 +520,11 @@ onBeforeUnmount(() => {
   flex: 1;
   min-height: 0;
   overflow: auto;
+}
+
+.map-table-wrap {
+  flex: 1;
+  min-height: 0;
 }
 
 .row-actions {
@@ -538,17 +574,37 @@ onBeforeUnmount(() => {
   border-bottom: 0;
 }
 
-@media (max-width: 760px) {
+@media (max-width: 680px) {
   .page {
     overflow: auto;
   }
 
   .content {
+    grid-template-rows: auto minmax(280px, 1fr);
+    overflow: visible;
+  }
+
+  .assist-grid {
+    grid-template-columns: 1fr;
     overflow: visible;
   }
 
   .upload-row {
-    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+  }
+
+  .upload-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ui-select {
+    flex-basis: auto;
+    width: 100%;
+  }
+
+  .map-card {
+    height: 230px;
   }
 }
 </style>

@@ -1,0 +1,24 @@
+.workspace-card {
+  --workspace-card-header-height: 44px;
+  --workspace-card-body-padding: 14px 18px;
+}
+
+.workspace-card.el-card {
+  border-radius: 6px;
+}
+
+.workspace-card > .el-card__header {
+  align-items: center;
+  box-sizing: border-box;
+  display: flex;
+  min-height: var(--workspace-card-header-height);
+  padding: 0 18px;
+}
+
+.workspace-card > .el-card__body {
+  padding: var(--workspace-card-body-padding);
+}
+
+.workspace-card .card-header {
+  width: 100%;
+}

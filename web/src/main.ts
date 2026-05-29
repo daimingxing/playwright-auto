@@ -4,6 +4,7 @@ import ElementPlus from 'element-plus';
 import 'element-plus/dist/index.css';
 import './styles/button-shadow.css';
 import './styles/table.css';
+import './styles/workspace-card.css';
 import App from './App.vue';
 import { router } from './router';
 

@@ -67,6 +67,12 @@ export interface StepReviewState {
   reviews: CaseReviewItem[];
 }
 
+export const editorPanels = [
+  { key: 'meta', defaultOpen: false },
+  { key: 'steps', defaultOpen: true },
+  { key: 'history', defaultOpen: false }
+] as const;
+
 /**
  * 计算当前用例的实际打开地址。
  */

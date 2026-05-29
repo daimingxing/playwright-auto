@@ -40,6 +40,7 @@ const cases = ref<CaseMeta[]>([]);
 const trash = ref<CaseMeta[]>([]);
 const selectedKeys = ref<string[]>([]);
 const statusFilter = ref<CaseStatusFilter>(projectUi.getCaseStatusFilter(projectKey));
+const trashOpen = ref<string[]>([]);
 const form = reactive({
   name: "",
   startPath: "/",
@@ -54,6 +55,7 @@ const statusOptions: Array<{ label: string; value: CaseStatusFilter }> = [
 const filteredCases = computed(() =>
   statusFilter.value === "all" ? cases.value : cases.value.filter((item) => item.status === statusFilter.value),
 );
+const trashTitle = computed(() => `回收站（${trash.value.length}）`);
 
 /**
  * 加载项目用例和回收站。
@@ -414,48 +416,55 @@ onMounted(loadData);
         </div>
       </section>
 
-      <section class="trash list-block">
-        <h3>回收站</h3>
-        <div class="table-wrap">
-          <!-- 回收站表同样要保留足够的最小宽度，避免被容器压扁后失去横向滚动。 -->
-          <el-table
-            class="trash-table btn-shadow-sm"
-            :data="trash"
-            border
-            stripe
-            height="100%"
-            empty-text="回收站暂无用例"
-          >
-            <el-table-column prop="name" label="用例名称" min-width="260" />
-            <el-table-column prop="key" label="目录编号" min-width="160" />
-            <el-table-column
-              label="创建时间"
-              min-width="170"
-              show-overflow-tooltip
+      <el-collapse v-model="trashOpen" class="minor-collapse trash-collapse">
+        <el-collapse-item name="trash">
+          <template #title>
+            <div class="collapse-title">
+              <span>{{ trashTitle }}</span>
+              <span class="hint">次要区域，展开后可恢复或彻底删除</span>
+            </div>
+          </template>
+          <div class="table-wrap minor-table-wrap">
+            <!-- 回收站表同样要保留足够的最小宽度，避免被容器压扁后失去横向滚动。 -->
+            <el-table
+              class="trash-table btn-shadow-sm"
+              :data="trash"
+              border
+              stripe
+              height="100%"
+              empty-text="回收站暂无用例"
             >
-              <template #default="{ row }">
-                {{ formatCaseCreatedTime(row.createdAt) }}
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="260">
-              <template #default="{ row }">
-                <div class="trash-actions btn-shadow-sm">
-                  <el-button size="small" @click="restoreItem(row)"
-                    >恢复</el-button
-                  >
-                  <el-button
-                    class="hard-delete-btn"
-                    size="small"
-                    type="danger"
-                    @click="removeTrashItem(row)"
-                    >彻底删除</el-button
-                  >
-                </div>
-              </template>
-            </el-table-column>
-          </el-table>
-        </div>
-      </section>
+              <el-table-column prop="name" label="用例名称" min-width="260" />
+              <el-table-column prop="key" label="目录编号" min-width="160" />
+              <el-table-column
+                label="创建时间"
+                min-width="170"
+                show-overflow-tooltip
+              >
+                <template #default="{ row }">
+                  {{ formatCaseCreatedTime(row.createdAt) }}
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="260">
+                <template #default="{ row }">
+                  <div class="trash-actions btn-shadow-sm">
+                    <el-button size="small" @click="restoreItem(row)"
+                      >恢复</el-button
+                    >
+                    <el-button
+                      class="hard-delete-btn"
+                      size="small"
+                      type="danger"
+                      @click="removeTrashItem(row)"
+                      >彻底删除</el-button
+                    >
+                  </div>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </el-collapse-item>
+      </el-collapse>
     </div>
 
     <el-dialog v-model="dialogOpen" title="新建测试用例" width="520px">
@@ -481,7 +490,7 @@ onMounted(loadData);
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  padding: 28px;
+  padding: 22px 28px 18px;
   box-sizing: border-box;
   overflow: hidden;
 }
@@ -491,7 +500,7 @@ onMounted(loadData);
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 20px;
+  margin-bottom: 14px;
   align-items: flex-end;
 }
 
@@ -522,8 +531,9 @@ onMounted(loadData);
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 20px;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 10px;
+  overflow: hidden;
 }
 
 .list-block {
@@ -535,7 +545,7 @@ onMounted(loadData);
 
 .list-block h3 {
   flex: 0 0 auto;
-  margin: 0 0 12px;
+  margin: 0 0 8px;
 }
 
 .case-tools {
@@ -544,7 +554,7 @@ onMounted(loadData);
   flex: 0 0 auto;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   flex-wrap: wrap;
 }
 
@@ -569,7 +579,52 @@ onMounted(loadData);
   min-width: 0;
   min-height: 0;
   overflow: auto;
-  padding-right: 4px;
+}
+
+.minor-collapse {
+  --el-collapse-border-color: #dbe4ef;
+  background: #ffffff;
+  border: 1px solid #dbe4ef;
+  border-radius: 6px;
+  flex: 0 0 auto;
+  overflow: hidden;
+}
+
+.minor-collapse :deep(.el-collapse-item__header) {
+  border-bottom: 0;
+  height: 44px;
+  padding: 0 18px;
+}
+
+.minor-collapse :deep(.el-collapse-item__content) {
+  padding: 0 18px 16px;
+}
+
+.minor-collapse :deep(.el-collapse-item__wrap) {
+  border-bottom: 0;
+}
+
+.collapse-title {
+  align-items: center;
+  display: flex;
+  flex: 1;
+  gap: 16px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.collapse-title > span:first-child {
+  color: #1f2937;
+  font-weight: 600;
+}
+
+.hint {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.minor-table-wrap {
+  height: min(260px, 32vh);
 }
 
 .row-actions {
