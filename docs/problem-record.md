@@ -166,3 +166,12 @@
 - 现象：在 Windows PowerShell 中执行 `rtk rg ... | head -80` 报 `head` 不是可识别命令。
 - 原因：项目当前 shell 是 PowerShell，不能默认使用 Unix 工具链命令。
 - 处理：后续截断输出使用 `Select-Object -First`，或让 `rtk` 自身压缩输出。
+
+---
+
+## 2026-05-29 PowerShell 双引号会提前展开 `$` 变量
+
+- 状态：已规避
+- 问题：用 `pwsh -Command "$i=0; ... { $i++; ... }"` 读取带行号片段时，外层命令会提前展开 `$i`，导致实际传入 PowerShell 的脚本变成 `++` 和空变量判断，报 `Missing expression after unary operator '++'`。
+- 处理：包含 `$` 变量、脚本块或 `ForEach-Object` 的片段统一使用外层单引号，例如 `pwsh -Command '$i=0; Get-Content ... | ForEach-Object { $i++; ... }'`。
+- 经验：Windows 下复杂 PowerShell 片段不要用外层双引号包脚本；需要字符串插值时优先在脚本内部完成，避免 shell 层先吃掉变量。

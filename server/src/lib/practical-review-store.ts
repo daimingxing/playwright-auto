@@ -100,15 +100,21 @@ export async function updateLatestPracticalReview(projectKey: string, caseKey: s
 /**
  * 如果用例或环境和最近实测检查快照不一致，则标记为过期。
  */
-export async function expirePracticalReviewIfNeeded(projectKey: string, item: CaseMeta, envBaseUrl?: string) {
+export function resolvePracticalReviewView(item: CaseMeta, envBaseUrl?: string) {
   const summary = item.practicalReview;
   if (!summary || summary.status === 'untested' || summary.status === 'expired') {
-    return item;
+    return {
+      item,
+      dirty: false
+    };
   }
 
   const currentHash = createCaseSnapshotHash(item, summary.envKey, envBaseUrl ?? summary.envBaseUrl);
   if (currentHash === summary.caseSnapshotHash) {
-    return item;
+    return {
+      item,
+      dirty: false
+    };
   }
 
   const nextItem: CaseMeta = {
@@ -119,9 +125,24 @@ export async function expirePracticalReviewIfNeeded(projectKey: string, item: Ca
     }
   };
 
-  await writeJson(join(getCasePath(projectKey, item.key), 'case.json'), nextItem);
+  return {
+    item: nextItem,
+    dirty: true
+  };
+}
 
-  return nextItem;
+/**
+ * 如果用例或环境和最近实测检查快照不一致，则写回过期状态。
+ */
+export async function expirePracticalReviewIfNeeded(projectKey: string, item: CaseMeta, envBaseUrl?: string) {
+  const result = resolvePracticalReviewView(item, envBaseUrl);
+  if (!result.dirty) {
+    return result.item;
+  }
+
+  await writeJson(join(getCasePath(projectKey, item.key), 'case.json'), result.item);
+
+  return result.item;
 }
 
 /**

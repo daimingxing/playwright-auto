@@ -10,7 +10,7 @@ import type {
   PracticalStepReview
 } from '../../../../shared/types';
 import { buildStartUrl } from '../../../../shared/url';
-import { getCase } from '../../lib/case-store';
+import { syncCaseDerivedState } from '../../lib/case-store';
 import { getProject } from '../../lib/project-store';
 import {
   cleanupPracticalReviews,
@@ -42,7 +42,7 @@ interface PracticalReviewInput {
  */
 export async function runPracticalReview(projectKey: string, caseKey: string, input: PracticalReviewInput = {}) {
   const project = await getProject(projectKey);
-  const item = await getCase(projectKey, caseKey);
+  const item = await syncCaseDerivedState(projectKey, caseKey);
   const envKey = input.envKey ?? project.defaultEnv;
   const env = project.envs.find((row) => row.key === envKey);
 

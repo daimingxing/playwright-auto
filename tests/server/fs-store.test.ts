@@ -1,10 +1,11 @@
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   createCase,
   deleteCase,
+  getCase,
   listCases,
   listTrash,
   removeTrashCase,
@@ -196,5 +197,46 @@ describe('文件存储', () => {
     expect(run.projectKey).toBe('crm');
     expect(run.envKey).toBe('default');
     expect(run.reportPath).toContain(run.id);
+  });
+
+  it('读取历史用例时返回兼容视图但不改写原始文件', async () => {
+    await createProject({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    const casePath = join(root, 'projects', 'crm', 'cases', 'case-old', 'case.json');
+    await writeJson(casePath, {
+      name: '历史用例',
+      key: 'case-old',
+      status: 'unknown',
+      startPath: '/orders',
+      steps: [
+        {
+          id: 's1',
+          type: 'click',
+          selector: "locator('#afab153e-f49d-4716-ac77-c621ad4a2fe9')"
+        }
+      ],
+      createdAt: '2026-05-29T00:00:00.000Z',
+      updatedAt: '2026-05-29T00:00:00.000Z'
+    });
+    const before = await readFile(casePath, 'utf8');
+
+    const items = await listCases('crm');
+    const detail = await getCase('crm', 'case-old');
+    const after = await readFile(casePath, 'utf8');
+
+    expect(items[0]).toMatchObject({
+      key: 'case-old',
+      status: 'draft',
+      review: {
+        summary: {
+          error: 1
+        }
+      }
+    });
+    expect(detail.review?.items[0]?.ruleCode).toBe('dynamic-id');
+    expect(after).toBe(before);
   });
 });

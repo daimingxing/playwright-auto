@@ -168,7 +168,7 @@ describe('用例接口', () => {
     expect(restored.body.key).toBe('case-1-1');
   });
 
-  it('读取历史用例时自动补充审查结果', async () => {
+  it('读取历史用例时返回补充审查结果的兼容视图', async () => {
     const app = createApp();
     await request(app).post('/api/projects').send({
       name: 'CRM 系统',

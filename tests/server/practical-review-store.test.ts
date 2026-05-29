@@ -1,8 +1,9 @@
-import { mkdtemp, rm, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createCase, getCase, updateCase } from '../../server/src/lib/case-store';
+import { writeJson } from '../../server/src/lib/fs';
 import { createProject } from '../../server/src/lib/project-store';
 import {
   cleanupPracticalReviews,
@@ -63,6 +64,26 @@ describe('实测检查存储', () => {
     const saved = await getCase('crm', item.key);
     expect(saved.practicalReview?.status).toBe('expired');
     expect(saved.practicalReview?.reviewId).toBe(record.id);
+  });
+
+  it('读取快照不一致的用例时只返回过期视图不改写原始文件', async () => {
+    await createProject({ name: 'CRM', key: 'crm', baseUrl: 'https://crm.test.local' });
+    const item = await createCase('crm', { name: '创建订单', startPath: '/orders/create' });
+    const hash = createCaseSnapshotHash(item, 'default', 'https://crm.test.local');
+    const record = makeRecord(item.key, hash, 'passed');
+    const casePath = join(root, 'projects', 'crm', 'cases', item.key, 'case.json');
+    await writeJson(casePath, {
+      ...item,
+      steps: [{ id: 's1', type: 'click', selector: '#save' }],
+      practicalReview: record.summary
+    });
+    const before = await readFile(casePath, 'utf8');
+
+    const saved = await getCase('crm', item.key);
+    const after = await readFile(casePath, 'utf8');
+
+    expect(saved.practicalReview?.status).toBe('expired');
+    expect(after).toBe(before);
   });
 
   it('清理 7 天前和超过 20 条的实测检查记录', async () => {

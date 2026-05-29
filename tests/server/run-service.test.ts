@@ -1,4 +1,4 @@
-import { mkdtemp, rm, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { EventEmitter } from 'node:events';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -227,6 +227,31 @@ describe('运行服务', () => {
     });
 
     await expect(getProjectRunFiles('crm', [draft.key])).rejects.toThrow('选择的测试用例未启用或基础检查不通过');
+  });
+
+  it('运行中心扫描历史用例时返回可运行文件但不改写用例文件', async () => {
+    await createProject({
+      name: 'CRM 系统',
+      key: 'crm',
+      baseUrl: 'https://crm.test.local'
+    });
+    const casePath = join(root, 'projects', 'crm', 'cases', 'case-old', 'case.json');
+    await writeJson(casePath, {
+      name: '历史启用用例',
+      key: 'case-old',
+      status: 'active',
+      startPath: '/orders',
+      steps: [{ id: 's1', type: 'wait', timeout: 1000 }],
+      createdAt: '2026-05-29T00:00:00.000Z',
+      updatedAt: '2026-05-29T00:00:00.000Z'
+    });
+    const before = await readFile(casePath, 'utf8');
+
+    const files = await getProjectRunFiles('crm');
+    const after = await readFile(casePath, 'utf8');
+
+    expect(files).toEqual([`.*crm.*cases.*case-old.*case\\.spec\\.ts`]);
+    expect(after).toBe(before);
   });
 
   it('运行项目时显式传入 Playwright 配置文件', async () => {

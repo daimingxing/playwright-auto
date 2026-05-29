@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import type { CaseMeta, CaseStatus, CaseStep } from '../../../shared/types';
 import { ensureDir, movePath, readJson, writeJson } from './fs';
 import { getCasePath, getProjectPath, getTrashPath } from './path';
-import { expirePracticalReviewIfNeeded } from './practical-review-store';
+import { expirePracticalReviewIfNeeded, resolvePracticalReviewView } from './practical-review-store';
 import { createCaseSchema } from './schema';
 import { generateSpec } from '../services/case/case-generator';
 import { isReviewPassed, reviewCase } from '../services/case-review';
@@ -98,14 +98,16 @@ export async function listCases(projectKey: string) {
     names.map((name) => readJson<CaseMeta>(join(casesPath, name, 'case.json')))
   );
 
-  return Promise.all(items.map((item) => ensureReview(projectKey, item)));
+  return items.map((item) => deriveCaseView(item).item);
 }
 
 /**
  * 读取单个用例。
  */
 export async function getCase(projectKey: string, caseKey: string) {
-  return ensureReview(projectKey, await readJson<CaseMeta>(join(getCasePath(projectKey, caseKey), 'case.json')));
+  const item = await readJson<CaseMeta>(join(getCasePath(projectKey, caseKey), 'case.json'));
+
+  return deriveCaseView(item).item;
 }
 
 /**
@@ -199,14 +201,14 @@ async function saveCase(projectKey: string, caseKey: string, input: CaseMeta, op
     await writeSpec(projectKey, item);
   }
 
-  return expirePracticalReviewIfNeeded(projectKey, item);
+  return syncCaseDerivedState(projectKey, caseKey);
 }
 
 /**
  * 更新单条用例状态。
  */
 export async function updateCaseStatus(projectKey: string, caseKey: string, status: CaseStatus) {
-  const item = await getCase(projectKey, caseKey);
+  const item = await syncCaseDerivedState(projectKey, caseKey);
   assertCaseStatusAllowed(item, status);
 
   const nextItem: CaseMeta = {
@@ -221,6 +223,20 @@ export async function updateCaseStatus(projectKey: string, caseKey: string, stat
   }
 
   return nextItem;
+}
+
+/**
+ * 显式同步用例的派生状态到磁盘。
+ */
+export async function syncCaseDerivedState(projectKey: string, caseKey: string) {
+  const raw = await readJson<CaseMeta>(join(getCasePath(projectKey, caseKey), 'case.json'));
+  const result = deriveCaseView(raw);
+
+  if (result.dirty) {
+    await writeJson(join(getCasePath(projectKey, caseKey), 'case.json'), result.item);
+  }
+
+  return result.item;
 }
 
 /**
@@ -384,9 +400,9 @@ async function writeSpec(projectKey: string, item: CaseMeta, caseKey = item.key)
 }
 
 /**
- * 为历史用例补充静态审查结果。
+ * 派生用例读取视图并兼容历史数据。
  */
-async function ensureReview(projectKey: string, item: CaseMeta) {
+function deriveCaseView(item: CaseMeta) {
   const itemWithStatus = {
     ...item,
     status: readCaseStatus(item.status)
@@ -397,12 +413,14 @@ async function ensureReview(projectKey: string, item: CaseMeta) {
         ...itemWithStatus,
         review: reviewCase(itemWithStatus)
       };
+  const reviewDirty = !item.review && item.steps.length > 0;
+  const statusDirty = item.status !== nextItem.status;
+  const practicalResult = resolvePracticalReviewView(nextItem);
 
-  if (!item.review || item.status !== nextItem.status) {
-    await writeJson(join(getCasePath(projectKey, item.key), 'case.json'), nextItem);
-  }
-
-  return expirePracticalReviewIfNeeded(projectKey, nextItem);
+  return {
+    item: practicalResult.item,
+    dirty: reviewDirty || statusDirty || practicalResult.dirty
+  };
 }
 
 /**
