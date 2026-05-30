@@ -178,6 +178,43 @@ describe('实测检查服务', () => {
     expect(code).not.toContain('page.button:has-text');
   });
 
+  it('生成实测脚本时 Kendo 下拉使用点击控件和选项文本', () => {
+    const code = generatePracticalReviewSpec({
+      startUrl: 'https://crm.test.local/orders',
+      resultPath: 'D:/tmp/review-result.json',
+      screenshotDir: 'D:/tmp/screenshots',
+      steps: [
+        {
+          id: 's1',
+          type: 'select',
+          selector: "locator('.xr-fc').filter({ hasText: '取样类别' }).locator('.k-dropdownlist')",
+          value: '采购'
+        }
+      ]
+    });
+
+    expect(code).toContain("await recordStep({ stepId: \"s1\"");
+    expect(code).toContain("page.locator('.xr-fc').filter({ hasText: '取样类别' }).locator('.k-dropdownlist').click()");
+    expect(code).toContain("page.getByRole('option', { name: \"采购\" }).or(page.getByText(\"采购\", { exact: true })).first().click()");
+    expect(code).not.toContain('.selectOption(');
+  });
+
+  it('生成实测脚本时原生 select 的 combobox role 和 aria-label locator 保持 selectOption', () => {
+    const code = generatePracticalReviewSpec({
+      startUrl: 'https://crm.test.local/orders',
+      resultPath: 'D:/tmp/review-result.json',
+      screenshotDir: 'D:/tmp/screenshots',
+      steps: [
+        { id: 's1', type: 'select', selector: "getByRole('combobox', { name: '状态' })", value: '启用' },
+        { id: 's2', type: 'select', selector: "locator('[aria-label=\"状态\"]')", value: '停用' }
+      ]
+    });
+
+    expect(code).toContain("page.getByRole('combobox', { name: '状态' }).selectOption(\"启用\")");
+    expect(code).toContain("page.locator('[aria-label=\"状态\"]').selectOption(\"停用\")");
+    expect(code).not.toContain("getByRole('option'");
+  });
+
   it('浏览器执行未生成结果文件时返回清晰错误', async () => {
     process.env.NODE_ENV = 'development';
     await createProject({ name: 'CRM', key: 'crm', baseUrl: 'https://crm.test.local' });

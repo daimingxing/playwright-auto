@@ -442,6 +442,17 @@ describe('AI 草稿生成服务', () => {
     expect(result.steps[0].warnings).toContain('平台按模板目标类型修正 AI 推测 selector，请人工确认。');
   });
 
+  it('AI 返回 getByLabel 当前值时 selector 修正后仍优先使用 field locator', () => {
+    const result = completeDraftSelectorsFromPageMap(createSelectDraft("getByLabel('---请选择---')"), {
+      steps: [createSelectStep()],
+      pageMap: createFieldPageMap('初始页面')
+    });
+
+    expect(result.steps[0].selector).toBe("locator('.xr-fc').filter({ hasText: '取样类别' }).locator('.k-dropdownlist')");
+    expect(result.steps[0].selector).not.toBe("getByLabel('---请选择---')");
+    expect(result.steps[0].warnings).toContain('平台按模板目标类型修正 AI 推测 selector，请人工确认。');
+  });
+
   it('AI 返回 button selector 时 selector 修正后仍优先使用 field locator', () => {
     const result = completeDraftSelectorsFromPageMap(createSelectDraft("getByRole('button', { name: '---请选择---' })"), {
       steps: [createSelectStep()],

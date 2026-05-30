@@ -89,7 +89,7 @@ function renderStep(step: CaseStep, index: number) {
     case 'fill':
       return [`  await recordStep(${meta}, async () => ${renderStepLocator(step)}.fill(${quote(step.value ?? '')}${renderTimeoutOption(step)}));`];
     case 'select':
-      return [`  await recordStep(${meta}, async () => ${renderStepLocator(step)}.selectOption(${quote(step.value ?? '')}${renderTimeoutOption(step)}));`];
+      return renderSelectStep(step, meta);
     case 'assertVisible':
       return [`  await recordStep(${meta}, async () => expect(${renderStepLocator(step)}).toBeVisible());`];
     case 'assertText':
@@ -110,6 +110,24 @@ function renderStep(step: CaseStep, index: number) {
 }
 
 /**
+ * 生成实测检查下拉步骤，保持与最终用例生成逻辑一致。
+ */
+function renderSelectStep(step: CaseStep, meta: string) {
+  const target = renderStepLocator(step);
+
+  if (!isCustomSelect(step)) {
+    return [`  await recordStep(${meta}, async () => ${target}.selectOption(${quote(step.value ?? '')}${renderTimeoutOption(step)}));`];
+  }
+
+  return [
+    `  await recordStep(${meta}, async () => {`,
+    `    await ${target}.click(${renderTimeoutArg(step)});`,
+    `    await ${renderOptionLocator(step.value ?? '')}.click(${renderTimeoutArg(step)});`,
+    '  });'
+  ];
+}
+
+/**
  * 根据结构化草稿或历史 selector 生成实测检查定位表达式。
  */
 function renderStepLocator(step: CaseStep) {
@@ -118,6 +136,45 @@ function renderStepLocator(step: CaseStep) {
   }
 
   return renderPracticalLocator(step.selector);
+}
+
+/**
+ * 判断 selector 是否明显指向非原生下拉控件。
+ */
+function isCustomSelect(step: CaseStep) {
+  const value = normalizeSelector(step.selector ?? '');
+
+  if (step.selectorDraft || isNativeSelect(value)) {
+    return false;
+  }
+
+  // 仅在 selector 自身包含 Kendo 或同类组件证据时改用点击，避免误伤原生 select 的 combobox role。
+  return /\.k-(dropdownlist|picker|combobox|multiselect|dropdowntree)\b|data-role=["']?(dropdownlist|combobox)/.test(value);
+}
+
+/**
+ * 判断 selector 是否明确选择原生 select 元素。
+ */
+function isNativeSelect(value: string) {
+  return /(^|[("'`\s>])select(\b|[#.:[\s>])/.test(value);
+}
+
+/**
+ * 生成自定义下拉选项定位器。
+ */
+function renderOptionLocator(value: string) {
+  return `page.getByRole('option', { name: ${quote(value)} }).or(page.getByText(${quote(value)}, { exact: true })).first()`;
+}
+
+/**
+ * 兼容历史数据中的页面别名前缀。
+ */
+function normalizeSelector(value: string) {
+  if (/^page\d+\./.test(value)) {
+    return value.replace(/^page\d+\./, '');
+  }
+
+  return value;
 }
 
 function renderTimeoutArg(step: CaseStep) {

@@ -504,7 +504,7 @@ function normalizeStep(step: z.infer<typeof draftStepSchema>, index: number): Ai
 function completeStepSelector(step: AiDraftStep, source: ImportStepSource | undefined, context: PageContext): AiDraftStep {
   const kind = readSelectorKind(step, source);
   const fixedStep = fixStepType(step, source);
-  const typeFixedStep = fixSelectorByTarget(fixedStep, source);
+  const typeFixedStep = fixSelectorByTarget(fixedStep, source, context);
 
   if (typeFixedStep.selector || !source || !needsSelector(kind.type) || isLazyMenuStep(source)) {
     return typeFixedStep;
@@ -542,7 +542,7 @@ export function completeDraftSelectorsFromPageMap(draft: AiCaseDraft, input: Gro
 function completeStepSelectorFromPageMap(step: AiDraftStep, source: ImportStepSource | undefined, pageMap: DraftPageMap): AiDraftStep {
   const kind = readSelectorKind(step, source);
   const fixedStep = fixStepType(step, source);
-  const typeFixedStep = fixSelectorByTarget(fixedStep, source);
+  const typeFixedStep = fixMapSelector(fixedStep, source, pageMap);
 
   if (typeFixedStep.selector || !source || !needsSelector(kind.type) || isLazyMenuStep(source)) {
     return typeFixedStep;
@@ -567,11 +567,29 @@ function completeStepSelectorFromPageMap(step: AiDraftStep, source: ImportStepSo
 /**
  * 按模板目标类型修正明显不匹配的 AI 推测 selector。
  */
-function fixSelectorByTarget(step: AiDraftStep, source: ImportStepSource | undefined): AiDraftStep {
-  if (!source || !step.selector || !isInferredSelectorMismatch(step.selector, source.targetType)) {
+function fixSelectorByTarget(step: AiDraftStep, source: ImportStepSource | undefined, context: PageContext): AiDraftStep {
+  if (!source || !step.selector || !shouldDropSelector(step.selector, source, [context])) {
     return step;
   }
 
+  return dropSelector(step);
+}
+
+/**
+ * 按多状态页面地图修正明显不可信的 AI 推测 selector。
+ */
+function fixMapSelector(step: AiDraftStep, source: ImportStepSource | undefined, pageMap: DraftPageMap): AiDraftStep {
+  if (!source || !step.selector || !shouldDropSelector(step.selector, source, pageMap.states.map((state) => state.context))) {
+    return step;
+  }
+
+  return dropSelector(step);
+}
+
+/**
+ * 丢弃 AI 推测 selector，让 fields/elements 页面证据重新补全。
+ */
+function dropSelector(step: AiDraftStep): AiDraftStep {
   const fixed = {
     ...step,
     warnings: uniqueWarnings([...step.warnings, selectorFixWarning])
@@ -581,6 +599,17 @@ function fixSelectorByTarget(step: AiDraftStep, source: ImportStepSource | undef
   delete fixed.selector;
 
   return fixed;
+}
+
+/**
+ * 判断已有 selector 是否应该被字段语义层接管。
+ */
+function shouldDropSelector(selector: string, source: ImportStepSource, contexts: PageContext[]) {
+  if (isInferredSelectorMismatch(selector, source.targetType)) {
+    return true;
+  }
+
+  return Boolean(isValueSelector(selector, source, contexts));
 }
 
 /**
@@ -600,6 +629,47 @@ function isInferredSelectorMismatch(selector: string, target: TargetType | undef
   }
 
   return false;
+}
+
+/**
+ * 判断 selector 是否明显使用了字段当前值而不是字段定位器。
+ */
+function isValueSelector(selector: string, source: ImportStepSource, contexts: PageContext[]) {
+  if (!source.targetType || !['input', 'select', 'date'].includes(source.targetType)) {
+    return false;
+  }
+
+  const targetName = readTargetName(source);
+
+  if (!targetName) {
+    return false;
+  }
+
+  const values = contexts
+    .flatMap((context) => context.fields ?? [])
+    .filter((field) => isFieldTargetMatch(field, source.targetType))
+    .filter((field) => getFieldMatchRank(field.name, targetName) > 0)
+    .map((field) => field.value?.trim())
+    .filter((value): value is string => Boolean(value));
+
+  return values.some((value) => isTextLocator(selector, value));
+}
+
+/**
+ * 判断 selector 是否是按文本或标签直接定位指定值。
+ */
+function isTextLocator(selector: string, value: string) {
+  const escaped = escapeRegExp(value);
+  const pattern = new RegExp(`^getBy(?:Label|Text)\\((['"])${escaped}\\1(?:,\\s*\\{[^)]*\\})?\\)`);
+
+  return pattern.test(selector.trim());
+}
+
+/**
+ * 转义正则表达式中的特殊字符。
+ */
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**

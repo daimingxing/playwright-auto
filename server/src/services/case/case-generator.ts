@@ -32,7 +32,9 @@ function renderStep(step: CaseStep) {
     lines.push(`  const ${step.opensPageAlias}Promise = ${getPageName(step)}.waitForEvent('popup');`);
   }
 
-  lines.push(renderStepAction(step));
+  const actionLines = renderStepAction(step);
+
+  lines.push(...(Array.isArray(actionLines) ? actionLines : [actionLines]));
 
   if (step.opensPageAlias) {
     lines.push(`  const ${step.opensPageAlias} = await ${step.opensPageAlias}Promise;`);
@@ -61,7 +63,7 @@ function renderStepAction(step: CaseStep) {
     case 'fill':
       return `  await ${renderStepLocator(step, '输入选择器', pageName)}.fill(${quote(step.value ?? '')}${renderTimeoutOption(step)});`;
     case 'select':
-      return `  await ${renderStepLocator(step, '下拉选择器', pageName)}.selectOption(${quote(step.value ?? '')}${renderTimeoutOption(step)});`;
+      return renderSelectAction(step, pageName);
     case 'wait':
       // 等待时间单位是毫秒，Playwright 的 waitForTimeout 也使用毫秒。
       return `  await ${pageName}.waitForTimeout(${step.timeout ?? 1000});`;
@@ -78,6 +80,50 @@ function renderStepAction(step: CaseStep) {
     default:
       throw new Error(`暂不支持的步骤类型：${String(step.type)}`);
   }
+}
+
+/**
+ * 生成下拉选择动作，区分原生 select 和 Kendo 等自定义下拉。
+ */
+function renderSelectAction(step: CaseStep, pageName: string) {
+  const target = renderStepLocator(step, '下拉选择器', pageName);
+
+  if (!isCustomSelect(step)) {
+    return `  await ${target}.selectOption(${quote(step.value ?? '')}${renderTimeoutOption(step)});`;
+  }
+
+  return [
+    `  await ${target}.click(${renderTimeoutArg(step)});`,
+    `  await ${renderOptionLocator(step.value ?? '', pageName)}.click(${renderTimeoutArg(step)});`
+  ];
+}
+
+/**
+ * 判断 selector 是否明显指向非原生下拉控件。
+ */
+function isCustomSelect(step: CaseStep) {
+  const value = normalizeSelector(step.selector ?? '');
+
+  if (step.selectorDraft || isNativeSelect(value)) {
+    return false;
+  }
+
+  // 仅在 selector 自身包含 Kendo 或同类组件证据时改用点击，避免误伤原生 select 的 combobox role。
+  return /\.k-(dropdownlist|picker|combobox|multiselect|dropdowntree)\b|data-role=["']?(dropdownlist|combobox)/.test(value);
+}
+
+/**
+ * 判断 selector 是否明确选择原生 select 元素。
+ */
+function isNativeSelect(value: string) {
+  return /(^|[("'`\s>])select(\b|[#.:[\s>])/.test(value);
+}
+
+/**
+ * 生成自定义下拉选项定位器。
+ */
+function renderOptionLocator(value: string, pageName: string) {
+  return `${pageName}.getByRole('option', { name: ${quote(value)} }).or(${pageName}.getByText(${quote(value)}, { exact: true })).first()`;
 }
 
 /**

@@ -171,6 +171,52 @@ describe('用例生成器', () => {
     expect(code).toContain('await page.locator("#status").selectOption("done");');
   });
 
+  it('Kendo 下拉生成点击控件和选项文本而不是 selectOption', () => {
+    const item: CaseMeta = {
+      name: '选择取样类别',
+      key: 'case-kendo-select',
+      status: 'draft',
+      startPath: '/samples',
+      createdAt: '2026-05-30T00:00:00.000Z',
+      updatedAt: '2026-05-30T00:00:00.000Z',
+      steps: [
+        {
+          id: 's1',
+          type: 'select',
+          selector: "locator('.xr-fc').filter({ hasText: '取样类别' }).locator('.k-dropdownlist')",
+          value: '采购'
+        }
+      ]
+    };
+
+    const code = generateSpec(item);
+
+    expect(code).toContain("await page.locator('.xr-fc').filter({ hasText: '取样类别' }).locator('.k-dropdownlist').click();");
+    expect(code).toContain("await page.getByRole('option', { name: \"采购\" }).or(page.getByText(\"采购\", { exact: true })).first().click();");
+    expect(code).not.toContain('.selectOption(');
+  });
+
+  it('原生 select 的 combobox role 和 aria-label locator 保持 selectOption', () => {
+    const item: CaseMeta = {
+      name: '选择状态',
+      key: 'case-native-select-locator',
+      status: 'draft',
+      startPath: '/orders',
+      createdAt: '2026-05-30T00:00:00.000Z',
+      updatedAt: '2026-05-30T00:00:00.000Z',
+      steps: [
+        { id: 's1', type: 'select', selector: "getByRole('combobox', { name: '状态' })", value: '启用' },
+        { id: 's2', type: 'select', selector: "locator('[aria-label=\"状态\"]')", value: '停用' }
+      ]
+    };
+
+    const code = generateSpec(item);
+
+    expect(code).toContain("await page.getByRole('combobox', { name: '状态' }).selectOption(\"启用\");");
+    expect(code).toContain("await page.locator('[aria-label=\"状态\"]').selectOption(\"停用\");");
+    expect(code).not.toContain("getByRole('option'");
+  });
+
   it('生成悬停、双击和右键点击步骤', () => {
     const item: CaseMeta = {
       name: '鼠标操作',
