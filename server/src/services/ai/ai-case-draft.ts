@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { stepTypes, type AiCaseDraft, type AiDebugInfo, type AiDraftStep, type AiLevel, type ImportCaseSource, type ImportDataSource, type ImportStepSource, type StepType, type TargetType, type UiLibrary } from '../../../../shared/types';
 import { AiJsonError, generateAiJson } from './ai-client';
-import type { PageContext, PageElement } from './page-context';
+import type { PageContext, PageElement, PageField, PageLocator } from './page-context';
 import { buildAiCaseDraftGroupSystemPrompt, buildAiCaseDraftGroupUserPrompt, buildAiCaseDraftSystemPrompt, buildAiCaseDraftUserPrompt } from '../../prompts/ai-case-draft-prompt';
 
 export interface DraftInput {
@@ -113,6 +113,7 @@ const percentScoreMax = 100;
 const assertTypes: StepType[] = ['assertText', 'assertVisible', 'assertValue', 'assertUrl', 'assertTitle'];
 const typeFixWarning = '平台按模板动作类型修正 AI 返回步骤类型，请确认草稿步骤。';
 const selectorFixWarning = '平台按模板目标类型修正 AI 推测 selector，请人工确认。';
+const levelRank: Record<AiLevel, number> = { high: 3, medium: 2, low: 1 };
 
 interface SelectorKind {
   type: StepType;
@@ -415,6 +416,7 @@ function summarizePageMap(pageMap: DraftPageMap) {
       name: state.name,
       actionName: state.actionName,
       page: state.context.page,
+      fields: state.context.fields,
       elements: state.context.elements,
       warnings: state.context.warnings
     }))
@@ -570,9 +572,15 @@ function fixSelectorByTarget(step: AiDraftStep, source: ImportStepSource | undef
     return step;
   }
 
-  const fallback = inferSelectorByTarget(source, source.actionType ?? step.type);
+  const fixed = {
+    ...step,
+    warnings: uniqueWarnings([...step.warnings, selectorFixWarning])
+  };
 
-  return fallback ? applySelectorFix(step, fallback) : step;
+  // 明显错位的 AI selector 不能直接替换成推测值，否则会绕过 fields/elements 的页面证据补全。
+  delete fixed.selector;
+
+  return fixed;
 }
 
 /**
@@ -711,6 +719,12 @@ function isLazyMenuStep(source: ImportStepSource) {
  * 查找与自然语言步骤匹配的页面元素候选。
  */
 function findSelectorCandidate(source: ImportStepSource, step: AiDraftStep, context: PageContext, kind: SelectorKind) {
+  const fieldCandidate = findFieldSelectorCandidate(source, context, kind);
+
+  if (fieldCandidate) {
+    return fieldCandidate;
+  }
+
   const target = `${readTargetName(source)} ${source.targetText} ${source.actionText} ${step.text}`;
   const items = getSelectorItems(kind, context).filter((item) => item.text && target.includes(item.text));
 
@@ -721,6 +735,21 @@ function findSelectorCandidate(source: ImportStepSource, step: AiDraftStep, cont
  * 从多状态页面地图查找与自然语言步骤匹配的元素候选。
  */
 function findSelectorCandidateFromPageMap(source: ImportStepSource, step: AiDraftStep, pageMap: DraftPageMap, kind: SelectorKind) {
+  const fieldItems = pageMap.states.flatMap((state, index) => {
+    const candidate = findFieldSelectorCandidate(source, state.context, kind);
+
+    return candidate ? [{
+      ...candidate,
+      stateId: state.stateId,
+      stateName: state.name,
+      isInitial: index === 0
+    }] : [];
+  });
+
+  if (fieldItems.length > 0) {
+    return fieldItems[0];
+  }
+
   const target = `${readTargetName(source)} ${source.targetText} ${source.actionText} ${step.text}`;
   const items = pageMap.states.flatMap((state, index) =>
     getSelectorItems(kind, state.context)
@@ -734,6 +763,131 @@ function findSelectorCandidateFromPageMap(source: ImportStepSource, step: AiDraf
   );
 
   return items.sort((left, right) => (right.text?.length ?? 0) - (left.text?.length ?? 0))[0];
+}
+
+/**
+ * 根据字段语义层查找与导入步骤匹配的 selector 候选。
+ */
+function findFieldSelectorCandidate(source: ImportStepSource, context: PageContext, kind: SelectorKind): SelectorCandidate | undefined {
+  if (!shouldUseFieldCandidates(kind, source)) {
+    return undefined;
+  }
+
+  const targetName = readTargetName(source);
+
+  if (!targetName) {
+    return undefined;
+  }
+
+  const fields = (context.fields ?? [])
+    .filter((field) => isOperableField(field, kind))
+    .filter((field) => isFieldTargetMatch(field, kind.target))
+    .map((field) => ({
+      field,
+      matchRank: getFieldMatchRank(field.name, targetName)
+    }))
+    .filter((item) => item.matchRank > 0)
+    .sort((left, right) => {
+      if (right.matchRank !== left.matchRank) {
+        return right.matchRank - left.matchRank;
+      }
+
+      return levelRank[right.field.confidence] - levelRank[left.field.confidence];
+    });
+
+  const field = fields[0]?.field;
+  const locator = field ? chooseUniqueFieldLocator(field.locators) : undefined;
+
+  if (!field || !locator) {
+    return undefined;
+  }
+
+  return {
+    text: field.name,
+    label: field.name,
+    locator: locator.selector,
+    unique: locator.unique
+  };
+}
+
+/**
+ * 判断字段是否适合自动补全可操作步骤。
+ */
+function isOperableField(field: PageField, kind: SelectorKind) {
+  if (field.state === 'disabled') {
+    return false;
+  }
+
+  if (field.state === 'readonly' && (kind.type === 'fill' || kind.type === 'select')) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * 判断当前步骤是否优先使用字段语义候选。
+ */
+function shouldUseFieldCandidates(kind: SelectorKind, source: ImportStepSource) {
+  if (kind.target === 'input' || kind.target === 'select' || kind.target === 'date') {
+    return true;
+  }
+
+  // 部分旧模板只有动作类型，仍应让 fill/select 优先按字段名匹配字段语义。
+  return source.actionType === 'fill' || source.actionType === 'select';
+}
+
+/**
+ * 判断字段类型是否符合结构化目标类型。
+ */
+function isFieldTargetMatch(field: PageField, target: TargetType | undefined) {
+  if (!target) {
+    return true;
+  }
+
+  if (target === 'input' || target === 'select' || target === 'date') {
+    return field.type === target;
+  }
+
+  return false;
+}
+
+/**
+ * 计算字段名与模板目标名的匹配等级。
+ */
+function getFieldMatchRank(fieldName: string, targetName: string) {
+  const fieldText = fieldName.trim();
+  const targetText = targetName.trim();
+
+  if (!fieldText || !targetText) {
+    return 0;
+  }
+
+  if (fieldText === targetText) {
+    return 3;
+  }
+
+  const compactField = fieldText.replace(/\s/g, '');
+  const compactTarget = targetText.replace(/\s/g, '');
+
+  if (compactField && compactField === compactTarget) {
+    return 2;
+  }
+
+  if (compactField && compactTarget && (compactField.includes(compactTarget) || compactTarget.includes(compactField))) {
+    return 1;
+  }
+
+  return 0;
+}
+
+/**
+ * 从字段候选中选择最可靠的定位器。
+ */
+function chooseUniqueFieldLocator(locators: PageLocator[]) {
+  return locators
+    .filter((locator) => locator.unique)
+    .sort((left, right) => levelRank[right.confidence] - levelRank[left.confidence])[0];
 }
 
 /**

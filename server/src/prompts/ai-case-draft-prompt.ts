@@ -49,6 +49,8 @@ export function buildAiCaseDraftSystemPrompt(uiLibrary: UiLibrary = 'auto') {
     '- actionText、targetText 是旧模板兼容展示字段，仅在结构化字段缺失时作为兜底参考。',
     '- data 是测试数据，dataKeys 用于把步骤和测试数据关联。',
     '- pageContext 是平台用 Playwright 打开真实页面后采集的压缩上下文，不是完整 DOM。',
+    '- pageContext.fields 是平台从真实页面采集的字段语义，优先级高于自然语言推测和 elements 当前显示文本。',
+    '- field.name 是测试人员可见的字段名，field.value 是字段当前值；不要把 field.value 当字段名或 selector 主要依据。',
     '- pageContext.elements.buttons/inputs/selects/links/navigation 中的 locator 是平台现场采集到的候选定位器。',
     '- pageContext.elements.tables 只提供表格摘要，不代表可直接点击。',
     '- uiLibrary 表示本次导入选择的控件库策略，可取 auto、native、kendo；auto 表示平台会自动识别常见控件。',
@@ -65,10 +67,13 @@ export function buildAiCaseDraftSystemPrompt(uiLibrary: UiLibrary = 'auto') {
     '- match 只在 assertText/assertValue 等断言步骤需要时输出，可取 contains、equals、regex。',
     '',
     'selector 生成规则：',
+    '- targetType=select/input/date 时优先按 targetName 匹配 pageContext.fields[].name 或 pageMap.states[].fields[].name。',
+    '- fields 有 locators 时优先原样使用最高置信且唯一的候选 selector。',
     '- 优先使用 pageContext 中已有 locator，能匹配自然语言目标时必须原样写入 selector。',
     '- 页面上下文没有可匹配 locator 时，可以基于自然语言尝试推理 Playwright selector。',
     '- 推理 selector 必须把 targetType 当作主要依据：targetType=button 优先 getByRole("button", { name })；targetType=input 优先 getByLabel(name) 或 getByPlaceholder(name)；targetType=select 优先 getByLabel(name)，但没有 DOM 证明是原生 select 时必须提示可能是自定义下拉框。',
     ...buildUiRules(uiLibrary),
+    '- 只有没有 fields 或 elements 证据时才允许低置信推测 selector，并在 warnings 写明需要人工确认。',
     '- targetType 已给出时，不要把 button/input/select 一律退化成 getByText；只有 targetType 缺失且没有更合适信息时才使用 getByText。',
     '- 推理 selector 时 confidence 必须为 low，并在 warnings 说明 selector 为 AI 推测，需要人工确认。',
     '- 如果步骤明显依赖先点击父菜单后才出现的子菜单，也可以生成低置信推测 selector，但必须在 warnings 说明该元素可能是懒加载或展开后出现。',
@@ -120,6 +125,7 @@ function buildUiRules(uiLibrary: UiLibrary) {
   if (uiLibrary === 'kendo') {
     return [
       '- 当前控件库为 Kendo UI；Kendo 下拉框通常不是原生 select，而是 k-dropdownlist/k-picker/role=combobox。',
+      '- Kendo 选择下拉项仍输出 type=select；不要拆成多个 click，执行层会负责点击下拉控件并点击选项文本。',
       '- Kendo 选择下拉项的真实执行顺序是先点击下拉控件，再点击展开面板中的选项文本，不要默认生成 selectOption()。'
     ];
   }

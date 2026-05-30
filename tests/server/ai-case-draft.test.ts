@@ -1,7 +1,7 @@
 import { chromium } from '@playwright/test';
 import { describe, expect, it } from 'vitest';
 import { parseJsonObject } from '../../server/src/services/ai/ai-client';
-import { buildCaseDraftGroupInput, buildCaseDraftInput, completeDraftSelectors, normalizeAiDraft, normalizeAiDraftGroup } from '../../server/src/services/ai/ai-case-draft';
+import { buildCaseDraftGroupInput, buildCaseDraftInput, completeDraftSelectors, completeDraftSelectorsFromPageMap, normalizeAiDraft, normalizeAiDraftGroup } from '../../server/src/services/ai/ai-case-draft';
 import type { DraftGroupInput } from '../../server/src/services/ai/ai-case-draft';
 import { assertPageAvailable, readPageSnapshot, resolveUnique, runPageAction, waitForPageReady } from '../../server/src/services/ai/page-context';
 import { getChromePath } from '../../server/src/services/playwright/vendor-browser';
@@ -139,6 +139,24 @@ describe('AI 草稿生成服务', () => {
       pageContext: {
         page: { url: '/web/IMQM07', title: '取样规则管理', headings: [] },
         elements: { buttons: [], inputs: [], selects: [], links: [], navigation: [], tables: [] },
+        fields: [
+          {
+            name: '取样类别',
+            type: 'select',
+            ui: 'kendo-dropdownlist',
+            value: '---请选择---',
+            locators: [
+              {
+                selector: "locator('.xr-fc').filter({ hasText: '取样类别' }).locator('.k-dropdownlist')",
+                kind: 'field-container',
+                unique: true,
+                confidence: 'high'
+              }
+            ],
+            source: 'label-container',
+            confidence: 'high'
+          }
+        ],
         warnings: []
       },
       uiLibrary: 'kendo'
@@ -166,10 +184,61 @@ describe('AI 草稿生成服务', () => {
     expect(kendoInput.system).toContain('Kendo');
     expect(kendoInput.system).toContain('先点击下拉控件');
     expect(JSON.parse(kendoInput.user).uiLibrary).toBe('kendo');
+    expect(JSON.parse(kendoInput.user).pageContext.fields[0]).toMatchObject({
+      name: '取样类别',
+      value: '---请选择---'
+    });
     expect(nativeInput.system).toContain('原生控件');
     expect(nativeInput.system).toContain('selectOption');
     expect(nativeInput.system).not.toContain('Kendo');
     expect(JSON.parse(nativeInput.user).uiLibrary).toBe('native');
+  });
+
+  it('pageMap 用户 prompt 包含 fields 且系统提示区分字段名和当前值', () => {
+    const base = createGroupPromptInput();
+    const input = buildCaseDraftGroupInput({
+      ...base,
+      pageMap: {
+        ...base.pageMap,
+        uiLibrary: 'kendo',
+        states: [
+          {
+            ...base.pageMap.states[0],
+            context: {
+              ...base.pageMap.states[0].context,
+              fields: [
+                {
+                  name: '取样类别',
+                  type: 'select',
+                  ui: 'kendo-dropdownlist',
+                  value: '---请选择---',
+                  locators: [
+                    {
+                      selector: "locator('.xr-fc').filter({ hasText: '取样类别' }).locator('.k-dropdownlist')",
+                      kind: 'field-container',
+                      unique: true,
+                      confidence: 'high'
+                    }
+                  ],
+                  source: 'label-container',
+                  confidence: 'high'
+                }
+              ]
+            }
+          }
+        ]
+      }
+    });
+    const user = JSON.parse(input.user);
+
+    expect(user.pageMap.states[0].fields[0]).toMatchObject({
+      name: '取样类别',
+      value: '---请选择---'
+    });
+    expect(user.pageMap.states[0].elements).toBeDefined();
+    expect(input.system).toContain('field.name 是测试人员可见的字段名');
+    expect(input.system).toContain('field.value 是字段当前值');
+    expect(input.system).toContain('不要把 field.value 当字段名');
   });
 
   it('分组 prompt 按页面地图控件库动态补充系统规则', () => {
@@ -350,6 +419,87 @@ describe('AI 草稿生成服务', () => {
       selector: "getByRole('button', { name: '保存' })"
     });
     expect(result.items[0].draft?.steps[0].warnings).toContain('selector 候选来自页面状态：新增弹窗。');
+  });
+
+  it('selector 补全优先用 fields 匹配 targetName 且不受旧 selects 当前值干扰', () => {
+    const result = completeDraftSelectorsFromPageMap(createSelectDraft(), {
+      steps: [createSelectStep()],
+      pageMap: createFieldPageMap('初始页面')
+    });
+
+    expect(result.steps[0].selector).toBe("locator('.xr-fc').filter({ hasText: '取样类别' }).locator('.k-dropdownlist')");
+    expect(result.steps[0].selector).not.toBe("getByLabel('---请选择---')");
+  });
+
+  it('AI 返回 getByText 当前值时 selector 修正后仍优先使用 field locator', () => {
+    const result = completeDraftSelectorsFromPageMap(createSelectDraft("getByText('---请选择---')"), {
+      steps: [createSelectStep()],
+      pageMap: createFieldPageMap('初始页面')
+    });
+
+    expect(result.steps[0].selector).toBe("locator('.xr-fc').filter({ hasText: '取样类别' }).locator('.k-dropdownlist')");
+    expect(result.steps[0].selector).not.toBe("getByLabel('取样类别')");
+    expect(result.steps[0].warnings).toContain('平台按模板目标类型修正 AI 推测 selector，请人工确认。');
+  });
+
+  it('AI 返回 button selector 时 selector 修正后仍优先使用 field locator', () => {
+    const result = completeDraftSelectorsFromPageMap(createSelectDraft("getByRole('button', { name: '---请选择---' })"), {
+      steps: [createSelectStep()],
+      pageMap: createFieldPageMap('初始页面')
+    });
+
+    expect(result.steps[0].selector).toBe("locator('.xr-fc').filter({ hasText: '取样类别' }).locator('.k-dropdownlist')");
+    expect(result.steps[0].selector).not.toBe("getByLabel('取样类别')");
+    expect(result.steps[0].warnings).toContain('平台按模板目标类型修正 AI 推测 selector，请人工确认。');
+  });
+
+  it('使用非初始状态 field 补全 selector 时 warnings 说明来源状态', () => {
+    const result = completeDraftSelectorsFromPageMap(createSelectDraft(), {
+      steps: [createSelectStep()],
+      pageMap: createFieldPageMap('新增弹窗')
+    });
+
+    expect(result.steps[0].selector).toBe("locator('.xr-fc').filter({ hasText: '取样类别' }).locator('.k-dropdownlist')");
+    expect(result.steps[0].warnings).toContain('selector 候选来自页面状态：新增弹窗。');
+  });
+
+  it('fields 未命中时 selector 补全回退旧 elements 逻辑', () => {
+    const result = completeDraftSelectorsFromPageMap(createSelectDraft(), {
+      steps: [createSelectStep()],
+      pageMap: createFieldPageMap('初始页面', '其他字段')
+    });
+
+    expect(result.steps[0].selector).toBe("getByLabel('取样类别')");
+    expect(result.steps[0].warnings).not.toContain('selector 候选来自页面状态：初始页面。');
+  });
+
+  it('disabled field 不用于 select 补全并回退唯一 elements', () => {
+    const result = completeDraftSelectorsFromPageMap(createSelectDraft(), {
+      steps: [createSelectStep()],
+      pageMap: createFieldPageMap('初始页面', '取样类别', { fieldState: 'disabled' })
+    });
+
+    expect(result.steps[0].selector).toBe("getByLabel('取样类别')");
+    expect(result.steps[0].selector).not.toBe("locator('.xr-fc').filter({ hasText: '取样类别' }).locator('.k-dropdownlist')");
+  });
+
+  it('readonly field 不用于 fill 补全并回退唯一 elements', () => {
+    const result = completeDraftSelectorsFromPageMap(createFillDraft(), {
+      steps: [createFillStep()],
+      pageMap: createInputFieldPageMap({ fieldState: 'readonly' })
+    });
+
+    expect(result.steps[0].selector).toBe("getByLabel('用户名称')");
+    expect(result.steps[0].selector).not.toBe("locator('.xr-fc').filter({ hasText: '用户名称' }).locator('input')");
+  });
+
+  it('非唯一 field locator 不压过唯一 elements', () => {
+    const result = completeDraftSelectorsFromPageMap(createSelectDraft(), {
+      steps: [createSelectStep()],
+      pageMap: createFieldPageMap('初始页面', '取样类别', { locatorUnique: false })
+    });
+
+    expect(result.steps[0].selector).toBe("getByLabel('取样类别')");
   });
 
   it('缺少 caseNo 和未知 caseNo 进入组级错误且不生成空编号结果', () => {
@@ -2066,5 +2216,224 @@ function createGroupPromptInput(): DraftGroupInput {
         data: []
       }
     ]
+  };
+}
+
+/**
+ * 创建 Kendo 下拉导入步骤。
+ */
+function createSelectStep() {
+  return {
+    caseNo: 'TC001',
+    stepNo: 1,
+    actionType: 'select' as const,
+    targetType: 'select' as const,
+    targetName: '取样类别',
+    inputValue: '采购',
+    actionText: '选择取样类别',
+    targetText: '取样类别下拉框',
+    dataKeys: [],
+    note: ''
+  };
+}
+
+/**
+ * 创建缺少 selector 的下拉草稿。
+ */
+function createSelectDraft(selector?: string) {
+  return {
+    name: '选择取样类别',
+    startPath: '/web/IMQM07',
+    steps: [
+      {
+        id: 'ai-1',
+        type: 'select' as const,
+        selector,
+        value: '采购',
+        text: '选择取样类别',
+        confidence: 'high' as const,
+        warnings: []
+      }
+    ],
+    confidence: 'high' as const,
+    warnings: [],
+    missingInfo: []
+  };
+}
+
+/**
+ * 创建输入框导入步骤。
+ */
+function createFillStep() {
+  return {
+    caseNo: 'TC001',
+    stepNo: 1,
+    actionType: 'fill' as const,
+    targetType: 'input' as const,
+    targetName: '用户名称',
+    inputValue: '张三',
+    actionText: '填写用户名称',
+    targetText: '用户名称输入框',
+    dataKeys: [],
+    note: ''
+  };
+}
+
+/**
+ * 创建缺少 selector 的输入草稿。
+ */
+function createFillDraft() {
+  return {
+    name: '填写用户名称',
+    startPath: '/user/list',
+    steps: [
+      {
+        id: 'ai-1',
+        type: 'fill' as const,
+        value: '张三',
+        text: '填写用户名称',
+        confidence: 'high' as const,
+        warnings: []
+      }
+    ],
+    confidence: 'high' as const,
+    warnings: [],
+    missingInfo: []
+  };
+}
+
+/**
+ * 创建包含 fields 和旧 elements 的页面地图。
+ */
+function createFieldPageMap(
+  stateName: string,
+  fieldName = '取样类别',
+  options: { fieldState?: 'enabled' | 'disabled' | 'readonly'; locatorUnique?: boolean } = {}
+): DraftGroupInput['pageMap'] {
+  const fieldContext = {
+    page: { url: '/web/IMQM07', title: stateName, headings: [] },
+    elements: {
+      buttons: [],
+      inputs: [],
+      selects: [
+        {
+          text: '---请选择---',
+          label: '取样类别',
+          locator: "getByLabel('取样类别')",
+          unique: true
+        }
+      ],
+      links: [],
+      navigation: [],
+      tables: []
+    },
+    fields: [
+      {
+        name: fieldName,
+        type: 'select' as const,
+        ui: 'kendo-dropdownlist',
+        value: '---请选择---',
+        locators: [
+          {
+            selector: "locator('.xr-fc').filter({ hasText: '取样类别' }).locator('.k-dropdownlist')",
+            kind: 'field-container' as const,
+            unique: options.locatorUnique ?? true,
+            confidence: 'high' as const,
+            reason: '字段名来自同一字段容器内的 label'
+          }
+        ],
+        state: options.fieldState,
+        source: 'label-container' as const,
+        confidence: 'high' as const
+      }
+    ],
+    warnings: []
+  };
+
+  return {
+    mapId: 'pm-field',
+    targetUrl: '/web/IMQM07',
+    uiLibrary: 'kendo',
+    states: stateName === '初始页面' ? [
+      {
+        stateId: 'state-initial',
+        name: '初始页面',
+        context: fieldContext
+      }
+    ] : [
+      {
+        stateId: 'state-initial',
+        name: '初始页面',
+        context: {
+          page: { url: '/web/IMQM07', title: '取样规则管理', headings: [] },
+          elements: { buttons: [], inputs: [], selects: [], links: [], navigation: [], tables: [] },
+          fields: [],
+          warnings: []
+        }
+      },
+      {
+        stateId: 'state-dialog',
+        name: stateName,
+        actionName: '新增',
+        context: fieldContext
+      }
+    ],
+    warnings: []
+  };
+}
+
+/**
+ * 创建包含输入字段和旧 elements 的页面地图。
+ */
+function createInputFieldPageMap(options: { fieldState?: 'enabled' | 'disabled' | 'readonly'; locatorUnique?: boolean } = {}): DraftGroupInput['pageMap'] {
+  return {
+    mapId: 'pm-input-field',
+    targetUrl: '/user/list',
+    uiLibrary: 'kendo',
+    states: [
+      {
+        stateId: 'state-initial',
+        name: '初始页面',
+        context: {
+          page: { url: '/user/list', title: '用户管理', headings: [] },
+          elements: {
+            buttons: [],
+            inputs: [
+              {
+                label: '用户名称',
+                locator: "getByLabel('用户名称')",
+                unique: true
+              }
+            ],
+            selects: [],
+            links: [],
+            navigation: [],
+            tables: []
+          },
+          fields: [
+            {
+              name: '用户名称',
+              type: 'input',
+              ui: 'kendo-textbox',
+              value: '',
+              locators: [
+                {
+                  selector: "locator('.xr-fc').filter({ hasText: '用户名称' }).locator('input')",
+                  kind: 'field-container',
+                  unique: options.locatorUnique ?? true,
+                  confidence: 'high',
+                  reason: '字段名来自同一字段容器内的 label'
+                }
+              ],
+              state: options.fieldState,
+              source: 'label-container',
+              confidence: 'high'
+            }
+          ],
+          warnings: []
+        }
+      }
+    ],
+    warnings: []
   };
 }
