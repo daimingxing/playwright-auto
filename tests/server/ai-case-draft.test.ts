@@ -1676,6 +1676,246 @@ describe('AI 草稿生成服务', () => {
     await browser.close();
   }, 15000);
 
+  it('Kendo 模式从字段容器采集下拉字段语义', async () => {
+    const browser = await chromium.launch({ executablePath: getChromePath() });
+    const page = await browser.newPage();
+
+    await page.setContent(`
+      <div class="i-col i-col-12 i-select xr-fc">
+        <div class="i-row">
+          <div class="i-col i-col-8 i-input-inner-left">
+            <label><span class="i-input-required">*</span><span>取样类别</span></label>
+          </div>
+          <div class="i-col i-col-16" style="display: flex;">
+            <span class="k-picker k-dropdownlist k-picker-solid k-picker-md k-rounded-md" role="combobox" aria-controls="edit-0-sampleType_listbox">
+              <span class="k-input-inner"><span class="k-input-value-text">---请选择---</span></span>
+              <button type="button" aria-label="select"></button>
+              <input id="edit-0-sampleType" name="edit-0-sampleType" required value="" data-role="dropdownlist" style="display: none;">
+            </span>
+          </div>
+        </div>
+      </div>
+    `);
+
+    const context = await readPageSnapshot(page, [], 'kendo');
+    const field = context.fields?.[0];
+
+    expect(field).toMatchObject({
+      name: '取样类别',
+      type: 'select',
+      ui: 'kendo-dropdownlist',
+      required: true,
+      value: '---请选择---',
+      source: 'label-container',
+      confidence: 'high',
+      attrs: {
+        inputId: 'edit-0-sampleType',
+        inputName: 'edit-0-sampleType',
+        ariaControls: 'edit-0-sampleType_listbox',
+        dataRole: 'dropdownlist'
+      }
+    });
+    expect(field?.locators[0]).toMatchObject({
+      kind: 'field-container',
+      unique: true,
+      confidence: 'high'
+    });
+    expect(field?.locators[0].selector).not.toContain("getByLabel('---请选择---')");
+    expect(await page.locator(field?.locators[0].selector ?? 'body').count()).toBe(1);
+    await browser.close();
+  }, 15000);
+
+  it('auto 模式检测到 Kendo 特征时采集字段语义', async () => {
+    const browser = await chromium.launch({ executablePath: getChromePath() });
+    const page = await browser.newPage();
+
+    await page.setContent(`
+      <div class="xr-fc">
+        <label><span class="i-input-required">*</span><span>取样类别</span></label>
+        <span class="k-picker k-dropdownlist" role="combobox">
+          <span class="k-input-value-text">---请选择---</span>
+          <input id="edit-0-sampleType" name="edit-0-sampleType" required value="" data-role="dropdownlist" style="display: none;">
+        </span>
+      </div>
+    `);
+
+    const context = await readPageSnapshot(page, [], 'auto');
+
+    expect(context.fields?.map((field) => field.name)).toContain('取样类别');
+    await browser.close();
+  }, 15000);
+
+  it('native 模式不主动采集 Kendo 字段语义', async () => {
+    const browser = await chromium.launch({ executablePath: getChromePath() });
+    const page = await browser.newPage();
+
+    await page.setContent(`
+      <div class="xr-fc">
+        <label><span class="i-input-required">*</span><span>取样类别</span></label>
+        <span class="k-picker k-dropdownlist" role="combobox">
+          <span class="k-input-value-text">---请选择---</span>
+          <input id="edit-0-sampleType" name="edit-0-sampleType" required value="" data-role="dropdownlist" style="display: none;">
+        </span>
+      </div>
+    `);
+
+    const context = await readPageSnapshot(page, [], 'native');
+
+    expect(context.fields ?? []).toEqual([]);
+    await browser.close();
+  }, 15000);
+
+  it('Kendo 字段只有特殊 id 时生成可执行属性定位器', async () => {
+    const browser = await chromium.launch({ executablePath: getChromePath() });
+    const page = await browser.newPage();
+
+    await page.setContent(`
+      <div class="xr-fc">
+        <label for="123:sample.type"><span>取样类别</span></label>
+        <span class="k-picker k-dropdownlist" role="combobox">
+          <span class="k-input-value-text">---请选择---</span>
+          <input id="123:sample.type" required value="" data-role="dropdownlist" style="display: none;">
+        </span>
+      </div>
+    `);
+
+    const context = await readPageSnapshot(page, [], 'kendo');
+    const attrLocator = context.fields?.[0].locators.find((locator) => locator.kind === 'attr');
+
+    expect(attrLocator?.selector).toBe('input[id="123:sample.type"]');
+    expect(await page.locator(attrLocator?.selector ?? 'body').count()).toBe(1);
+    await browser.close();
+  }, 15000);
+
+  it('只有 aria-label 的 Kendo 字段不会把空字段容器定位器排在首位', async () => {
+    const browser = await chromium.launch({ executablePath: getChromePath() });
+    const page = await browser.newPage();
+
+    await page.setContent(`
+      <div class="form-row">
+        <span class="k-picker k-dropdownlist" role="combobox" aria-label="取样类别">
+          <span class="k-input-value-text">---请选择---</span>
+          <input id="sampleType" value="" data-role="dropdownlist" style="display: none;">
+        </span>
+      </div>
+    `);
+
+    const context = await readPageSnapshot(page, [], 'kendo');
+    const field = context.fields?.[0];
+
+    expect(field).toMatchObject({
+      name: '取样类别',
+      source: 'aria'
+    });
+    expect(field?.locators[0].kind).not.toBe('field-container');
+    expect(await page.locator(field?.locators[0].selector ?? 'body').count()).toBeGreaterThan(0);
+    await browser.close();
+  }, 15000);
+
+  it('同一宽表单行内的 Kendo 字段不会串用其他字段标签和必填状态', async () => {
+    const browser = await chromium.launch({ executablePath: getChromePath() });
+    const page = await browser.newPage();
+
+    await page.setContent(`
+      <div class="form-row">
+        <label><span class="i-input-required">*</span><span>供应商</span></label>
+        <span class="k-picker k-dropdownlist" role="combobox">
+          <span class="k-input-value-text">请选择供应商</span>
+          <input id="supplier" required value="" data-role="dropdownlist" style="display: none;">
+        </span>
+        <label><span>取样类别</span></label>
+        <span class="k-picker k-dropdownlist" role="combobox">
+          <span class="k-input-value-text">---请选择---</span>
+          <input id="sampleType" value="" data-role="dropdownlist" style="display: none;">
+        </span>
+      </div>
+    `);
+
+    const context = await readPageSnapshot(page, [], 'kendo');
+    const field = context.fields?.find((item) => item.attrs?.inputId === 'sampleType');
+
+    expect(field).toMatchObject({
+      name: '取样类别',
+      required: false,
+      value: '---请选择---'
+    });
+    await browser.close();
+  }, 15000);
+
+  it('Kendo 字段从外层容器和 fieldset 识别 disabled 与 readonly 状态', async () => {
+    const browser = await chromium.launch({ executablePath: getChromePath() });
+    const page = await browser.newPage();
+
+    await page.setContent(`
+      <fieldset disabled>
+        <div class="xr-fc">
+          <label><span>取样类别</span></label>
+          <span class="k-picker k-dropdownlist" role="combobox">
+            <span class="k-input-value-text">---请选择---</span>
+            <input id="sampleType" value="" data-role="dropdownlist" style="display: none;">
+          </span>
+        </div>
+      </fieldset>
+      <div class="xr-fc" aria-readonly="true">
+        <label><span>取样日期</span></label>
+        <span class="k-picker k-datepicker" role="combobox">
+          <span class="k-input-value-text">2026-05-30</span>
+          <input id="sampleDate" value="2026-05-30" data-role="datepicker" style="display: none;">
+        </span>
+      </div>
+    `);
+
+    const context = await readPageSnapshot(page, [], 'kendo');
+
+    expect(context.fields?.find((field) => field.name === '取样类别')?.state).toBe('disabled');
+    expect(context.fields?.find((field) => field.name === '取样日期')?.state).toBe('readonly');
+    await browser.close();
+  }, 15000);
+
+  it('Kendo 字段从 class 和 aria 识别 disabled 与 readonly 状态', async () => {
+    const browser = await chromium.launch({ executablePath: getChromePath() });
+    const page = await browser.newPage();
+
+    await page.setContent(`
+      <div class="xr-fc">
+        <label><span>禁用类别</span></label>
+        <span class="k-picker k-dropdownlist k-disabled" role="combobox">
+          <span class="k-input-value-text">---请选择---</span>
+          <input id="disabledKind" value="" data-role="dropdownlist" style="display: none;">
+        </span>
+      </div>
+      <div class="xr-fc">
+        <label><span>禁用来源</span></label>
+        <span class="k-picker k-dropdownlist" role="combobox" aria-disabled="true">
+          <span class="k-input-value-text">---请选择---</span>
+          <input id="disabledSource" value="" data-role="dropdownlist" style="display: none;">
+        </span>
+      </div>
+      <div class="xr-fc">
+        <label><span>只读类别</span></label>
+        <span class="k-picker k-dropdownlist k-readonly" role="combobox">
+          <span class="k-input-value-text">---请选择---</span>
+          <input id="readonlyKind" value="" data-role="dropdownlist" style="display: none;">
+        </span>
+      </div>
+      <div class="xr-fc k-state-readonly">
+        <label><span>只读来源</span></label>
+        <span class="k-picker k-dropdownlist" role="combobox">
+          <span class="k-input-value-text">---请选择---</span>
+          <input id="readonlySource" value="" data-role="dropdownlist" style="display: none;">
+        </span>
+      </div>
+    `);
+
+    const context = await readPageSnapshot(page, [], 'kendo');
+
+    expect(context.fields?.find((field) => field.name === '禁用类别')?.state).toBe('disabled');
+    expect(context.fields?.find((field) => field.name === '禁用来源')?.state).toBe('disabled');
+    expect(context.fields?.find((field) => field.name === '只读类别')?.state).toBe('readonly');
+    expect(context.fields?.find((field) => field.name === '只读来源')?.state).toBe('readonly');
+    await browser.close();
+  }, 15000);
+
   it('执行 Kendo 下拉选择时点击控件本体后再点击选项', async () => {
     const browser = await chromium.launch({ executablePath: getChromePath() });
     const page = await browser.newPage();

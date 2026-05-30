@@ -1,5 +1,5 @@
 import { chromium, type Locator, type Page } from '@playwright/test';
-import type { ImportCaseSource, ImportDataSource, ImportStepSource, PageAction, UiLibrary } from '../../../../shared/types';
+import type { AiLevel, ImportCaseSource, ImportDataSource, ImportStepSource, PageAction, TargetType, UiLibrary } from '../../../../shared/types';
 import { buildStartUrl } from '../../../../shared/url';
 import { getProject } from '../../lib/project-store';
 import { getBrowserPath } from '../playwright/browser-path';
@@ -19,6 +19,34 @@ export interface TableElement {
   nearbyText: string;
 }
 
+export interface PageLocator {
+  selector: string;
+  kind: 'role' | 'label' | 'field-container' | 'attr' | 'text';
+  unique: boolean;
+  confidence: AiLevel;
+  reason?: string;
+}
+
+export interface PageOption {
+  text: string;
+  value?: string;
+  locator?: string;
+}
+
+export interface PageField {
+  name: string;
+  type: TargetType;
+  ui?: string;
+  required?: boolean;
+  value?: string;
+  state?: 'enabled' | 'disabled' | 'readonly';
+  locators: PageLocator[];
+  attrs?: Record<string, string>;
+  options?: PageOption[];
+  source: 'label-container' | 'native-label' | 'aria' | 'heuristic';
+  confidence: AiLevel;
+}
+
 export interface PageContext {
   page: {
     url: string;
@@ -33,6 +61,7 @@ export interface PageContext {
     navigation: PageElement[];
     tables: TableElement[];
   };
+  fields?: PageField[];
   aria?: string;
   uiLibrary?: UiLibrary;
   warnings: string[];
@@ -471,6 +500,8 @@ function getActionLocator(page: Page, action: PageAction) {
  * 读取当前页面的压缩上下文快照。
  */
 export async function readPageSnapshot(page: Page, warnings: string[] = [], uiLibrary: UiLibrary = 'auto'): Promise<PageContext> {
+  const shouldReadKendoFields = await shouldCollectKendoFields(page, uiLibrary);
+
   return {
     page: {
       url: page.url(),
@@ -485,6 +516,7 @@ export async function readPageSnapshot(page: Page, warnings: string[] = [], uiLi
       navigation: await readNavigation(page),
       tables: await readTables(page)
     },
+    fields: shouldReadKendoFields ? await readKendoFields(page) : [],
     uiLibrary,
     warnings
   };
@@ -612,6 +644,419 @@ async function readKendoSelects(page: Page): Promise<PageElement[]> {
   }
 
   return resolveUnique(values, counts);
+}
+
+/**
+ * 判断当前快照是否需要执行 Kendo 字段语义采集。
+ */
+async function shouldCollectKendoFields(page: Page, uiLibrary: UiLibrary) {
+  if (uiLibrary === 'native') {
+    return false;
+  }
+
+  if (uiLibrary === 'kendo') {
+    return true;
+  }
+
+  return (await page.locator('.k-dropdownlist,.k-combobox,.k-picker,.k-multiselect,.k-dropdowntree,.k-numerictextbox,.k-datepicker,.k-datetimepicker,.k-timepicker,[data-role="dropdownlist"],[data-role="combobox"],[data-role="datepicker"],[data-role="numerictextbox"]').count()) > 0;
+}
+
+/**
+ * 读取 Kendo 控件对应的表单字段语义。
+ */
+async function readKendoFields(page: Page): Promise<PageField[]> {
+  const fields: PageField[] = [];
+  const locator = page.locator('.k-dropdownlist,.k-combobox,.k-picker[role="combobox"],.k-multiselect,.k-dropdowntree,.k-numerictextbox,.k-datepicker,.k-datetimepicker,.k-timepicker,[data-role="dropdownlist"],[data-role="combobox"]');
+  const count = Math.min(await locator.count(), maxItems);
+
+  for (let index = 0; index < count; index += 1) {
+    const item = locator.nth(index);
+
+    if (!(await item.isVisible().catch(() => false))) {
+      continue;
+    }
+
+    const info = await item.evaluate((element) => {
+      const control = findKendoControl(element);
+      const input = findKendoInput(control);
+      const field = findFieldInfo(control, input);
+      const container = field.container;
+      const label = field.label;
+      const ariaText = cleanLabel(control.getAttribute('aria-label') || control.getAttribute('title') || '');
+      const fallbackName = cleanLabel(input?.getAttribute('name') || input?.getAttribute('id') || '');
+      const source = label ? 'label-container' : ariaText ? 'aria' : 'heuristic';
+      const name = label || ariaText || fallbackName;
+      const value = readKendoValue(control, input);
+      const attrs = readKendoAttrs(control, input);
+      const className = control.getAttribute('class') || '';
+      const dataRole = input?.getAttribute('data-role') || control.getAttribute('data-role') || '';
+      const disabled = isDisabled(control, input, container);
+      const readonly = isReadonly(control, input, container);
+
+      return {
+        name,
+        value,
+        source,
+        ui: getKendoUi(className, dataRole),
+        type: getKendoType(className, dataRole),
+        required: Boolean(input?.required || field.required),
+        state: disabled ? 'disabled' : readonly ? 'readonly' : 'enabled',
+        attrs,
+        containerTag: container?.tagName.toLowerCase() || '',
+        containerClass: container?.getAttribute('class') || '',
+        hasContainerLabel: Boolean(label && container),
+        ariaLabel: ariaText,
+        inputName: attrs.inputName || '',
+        inputId: attrs.inputId || ''
+      };
+
+      /**
+       * 查找可交互的 Kendo 控件包装节点。
+       */
+      function findKendoControl(target: Element) {
+        return target.matches('.k-dropdownlist,.k-combobox,.k-picker,.k-multiselect,.k-dropdowntree,.k-numerictextbox,.k-datepicker,.k-datetimepicker,.k-timepicker')
+          ? target
+          : target.closest('.k-dropdownlist,.k-combobox,.k-picker,.k-multiselect,.k-dropdowntree,.k-numerictextbox,.k-datepicker,.k-datetimepicker,.k-timepicker') ?? target;
+      }
+
+      /**
+       * 查找 Kendo 控件内承载 id/name/data-role 的输入节点。
+       */
+      function findKendoInput(controlElement: Element) {
+        if (controlElement.tagName.toLowerCase() === 'input') {
+          return controlElement as HTMLInputElement;
+        }
+
+        return controlElement.querySelector('input,select,textarea') as HTMLInputElement | null;
+      }
+
+      /**
+       * 清理字段标签文本，避免必填星号和冒号污染字段名。
+       */
+      function cleanLabel(value: string) {
+        return value.replace(/\*/g, '').replace(/\s+/g, ' ').replace(/[:：]$/, '').trim();
+      }
+
+      /**
+       * 查找当前控件真实关联的字段信息，避免宽表单行串用其他字段。
+       */
+      function findFieldInfo(controlElement: Element, inputElement: HTMLInputElement | null) {
+        const id = inputElement?.getAttribute('id') || '';
+        const exactLabel = id ? document.querySelector(`label[for="${cssEscape(id)}"]`) : null;
+
+        if (exactLabel) {
+          return {
+            label: cleanLabel(exactLabel.textContent ?? ''),
+            required: isRequiredLabel(exactLabel),
+            container: exactLabel.closest('.xr-fc,.i-select,.i-input,.k-form-field,.el-form-item,.ant-form-item')
+          };
+        }
+
+        const scoped = controlElement.closest('.xr-fc,.i-select,.i-input,.k-form-field,.el-form-item,.ant-form-item');
+        const scopedLabel = scoped?.querySelector('label,.field-label,.label,.el-form-item__label,.ant-form-item-label');
+
+        if (scopedLabel) {
+          return {
+            label: cleanLabel(scopedLabel.textContent ?? ''),
+            required: isRequiredLabel(scopedLabel),
+            container: scoped
+          };
+        }
+
+        const siblingLabel = findSiblingLabel(controlElement);
+
+        if (siblingLabel) {
+          const parent = siblingLabel.parentElement;
+
+          return {
+            label: cleanLabel(siblingLabel.textContent ?? ''),
+            required: isRequiredLabel(siblingLabel),
+            // form-row/field-row 可能包含多个字段，只用于识别字段名，不作为字段容器定位依据。
+            container: parent?.matches('.form-row,.field-row') ? null : parent
+          };
+        }
+
+        return {
+          label: '',
+          required: false,
+          container: null
+        };
+      }
+
+      /**
+       * 查找当前控件前序同级标签，不跨越前一个 Kendo 控件。
+       */
+      function findSiblingLabel(controlElement: Element) {
+        let node = controlElement.previousElementSibling;
+
+        while (node) {
+          if (isKendoControl(node)) {
+            return null;
+          }
+
+          if (node.matches('label,.field-label,.label,.el-form-item__label,.ant-form-item-label')) {
+            return node;
+          }
+
+          const nested = node.querySelector('label,.field-label,.label,.el-form-item__label,.ant-form-item-label');
+
+          if (nested) {
+            return nested;
+          }
+
+          node = node.previousElementSibling;
+        }
+
+        return null;
+      }
+
+      /**
+       * 判断节点是否是 Kendo 控件边界。
+       */
+      function isKendoControl(node: Element) {
+        return node.matches('.k-dropdownlist,.k-combobox,.k-picker,.k-multiselect,.k-dropdowntree,.k-numerictextbox,.k-datepicker,.k-datetimepicker,.k-timepicker,[data-role]');
+      }
+
+      /**
+       * 判断当前字段标签是否表达必填。
+       */
+      function isRequiredLabel(labelElement: Element) {
+        return Boolean(labelElement.querySelector('.i-input-required,[required]') || labelElement.textContent?.includes('*'));
+      }
+
+      /**
+       * 转义 label[for] 属性选择器中的特殊字符。
+       */
+      function cssEscape(value: string) {
+        return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+      }
+
+      /**
+       * 读取 Kendo 当前显示值，隐藏 input 的空 value 不覆盖可见文本。
+       */
+      function readKendoValue(controlElement: Element, inputElement: HTMLInputElement | null) {
+        const text = controlElement.querySelector('.k-input-value-text,.k-input-inner,.k-input')?.textContent?.trim() || '';
+
+        return text || inputElement?.value || '';
+      }
+
+      /**
+       * 读取 Kendo 控件和隐藏 input 的关键属性。
+       */
+      function readKendoAttrs(controlElement: Element, inputElement: HTMLInputElement | null) {
+        const values: Record<string, string> = {};
+        const attrPairs: Array<[string, string | null | undefined]> = [
+          ['inputId', inputElement?.getAttribute('id')],
+          ['inputName', inputElement?.getAttribute('name')],
+          ['ariaControls', controlElement.getAttribute('aria-controls')],
+          ['ariaExpanded', controlElement.getAttribute('aria-expanded')],
+          ['ariaDisabled', controlElement.getAttribute('aria-disabled')],
+          ['ariaReadonly', controlElement.getAttribute('aria-readonly')],
+          ['dataRole', inputElement?.getAttribute('data-role') || controlElement.getAttribute('data-role')]
+        ];
+
+        for (const [key, value] of attrPairs) {
+          if (value) {
+            values[key] = value;
+          }
+        }
+
+        return values;
+      }
+
+      /**
+       * 判断控件是否处于禁用状态。
+       */
+      function isDisabled(controlElement: Element, inputElement: HTMLInputElement | null, containerElement: Element | null) {
+        const disabledRoot = controlElement.closest('fieldset[disabled],.k-disabled,.k-state-disabled,[aria-disabled="true"]') || containerElement?.closest('fieldset[disabled],.k-disabled,.k-state-disabled,[aria-disabled="true"]');
+
+        return Boolean(disabledRoot || inputElement?.disabled || controlElement.classList.contains('k-disabled') || controlElement.classList.contains('k-state-disabled') || controlElement.getAttribute('aria-disabled') === 'true' || containerElement?.getAttribute('aria-disabled') === 'true');
+      }
+
+      /**
+       * 判断控件是否处于只读状态。
+       */
+      function isReadonly(controlElement: Element, inputElement: HTMLInputElement | null, containerElement: Element | null) {
+        const readonlyRoot = controlElement.closest('[aria-readonly="true"],.k-readonly,.k-state-readonly') || containerElement?.closest('[aria-readonly="true"],.k-readonly,.k-state-readonly');
+
+        return Boolean(readonlyRoot || inputElement?.readOnly || controlElement.classList.contains('k-readonly') || controlElement.classList.contains('k-state-readonly') || controlElement.getAttribute('aria-readonly') === 'true' || containerElement?.getAttribute('aria-readonly') === 'true' || containerElement?.classList.contains('k-readonly') || containerElement?.classList.contains('k-state-readonly'));
+      }
+
+      /**
+       * 根据 Kendo class 和 data-role 推断 UI 控件类型。
+       */
+      function getKendoUi(classNameValue: string, dataRoleValue: string) {
+        if (classNameValue.includes('k-combobox') || dataRoleValue === 'combobox') {
+          return 'kendo-combobox';
+        }
+
+        if (classNameValue.includes('k-multiselect')) {
+          return 'kendo-multiselect';
+        }
+
+        if (classNameValue.includes('k-dropdowntree')) {
+          return 'kendo-dropdowntree';
+        }
+
+        if (classNameValue.includes('k-datepicker') || classNameValue.includes('k-datetimepicker') || classNameValue.includes('k-timepicker')) {
+          return 'kendo-datepicker';
+        }
+
+        if (classNameValue.includes('k-numerictextbox')) {
+          return 'kendo-numerictextbox';
+        }
+
+        return 'kendo-dropdownlist';
+      }
+
+      /**
+       * 将 Kendo 控件类型映射到导入目标类型。
+       */
+      function getKendoType(classNameValue: string, dataRoleValue: string) {
+        if (classNameValue.includes('k-datepicker') || classNameValue.includes('k-datetimepicker') || classNameValue.includes('k-timepicker')) {
+          return 'date';
+        }
+
+        if (classNameValue.includes('k-dropdownlist') || classNameValue.includes('k-combobox') || classNameValue.includes('k-multiselect') || classNameValue.includes('k-dropdowntree') || dataRoleValue === 'dropdownlist' || dataRoleValue === 'combobox') {
+          return 'select';
+        }
+
+        return 'input';
+      }
+    });
+    const name = normalizeText(info.name);
+
+    if (!name) {
+      continue;
+    }
+
+    const locators: PageLocator[] = [];
+
+    if (info.source === 'label-container' && info.hasContainerLabel) {
+      const selector = buildKendoFieldSelector(info);
+
+      locators.push({
+        selector,
+        kind: 'field-container',
+        unique: await page.locator(selector).count().then((matchCount) => matchCount === 1).catch(() => false),
+        confidence: 'high',
+        reason: '字段名来自同一字段容器内的 label'
+      });
+    }
+
+    const ariaSelector = buildKendoAriaSelector(info);
+
+    if (ariaSelector) {
+      locators.push({
+        selector: ariaSelector,
+        kind: 'label',
+        unique: await page.locator(ariaSelector).count().then((matchCount) => matchCount === 1).catch(() => false),
+        confidence: 'medium',
+        reason: '字段名来自控件 aria-label'
+      });
+    }
+
+    const attrSelector = buildKendoAttrSelector(info);
+
+    if (attrSelector) {
+      locators.push({
+        selector: attrSelector,
+        kind: 'attr',
+        unique: await page.locator(attrSelector).count().then((matchCount) => matchCount === 1).catch(() => false),
+        confidence: 'medium',
+        reason: '隐藏输入提供了 id 或 name 属性'
+      });
+    }
+
+    fields.push({
+      name,
+      type: info.type as TargetType,
+      ui: info.ui,
+      required: info.required,
+      value: normalizeText(info.value) || undefined,
+      state: info.state as PageField['state'],
+      locators,
+      attrs: info.attrs,
+      options: [],
+      source: info.source as PageField['source'],
+      confidence: info.source === 'label-container' ? 'high' : 'medium'
+    });
+  }
+
+  return fields;
+}
+
+/**
+ * 构造可由 page.locator 执行的 Kendo 字段容器定位器。
+ */
+function buildKendoFieldSelector(info: { name: string; containerTag: string; containerClass: string }) {
+  const tag = info.containerTag || '*';
+  const classPredicate = buildClassPredicate(info.containerClass);
+  const controlPredicate = 'self::*[@role="combobox" or contains(concat(" ", normalize-space(@class), " "), " k-dropdownlist ") or contains(concat(" ", normalize-space(@class), " "), " k-combobox ") or contains(concat(" ", normalize-space(@class), " "), " k-picker ") or contains(concat(" ", normalize-space(@class), " "), " k-multiselect ") or contains(concat(" ", normalize-space(@class), " "), " k-dropdowntree ") or contains(concat(" ", normalize-space(@class), " "), " k-numerictextbox ") or contains(concat(" ", normalize-space(@class), " "), " k-datepicker ") or contains(concat(" ", normalize-space(@class), " "), " k-datetimepicker ") or contains(concat(" ", normalize-space(@class), " "), " k-timepicker ")]';
+
+  // 字段名只用于限制容器，不作为控件可访问名，避免把当前值误当成 label。
+  return `xpath=//${tag}[${classPredicate}][.//*[self::label or contains(concat(" ", normalize-space(@class), " "), " field-label ") or contains(concat(" ", normalize-space(@class), " "), " label ")][contains(normalize-space(.), ${xpathLiteral(info.name)})]]//*[${controlPredicate}][1]`;
+}
+
+/**
+ * 构造 aria-label 控件定位器，避免 aria 来源使用字段容器 XPath。
+ */
+function buildKendoAriaSelector(info: { ariaLabel: string }) {
+  if (!info.ariaLabel) {
+    return undefined;
+  }
+
+  return `[aria-label=${cssString(info.ariaLabel)}]`;
+}
+
+/**
+ * 构造隐藏 input 属性定位器，作为字段容器定位失败时的候选。
+ */
+function buildKendoAttrSelector(info: { inputName: string; inputId: string }) {
+  if (info.inputName) {
+    return `input[name=${cssString(info.inputName)}]`;
+  }
+
+  if (info.inputId) {
+    return `input[id=${cssString(info.inputId)}]`;
+  }
+
+  return undefined;
+}
+
+/**
+ * 根据字段容器 class 构造 XPath class 条件。
+ */
+function buildClassPredicate(className: string) {
+  const classes = className.split(/\s+/).filter((item) => ['xr-fc', 'i-select', 'i-input', 'k-form-field', 'el-form-item', 'ant-form-item', 'form-row', 'field-row'].includes(item));
+
+  if (!classes.length) {
+    return 'true()';
+  }
+
+  return classes.map((item) => `contains(concat(" ", normalize-space(@class), " "), " ${item} ")`).join(' and ');
+}
+
+/**
+ * 转义 XPath 字符串字面量。
+ */
+function xpathLiteral(value: string) {
+  if (!value.includes("'")) {
+    return `'${value}'`;
+  }
+
+  if (!value.includes('"')) {
+    return `"${value}"`;
+  }
+
+  return `concat(${value.split("'").map((part) => `'${part}'`).join(', "\'", ')})`;
+}
+
+/**
+ * 转义 CSS 属性选择器字符串。
+ */
+function cssString(value: string) {
+  return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 }
 
 /**
