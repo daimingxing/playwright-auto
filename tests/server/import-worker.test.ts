@@ -2,8 +2,9 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createImportJob, listImportItems } from '../../server/src/lib/import-store';
+import { createImportJob, listImportItems, updateImportItem } from '../../server/src/lib/import-store';
 import { addProjectEnv, createProject } from '../../server/src/lib/project-store';
+import { readPageMap } from '../../server/src/lib/page-map-store';
 import { setPageMapRunner } from '../../server/src/services/ai/page-context';
 import { enqueueImportJob, processImportItem } from '../../server/src/services/import/import-worker';
 import type { AiDebugInfo, AiCaseDraft, ImportCaseSource, ImportStepSource } from '../../shared/types';
@@ -303,10 +304,55 @@ describe('导入 worker 页面地图分组', () => {
 
     expect(collectCount).toBe(2);
     expect(retried?.status).toBe('pendingReview');
-    expect(retried?.pageMapId).toBeUndefined();
+    expect(retried?.pageMapId).toBe(failed[0].groupId);
     expect(sameGroupFailed?.status).toBe('failed');
     expect(sameGroupFailed?.pageMapId).toBeUndefined();
     expect(success?.status).toBe('pendingReview');
+  });
+
+  it('刷新页面地图后重试失败导入项会绑定并复用新页面地图', async () => {
+    await createProject({ name: 'CRM 系统', key: 'crm', baseUrl: 'https://crm.test.local' });
+    failUrl = '/missing';
+    const job = await createImportJob('crm', {
+      fileName: 'cases.xlsx',
+      fileHash: 'hash-reuse-refreshed-map',
+      envKey: 'default',
+      cases: [createCase('TC001', '/missing')]
+    });
+
+    await enqueueImportJob('crm', job.importId);
+    const failedItems = await waitItems('crm', job.importId, ['pendingReview', 'failed']);
+    const failed = failedItems[0];
+    const oldMapId = failed.groupId;
+
+    expect(oldMapId).toMatch(/^pm-/);
+    await expect(readPageMap('crm', oldMapId!)).resolves.toMatchObject({ status: 'failed' });
+
+    failUrl = '';
+    await updateImportItem('crm', job.importId, failed.itemId, {
+      pageMapId: oldMapId
+    });
+    await processImportItem('crm', job.importId, failed.itemId);
+    const firstRetryItems = await listImportItems('crm', job.importId);
+    const firstRetry = firstRetryItems[0];
+    const mapId = firstRetry.pageMapId;
+    const refreshedMap = await readPageMap('crm', oldMapId!);
+    const refreshCount = collectCount;
+
+    await updateImportItem('crm', job.importId, firstRetry.itemId, {
+      status: 'failed',
+      errorMessage: '模拟草稿生成失败',
+      pageMapId: undefined
+    });
+    await processImportItem('crm', job.importId, firstRetry.itemId);
+    const secondRetryItems = await listImportItems('crm', job.importId);
+    const secondRetry = secondRetryItems[0];
+
+    expect(collectCount).toBe(refreshCount);
+    expect(refreshedMap.status).toBe('ready');
+    expect(mapId).toBe(oldMapId);
+    expect(secondRetry.status).toBe('pendingReview');
+    expect(secondRetry.pageMapId).toBe(mapId);
   });
 
   it('分组生成失败后先拆批，拆批失败后降级为单条生成', async () => {

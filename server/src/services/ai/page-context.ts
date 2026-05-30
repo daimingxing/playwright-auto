@@ -2,6 +2,7 @@ import { chromium, type Locator, type Page } from '@playwright/test';
 import type { AiLevel, ImportCaseSource, ImportDataSource, ImportStepSource, PageAction, TargetType, UiLibrary } from '../../../../shared/types';
 import { buildStartUrl } from '../../../../shared/url';
 import { getProject } from '../../lib/project-store';
+import { getAppConfig } from '../../lib/app-config';
 import { getBrowserPath } from '../playwright/browser-path';
 import { getProjectAuthPath, hasProjectAuth } from '../auth-session';
 import { assertVendorBrowser } from '../playwright/vendor-browser';
@@ -85,7 +86,7 @@ export interface CollectPageInput {
 
 export interface CollectPageMapInput extends CollectPageInput {
   actions: PageAction[];
-  timeoutMs: number;
+  openTimeoutMs: number;
 }
 
 export interface CollectedPageState {
@@ -94,11 +95,10 @@ export interface CollectedPageState {
 }
 
 interface PageMapRunner {
-  setDefaultTimeout(timeoutMs: number): void;
-  open(targetUrl: string, timeoutMs: number): Promise<void>;
+  open(targetUrl: string, openTimeoutMs: number, warnings: string[]): Promise<void>;
   snapshot(warnings: string[]): Promise<PageContext>;
   action(action: PageAction): Promise<void>;
-  stable(timeoutMs: number, warnings: string[]): Promise<void>;
+  stable(warnings: string[]): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -123,6 +123,7 @@ export class PageContextError extends Error {
 const maxItems = 20;
 const maxText = 80;
 const readyTimeoutMs = 12000;
+const actionStableTimeoutMs = 5000;
 const minReadyTextLength = 50;
 let pageMapRunnerFactory: PageMapRunnerFactory | undefined;
 
@@ -157,10 +158,9 @@ export async function collectPageContext(input: CollectInput): Promise<PageConte
 
   try {
     const targetUrl = buildStartUrl(baseUrl, input.caseInfo.targetUrl);
-    const response = await page.goto(targetUrl, { waitUntil: 'domcontentloaded' });
-    assertPageAvailable(response, targetUrl);
     const warnings: string[] = [];
 
+    await openPage(page, targetUrl, getAppConfig().browser.openTimeoutMs, warnings);
     await waitForPageReady(page, warnings);
 
     // 必须等待快照读取完成后再进入 finally 关闭浏览器，否则真实页面读取标题或元素时会遇到页面已关闭。
@@ -174,7 +174,7 @@ export async function collectPageContext(input: CollectInput): Promise<PageConte
  * 按页面地址采集初始页面上下文。
  */
 export async function collectInitialPage(input: CollectPageInput): Promise<PageContext> {
-  return collectPageContext({
+  const context = await collectPageContext({
     projectKey: input.projectKey,
     envKey: input.envKey,
     caseInfo: {
@@ -189,6 +189,10 @@ export async function collectInitialPage(input: CollectPageInput): Promise<PageC
     data: [],
     uiLibrary: input.uiLibrary
   });
+
+  assertUsablePageContext(context);
+
+  return context;
 }
 
 /**
@@ -199,18 +203,19 @@ export async function collectPageMapStates(input: CollectPageMapInput): Promise<
   const states: CollectedPageState[] = [];
   const warnings: string[] = [];
 
-  runner.setDefaultTimeout(input.timeoutMs);
-
   try {
-    await runner.open(input.targetUrl, input.timeoutMs);
-    states.push({ context: await runner.snapshot([...warnings]) });
+    await runner.open(input.targetUrl, input.openTimeoutMs, warnings);
+    const initialContext = await runner.snapshot([...warnings]);
+
+    assertUsablePageContext(initialContext);
+    states.push({ context: initialContext });
 
     for (const action of input.actions) {
       const actionWarnings: string[] = [];
 
       try {
         await runner.action(action);
-        await runner.stable(input.timeoutMs, actionWarnings);
+        await runner.stable(actionWarnings);
         states.push({ action, context: await runner.snapshot(actionWarnings) });
       } catch (error) {
         const message = error instanceof Error ? error.message : '未知错误';
@@ -261,15 +266,11 @@ async function createBrowserRunner(input: CollectPageMapInput): Promise<PageMapR
   const page = await context.newPage();
 
   return {
-    setDefaultTimeout(timeoutMs) {
-      page.setDefaultTimeout(timeoutMs);
-    },
-    async open(targetUrl, timeoutMs) {
+    async open(targetUrl, openTimeoutMs, warnings) {
       const url = buildStartUrl(baseUrl, targetUrl);
-      const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: timeoutMs });
 
-      assertPageAvailable(response, url);
-      await waitForPageReady(page);
+      await openPage(page, url, openTimeoutMs, warnings);
+      await waitForPageReady(page, warnings);
     },
     snapshot(warnings) {
       return readPageSnapshot(page, warnings, input.uiLibrary);
@@ -277,8 +278,8 @@ async function createBrowserRunner(input: CollectPageMapInput): Promise<PageMapR
     action(action) {
       return runPageAction(page, action);
     },
-    stable(timeoutMs, warnings) {
-      return waitForActionStable(page, timeoutMs, warnings);
+    stable(warnings) {
+      return waitForActionStable(page, warnings);
     },
     close() {
       return browser.close();
@@ -294,7 +295,6 @@ function createTestRunner(input: CollectPageMapInput): PageMapRunner {
   let url = input.targetUrl;
 
   return {
-    setDefaultTimeout() {},
     async open() {},
     async snapshot(warnings) {
       const context = createTestContext({ caseNo: 'PAGE-MAP', caseName: title, targetUrl: url, precondition: '', expectedResult: '', note: '' });
@@ -355,6 +355,23 @@ export async function waitForPageReady(page: Page, warnings: string[] = []) {
     );
   } catch {
     warnings.push(await buildPageReadyWarning(page));
+  }
+}
+
+/**
+ * 初始打开业务 URL，domcontentloaded 超时时保留现有页面内容继续采集。
+ */
+async function openPage(page: Page, targetUrl: string, openTimeoutMs: number, warnings: string[]) {
+  try {
+    const response = await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: openTimeoutMs });
+
+    assertPageAvailable(response, targetUrl);
+  } catch (error) {
+    if (!isNavigationTimeout(error)) {
+      throw error;
+    }
+
+    warnings.push(`domcontentloaded 等待超时，已继续尝试读取当前页面快照：${getErrorMessage(error)}`);
   }
 }
 
@@ -448,9 +465,10 @@ function findSelectOption(page: Page, value: string) {
 /**
  * 等待动作后的页面进入可读状态。
  */
-async function waitForActionStable(page: Page, timeoutMs: number, warnings: string[]) {
+async function waitForActionStable(page: Page, warnings: string[]) {
   try {
-    await page.waitForLoadState('networkidle', { timeout: timeoutMs });
+    // 动作探索稳定等待是内部保护，避免把平台打开业务 URL 的配置扩散到点击、悬停、选择等动作。
+    await page.waitForLoadState('networkidle', { timeout: actionStableTimeoutMs });
   } catch {
     warnings.push('探索动作后页面网络未在限定时间内完全空闲，已继续读取当前可见内容。');
   }
@@ -538,6 +556,19 @@ export function assertPageAvailable(response: PageResponse | null, targetUrl: st
 
     throw new PageContextError(`目标页面不可访问：${response.url()}（HTTP ${status}${reason}）。请检查目标页面URL是否写错，或页面是否存在。`);
   }
+}
+
+/**
+ * 校验页面地图初始快照是否具备业务可读信号。
+ */
+export function assertUsablePageContext(context: PageContext) {
+  if (hasPageSignal(context)) {
+    return;
+  }
+
+  const warning = context.warnings.length > 0 ? `已有 warning：${context.warnings.join('；')}` : '未采集到可解释 warning';
+
+  throw new PageContextError(`页面地图初始快照不可用：页面没有可读业务内容。${warning}`);
 }
 
 /**
@@ -1200,6 +1231,42 @@ function normalizeText(value: string | null | undefined) {
  */
 function uniqueTexts(values: string[]) {
   return Array.from(new Set(values));
+}
+
+/**
+ * 判断页面上下文是否包含足够保守的业务可读信号。
+ */
+function hasPageSignal(context: PageContext) {
+  const title = context.page.title.trim();
+  const hasTitle = Boolean(title && title !== 'Vite App');
+  const hasHeadings = context.page.headings.some((text) => Boolean(text.trim()));
+  const elements = context.elements;
+  const hasElements = [
+    elements.buttons,
+    elements.inputs,
+    elements.selects,
+    elements.links,
+    elements.navigation,
+    elements.tables
+  ].some((items) => items.length > 0);
+  const hasFields = (context.fields ?? []).length > 0;
+  const hasAria = Boolean(context.aria?.trim());
+
+  return hasTitle || hasHeadings || hasElements || hasFields || hasAria;
+}
+
+/**
+ * 判断 Playwright 导航是否因为等待上限超时。
+ */
+function isNavigationTimeout(error: unknown) {
+  return getErrorMessage(error).includes('Timeout');
+}
+
+/**
+ * 统一提取未知错误的可读信息。
+ */
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
 }
 
 /**

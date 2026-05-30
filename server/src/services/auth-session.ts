@@ -6,6 +6,7 @@ import { writeJson } from '../lib/fs';
 import { getProjectPath } from '../lib/path';
 import { getProject } from '../lib/project-store';
 import { badRequest, notFound } from '../lib/http-error';
+import { getAppConfig } from '../lib/app-config';
 import { getBrowserPath } from './playwright/browser-path';
 import { assertVendorBrowser } from './playwright/vendor-browser';
 
@@ -76,8 +77,6 @@ interface ManualSession {
 
 const sessions = new Map<string, ManualSession>();
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
-// 与 Playwright 默认导航超时保持一致，超时后只提示用户手动处理，不中断登录会话。
-const LOGIN_NAV_TIMEOUT_MS = 30 * 1000;
 
 /**
  * 打开有头浏览器让用户手动登录。
@@ -207,8 +206,10 @@ function createSessionTimer(sessionId: string) {
  */
 async function openLoginUrl(page: Page, url: string) {
   try {
-    // 登录页本身可能位于慢内网，30 秒超时后仍允许用户在已打开浏览器中手动刷新或输入地址。
-    await page.goto(url, { timeout: LOGIN_NAV_TIMEOUT_MS });
+    const openTimeoutMs = getAppConfig().browser.openTimeoutMs;
+
+    // 登录页本身可能位于慢内网，打开超时后仍允许用户在已打开浏览器中手动刷新或输入地址。
+    await page.goto(url, { timeout: openTimeoutMs });
     return '';
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

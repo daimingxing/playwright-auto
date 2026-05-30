@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import request from 'supertest';
@@ -47,6 +47,7 @@ beforeEach(async () => {
 afterEach(async () => {
   delete process.env.DATA_ROOT;
   delete process.env.NODE_ENV;
+  delete process.env.PLAYWRIGHT_AUTO_CONFIG;
   await rm(root, { recursive: true, force: true });
 });
 
@@ -111,6 +112,34 @@ describe('登录接口', () => {
       path: expect.stringContaining('default.storageState.json')
     });
     expect(browserMocks.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('手动登录初始打开 URL 使用 browser.openTimeoutMs', async () => {
+    process.env.NODE_ENV = 'development';
+    const configPath = join(root, 'playwright-auto.config.json');
+    await mkdir(root, { recursive: true });
+    await writeFile(configPath, JSON.stringify({ browser: { openTimeoutMs: 45000 } }), 'utf8');
+    process.env.PLAYWRIGHT_AUTO_CONFIG = configPath;
+    const app = createApp();
+    await request(app).post('/api/projects').send({
+      name: 'CCTQ',
+      key: 'cctq',
+      baseUrl: 'https://www.cctq.ai'
+    });
+    browserMocks.newPage.mockResolvedValue({ goto: browserMocks.goto });
+    browserMocks.newContext.mockResolvedValue({
+      newPage: browserMocks.newPage,
+      storageState: browserMocks.storageState
+    });
+    browserMocks.launch.mockResolvedValue({
+      newContext: browserMocks.newContext,
+      close: browserMocks.close
+    });
+
+    const res = await request(app).post('/api/projects/cctq/auth/start').send({});
+
+    expect(res.status).toBe(201);
+    expect(browserMocks.goto).toHaveBeenCalledWith('https://www.cctq.ai', { timeout: 45000 });
   });
 
   it('可以保存手动登录会话为项目级登录态', async () => {

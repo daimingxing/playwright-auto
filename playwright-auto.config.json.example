@@ -16,6 +16,9 @@
     "headedWorkers": 1,
     "maxWorkers": 20
   },
+  "browser": {
+    "openTimeoutMs": 30000
+  },
   "steps": {
     "timeouts": {
       "navigation": 20000,

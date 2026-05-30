@@ -41,6 +41,9 @@ describe('应用配置', () => {
         headedWorkers: 1,
         maxWorkers: 8
       },
+      browser: {
+        openTimeoutMs: 30000
+      },
       steps: {
         timeouts: {
           navigation: 20000,
@@ -61,7 +64,6 @@ describe('应用配置', () => {
           staleDays: 30,
           maxActions: 20,
           maxDepth: 2,
-          timeoutMs: 30000,
           autoCreate: true
         }
       }
@@ -83,6 +85,9 @@ describe('应用配置', () => {
         headlessWorkers: 12,
         headedWorkers: 2,
         maxWorkers: 16
+      },
+      browser: {
+        openTimeoutMs: 30000
       },
       steps: {
         timeouts: {
@@ -109,6 +114,9 @@ describe('应用配置', () => {
         headedWorkers: 2,
         maxWorkers: 16
       },
+      browser: {
+        openTimeoutMs: 30000
+      },
       steps: {
         timeouts: {
           navigation: 30000,
@@ -129,7 +137,6 @@ describe('应用配置', () => {
           staleDays: 30,
           maxActions: 20,
           maxDepth: 2,
-          timeoutMs: 30000,
           autoCreate: true
         }
       }
@@ -179,6 +186,9 @@ describe('应用配置', () => {
         headedWorkers: 3,
         maxWorkers: 24
       },
+      browser: {
+        openTimeoutMs: 30000
+      },
       steps: {
         timeouts: {
           navigation: 30000,
@@ -199,7 +209,6 @@ describe('应用配置', () => {
           staleDays: 30,
           maxActions: 20,
           maxDepth: 2,
-          timeoutMs: 30000,
           autoCreate: true
         }
       }

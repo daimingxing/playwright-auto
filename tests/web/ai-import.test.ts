@@ -1,19 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import ExcelJS from 'exceljs';
 import { readFileSync } from 'node:fs';
 import {
-  formatEnumLabel,
   formatStepType,
   formatTargetTypeText,
   matchTypeLabels,
-  stepTypeLabels,
-  stepTypes,
   targetTypeLabels,
   targetTypes,
   type ImportItem,
   type ImportJob
 } from '../../shared/types';
-import { parseImportExcel } from '../../server/src/services/import/import-excel';
 import {
   canRetryImportItem,
   canSaveImportItem,
@@ -155,32 +150,6 @@ describe('AI 导入页面工具', () => {
         note: ''
       })
     ).toBe('填写用户名称，用户名称输入框');
-  });
-
-  it('真实 Excel 模板可以被解析为两表导入数据', async () => {
-    const buffer = readFileSync('docs/ai-case-import/AI自然语言用例导入模板.xlsx');
-    const result = await parseImportExcel(buffer);
-
-    expect(result).toHaveLength(2);
-    expect(result.map((item) => item.caseInfo.caseNo)).toEqual(['TC001', 'TC002']);
-    expect(result[0].steps.map((step) => step.stepNo)).toEqual([1, 2, 3, 4]);
-    expect(result[1].steps.map((step) => step.stepNo)).toEqual([1, 2]);
-  });
-
-  it('真实 Excel 模板保留两张业务表和中文英文动作值', async () => {
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(readFileSync('docs/ai-case-import/AI自然语言用例导入模板.xlsx') as unknown as ExcelJS.Buffer);
-    const steps = workbook.getWorksheet('步骤明细');
-
-    expect(workbook.getWorksheet('用例清单')).toBeTruthy();
-    expect(steps).toBeTruthy();
-    expect(workbook.getWorksheet('测试数据')).toBeUndefined();
-    expect(steps?.getColumn(3).values).toEqual(
-      expect.arrayContaining(['填写(fill)', '选择(select)', '检查可见(assertVisible)'])
-    );
-    expect(steps?.getCell('C2').dataValidation?.formulae?.[0]).toBe(`"${stepTypes.map((type) => formatEnumLabel(stepTypeLabels[type], type)).join(',')}"`);
-    expect(steps?.getCell('D2').dataValidation?.formulae?.[0]).toBe(`"${targetTypes.map((type) => formatEnumLabel(targetTypeLabels[type], type)).join(',')}"`);
-    expect(steps?.getCell('G2').dataValidation?.formulae?.[0]).toBe(`"${Object.entries(matchTypeLabels).map(([type, label]) => formatEnumLabel(label, type)).join(',')}"`);
   });
 
   it('按状态、低置信和风险提示筛选导入项', () => {

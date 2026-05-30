@@ -31,7 +31,7 @@
 - 页面地图字段语义层：`server/src/services/ai/page-context.ts` 定义并采集 `PageContext.fields`，Kendo 控件优先从同一字段容器内的 `label` 归属字段名；`server/src/services/ai/ai-case-draft.ts` 在 AI 输入摘要和 selector 补全中优先消费 `fields`，找不到字段证据再回退旧 `elements`；`server/src/routes/page-maps.ts` 的详情接口从 snapshot 展开 `fields` 到状态响应；`web/src/pages/ai-import/AiImportList.vue` 的页面地图详情抽屉展示字段名、类型、UI、当前值、首选 selector、唯一性和来源置信度，便于诊断页面地图质量。
 - 运行项目与报告：`web/src/api/runs.ts`、`web/src/pages/run-center/RunCenter.vue`、`web/src/pages/run-center/run-center.ts`、`server/src/routes/runs.ts`、`server/src/services/run/runner.ts`、`server/src/lib/run-store.ts`
 - 登录态：`web/src/api/auth.ts`、`server/src/routes/auth.ts`、`server/src/services/auth-session.ts`
-- 本地应用配置、CORS 来源和步骤默认等待时间：`playwright-auto.config.json`、`shared/types.ts`、`server/src/lib/app-config.ts`、`server/src/app.ts`、`web/src/api/projects.ts`
+- 本地应用配置、CORS 来源、浏览器打开业务 URL 等待和步骤默认等待时间：`playwright-auto.config.json`、`shared/types.ts`、`server/src/lib/app-config.ts`、`server/src/app.ts`、`web/src/api/projects.ts`
 - 离线浏览器依赖：`server/src/services/playwright/vendor-browser.ts`、`server/src/services/playwright/browser-path.ts`、`scripts/install-browsers.mjs`
 - 开发启动健康检查：`scripts/wait-for-server.ts`、`package.json`
 - 路径参数校验和 HTTP 错误：`server/src/lib/guard.ts`、`server/src/lib/http-error.ts`、`server/src/lib/path.ts`、`server/src/app.ts`
@@ -56,6 +56,7 @@
 - 保存草稿只写 `case.json`，保存并生成测试文件、切换到待启用或启用时会刷新 `case.spec.ts`
 - `web/src/state/project-ui.ts` 保存项目环境选择、项目页状态筛选和运行中心用例选择
 - AI 导入按项目、环境、目标 URL、登录态、视口和控件库命中页面地图缓存；分组生成失败时先拆小批，再降级单条生成，降级过程复用同一页面地图 snapshot，不重新采集页面
+- `browser.openTimeoutMs` 是平台打开业务 URL 的统一上限，手动登录初始打开和页面地图初始采集共用；`ai.timeoutMs` 只控制模型请求，`steps.timeouts` 只控制生成、运行和实测步骤等待。
 - 页面地图探索会跳过保存、删除、提交等高风险动作，相关提示写入页面地图 warning，预览页只展示提示，不把它当作生成失败
 - `PageContext.fields` 是页面地图 snapshot 内的字段语义层，页面地图详情接口会只读 snapshot 并展开到状态字段；如果旧缓存缺少 snapshot，详情仍可返回并在状态 warning 中说明字段语义未展开。Kendo options 展开采集暂未实现，后续如补充下拉选项读取，需要同步检查 `page-context.ts`、`page-map.ts`、AI 摘要和页面地图详情展示。
 
@@ -66,7 +67,7 @@
 - 改 API 路径或响应结构时，同步检查 `web/src/api/*`、`server/src/routes/*` 和对应 `tests/server/*`
 - 改用例步骤类型或定位器草稿结构时，同步检查 `shared/types.ts`、`shared/locator-builder.ts`、`CaseEditor.vue`、`LocatorBuilderDrawer.vue`、`web/src/pages/case-editor/case-editor.ts`、`server/src/services/case/case-step-render.ts`、`server/src/services/case/case-generator.ts`、`server/src/services/practical-review/practical-review-spec.ts`、`server/src/services/record/codegen-parser.ts` 和相关测试
 - 改用例步骤编辑交互、批量操作、登录态、录制或实测检查时，同步检查 `CaseEditor.vue`、`web/src/pages/case-editor/case-editor.ts`、`web/src/pages/case-editor/case-editor-composables.ts`、`tests/web/case-editor.test.ts` 和 `tests/web/case-editor-composables.test.ts`
-- 改配置类型、步骤默认等待时间或前端可见配置时，同步检查 `playwright-auto.config.json`、`shared/types.ts`、`app-config.ts`、`web/src/api/projects.ts`、`CaseEditor.vue`、`web/src/pages/case-editor/case-editor-composables.ts`、`server/src/services/record/codegen-parser.ts` 和相关测试
+- 改配置类型、浏览器打开等待、步骤默认等待时间或前端可见配置时，同步检查 `playwright-auto.config.json`、`shared/types.ts`、`app-config.ts`、`app.ts`、`auth-session.ts`、`page-context.ts`、`page-map.ts`、`web/src/api/projects.ts`、`CaseEditor.vue`、`web/src/pages/case-editor/case-editor-composables.ts`、`server/src/services/record/codegen-parser.ts` 和相关测试
 - 改 `server.corsOrigins` 或本地服务来源限制时，同步检查 `playwright-auto.config.json`、`app-config.ts`、`app.ts`、`README.md` 和 `tests/server/api-projects.test.ts`
 - 改路径参数规则时，同步检查 `guard.ts`、`path.ts`、相关路由和 API 测试
 - 改新建项目标识归一化时，同步检查 `web/src/pages/project-list/ProjectList.vue`、`schema.ts`、`project-store.ts` 和 `tests/server/api-projects.test.ts`

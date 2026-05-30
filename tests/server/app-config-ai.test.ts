@@ -38,9 +38,11 @@ describe('AI 配置', () => {
         staleDays: 30,
         maxActions: 20,
         maxDepth: 2,
-        timeoutMs: 30000,
         autoCreate: true
       }
+    });
+    expect(getAppConfig().browser).toEqual({
+      openTimeoutMs: 30000
     });
   });
 
@@ -59,9 +61,11 @@ describe('AI 配置', () => {
           staleDays: 7,
           maxActions: 8,
           maxDepth: 3,
-          timeoutMs: 15000,
           autoCreate: false
         }
+      },
+      browser: {
+        openTimeoutMs: 45000
       }
     });
     process.env.PLAYWRIGHT_AUTO_AI_API_KEY = 'env-key';
@@ -82,13 +86,13 @@ describe('AI 配置', () => {
         staleDays: 7,
         maxActions: 8,
         maxDepth: 3,
-        timeoutMs: 15000,
         autoCreate: false
       }
     });
+    expect(getAppConfig().browser.openTimeoutMs).toBe(45000);
   });
 
-  it('公开配置不泄露 AI 密钥并包含页面地图配置', async () => {
+  it('公开配置不泄露 AI 密钥并包含浏览器打开配置', async () => {
     await writeConfig({
       ai: {
         enabled: true,
@@ -99,9 +103,11 @@ describe('AI 配置', () => {
           staleDays: 10,
           maxActions: 6,
           maxDepth: 2,
-          timeoutMs: 12000,
           autoCreate: true
         }
+      },
+      browser: {
+        openTimeoutMs: 45000
       }
     });
     const { createApp } = await importFreshApp();
@@ -115,9 +121,34 @@ describe('AI 配置', () => {
       staleDays: 10,
       maxActions: 6,
       maxDepth: 2,
-      timeoutMs: 12000,
       autoCreate: true
     });
+    expect(res.body.browser).toEqual({
+      openTimeoutMs: 45000
+    });
+  }, 10000);
+
+  it('页面地图配置不再暴露打开等待字段', async () => {
+    await writeConfig({
+      ai: {
+        pageMap: {
+          staleDays: 10,
+          maxActions: 6,
+          maxDepth: 2,
+          autoCreate: true
+        }
+      }
+    });
+
+    const { getAppConfig } = await importFreshConfig();
+
+    expect(getAppConfig().ai.pageMap).toEqual({
+      staleDays: 10,
+      maxActions: 6,
+      maxDepth: 2,
+      autoCreate: true
+    });
+    expect(getAppConfig().browser.openTimeoutMs).toBe(30000);
   });
 });
 

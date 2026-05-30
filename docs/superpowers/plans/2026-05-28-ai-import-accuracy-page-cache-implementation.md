@@ -141,7 +141,7 @@ npm run typecheck
 - 检查：`tests/server/app-config-ai.test.ts`；如不修改，必须在任务总结说明现有 AI 配置测试无需覆盖 `pageMap` 默认值的原因。
 
 **实现要点：**
-- 在 `AiConfig` 下新增 `pageMap` 配置：`staleDays`、`maxActions`、`maxDepth`、`timeoutMs`、`autoCreate`。
+- 在 `AiConfig` 下维护 `pageMap` 配置：`staleDays`、`maxActions`、`maxDepth`、`autoCreate`；平台打开业务 URL 的等待统一使用 `browser.openTimeoutMs`。
 - 新增共享类型：`PageMap`、`PageState`、`PageAction`、`PageMapStatus`、`PageMapSummary`。
 - 缓存键至少包含：`projectKey`、`envKey`、`targetUrl`、`authHash`、`viewport`。
 - `authHash` 由登录态文件更新时间或内容摘要生成；没有登录态时使用明确值，例如 `no-auth`。
@@ -261,7 +261,7 @@ npm run typecheck
 **实现要点：**
 - 在初始页面上按安全动作路径执行探索，每个动作后调用 `readPageSnapshot` 生成 `PageState`。
 - 支持菜单、弹窗、页签、下拉、悬停的最小可用探索；每次动作后等待页面稳定。
-- 探索上限使用配置：`maxActions`、`maxDepth`、`timeoutMs`；这些值旁边必须有行间注释说明风险和性能边界。
+- 探索上限使用配置：`maxActions`、`maxDepth`；初始打开业务 URL 使用 `browser.openTimeoutMs`。这些值旁边必须有行间注释说明风险和性能边界。
 - 每个状态保留 `sourceAction`，用于后续解释“这个元素来自哪个探索动作后”。
 - 遇到探索失败时不让整张页面地图失败，记录状态 warning 并继续处理其他安全动作。
 

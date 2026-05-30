@@ -17,6 +17,9 @@ interface FileConfig {
     headedWorkers?: unknown;
     maxWorkers?: unknown;
   };
+  browser?: {
+    openTimeoutMs?: unknown;
+  };
   steps?: {
     timeouts?: {
       navigation?: unknown;
@@ -37,7 +40,6 @@ interface FileConfig {
       staleDays?: unknown;
       maxActions?: unknown;
       maxDepth?: unknown;
-      timeoutMs?: unknown;
       autoCreate?: unknown;
     };
   };
@@ -57,6 +59,9 @@ const DEFAULT_CONFIG = {
     headlessWorkers: 4,
     headedWorkers: 1,
     maxWorkers: 8
+  },
+  browser: {
+    openTimeoutMs: 30000
   },
   steps: {
     timeouts: {
@@ -78,7 +83,6 @@ const DEFAULT_CONFIG = {
       staleDays: 30,
       maxActions: 20,
       maxDepth: 2,
-      timeoutMs: 30000,
       autoCreate: true
     }
   }
@@ -126,10 +130,21 @@ export function getAppConfig(): FullAppConfig {
       headedWorkers,
       maxWorkers
     },
+    browser: readBrowserConfig(fileConfig),
     steps: {
       timeouts
     },
     ai: readAiConfig(fileConfig)
+  };
+}
+
+/**
+ * 读取浏览器打开业务 URL 的统一等待配置。
+ */
+function readBrowserConfig(fileConfig: FileConfig) {
+  return {
+    // 业务页面可能位于慢内网，统一限制初始打开 URL 的等待上限，避免登录和采集入口语义分裂。
+    openTimeoutMs: readInt(undefined, fileConfig.browser?.openTimeoutMs, DEFAULT_CONFIG.browser.openTimeoutMs, 1000, 300000)
   };
 }
 
@@ -162,8 +177,6 @@ function readPageMapConfig(fileConfig: FileConfig) {
     maxActions: readInt(undefined, fileMap?.maxActions, DEFAULT_CONFIG.ai.pageMap.maxActions, 0, 200),
     // 限制动作深度，避免菜单、弹窗和树形控件组合产生指数级探索。
     maxDepth: readInt(undefined, fileMap?.maxDepth, DEFAULT_CONFIG.ai.pageMap.maxDepth, 0, 10),
-    // 单次页面地图采集超时单独配置，避免复用 AI 请求超时导致浏览器任务等待过久。
-    timeoutMs: readInt(undefined, fileMap?.timeoutMs, DEFAULT_CONFIG.ai.pageMap.timeoutMs, 1000, 300000),
     autoCreate: readBool(undefined, fileMap?.autoCreate, DEFAULT_CONFIG.ai.pageMap.autoCreate)
   };
 }

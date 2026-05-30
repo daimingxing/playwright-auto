@@ -40,6 +40,7 @@ export function createApp() {
     const config = getAppConfig();
 
     res.json({
+      browser: config.browser,
       steps: config.steps,
       ai: {
         enabled: config.ai.enabled,

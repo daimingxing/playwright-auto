@@ -1758,7 +1758,7 @@ describe('AI 草稿生成服务', () => {
     const browser = await chromium.launch({ executablePath: getChromePath() });
     const page = await browser.newPage();
 
-    await page.setContent('<div id="app"></div><script>setTimeout(() => { document.querySelector("#app").textContent = "物流管控"; }, 50);</script>');
+    await page.setContent('<div id="app"></div><script>setTimeout(() => { document.querySelector("#app").innerHTML = "<button>物流管控</button>"; }, 50);</script>');
     await waitForPageReady(page);
 
     expect(await page.locator('body').innerText()).toContain('物流管控');

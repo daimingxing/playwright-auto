@@ -148,11 +148,14 @@ export interface AiConfig {
   pageMap: PageMapConfig;
 }
 
+export interface BrowserConfig {
+  openTimeoutMs: number;
+}
+
 export interface PageMapConfig {
   staleDays: number;
   maxActions: number;
   maxDepth: number;
-  timeoutMs: number;
   autoCreate: boolean;
 }
 
@@ -558,11 +561,13 @@ export interface FullAppConfig {
   server: ServerConfig;
   web: WebConfig;
   runner: RunConfig;
+  browser: BrowserConfig;
   steps: StepConfig;
   ai: AiConfig;
 }
 
 export interface PublicAppConfig {
+  browser: BrowserConfig;
   steps: StepConfig;
   ai: Omit<AiConfig, 'apiKey'> & { configured: boolean };
 }

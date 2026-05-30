@@ -10,10 +10,10 @@ import {
 } from '../../lib/import-store';
 import { listProjects } from '../../lib/project-store';
 import { createPageMapId, createPageMapKey, getAuthHash } from '../../lib/path';
-import { readPageMapShot } from '../../lib/page-map-store';
+import { readPageMap, readPageMapShot } from '../../lib/page-map-store';
 import { reviewCase } from '../case-review';
 import { AiDraftError, generateCaseDraft, type DraftPageMap } from '../ai/ai-case-draft';
-import { getPageMap } from '../ai/page-map';
+import { getPageMap, refreshPageMap } from '../ai/page-map';
 import { collectPageContext, PageContextError, type PageContext } from '../ai/page-context';
 import { generateItems } from './import-gen-flow';
 import { bindGroupMeta, markDraftReady, markFailed, markGenerating, markMapFailed } from './import-state-repo';
@@ -100,7 +100,15 @@ export async function processImportItem(projectKey: string, importId: string, it
       });
 
       const job = await getImportJob(projectKey, importId);
-      const pageContext = await readDraftPageContext(projectKey, job.envKey, item, pageMapId ?? item.pageMapId);
+      const map = await resolveRetryPageMap(projectKey, job.envKey, item, job.uiLibrary, pageMapId ?? item.pageMapId);
+      const pageContext = await readDraftPageContext(projectKey, job.envKey, item, map?.mapId);
+      if (map) {
+        await bindGroupMeta(projectKey, importId, itemId, {
+          groupId: item.groupId ?? map.mapId,
+          groupIndex: item.groupIndex ?? 0,
+          pageMapId: map.mapId
+        });
+      }
       const draftInput = {
         caseInfo: item.source.caseInfo,
         steps: item.source.steps,
@@ -141,6 +149,50 @@ export async function processImportItem(projectKey: string, importId: string, it
       }
     }
   }
+}
+
+/**
+ * 为失败项重试解析当前页面地图，确保刷新后的快照会被复用。
+ */
+async function resolveRetryPageMap(
+  projectKey: string,
+  envKey: string,
+  item: ImportItem,
+  uiLibrary: UiLibrary | undefined,
+  pageMapId: string | undefined
+) {
+  if (pageMapId) {
+    const pageMap = await readPageMap(projectKey, pageMapId);
+
+    if (pageMap.status === 'failed') {
+      // 历史失败项可能残留 failed pageMapId，重试必须先刷新，避免读取缺失的 state-initial 快照。
+      return refreshPageMap(projectKey, pageMap.mapId);
+    }
+
+    return pageMap;
+  }
+
+  if (item.groupId || item.status === 'failed') {
+    const authHash = await getAuthHash(projectKey, envKey);
+    let pageMap = await getPageMap({
+      projectKey,
+      envKey,
+      targetUrl: item.source.caseInfo.targetUrl,
+      viewport: defaultViewport,
+      authHash,
+      uiLibrary: uiLibrary ?? 'auto',
+      steps: item.source.steps
+    });
+
+    if (pageMap.status === 'failed') {
+      // 失败缓存可能来自上一次页面地图采集，重试时需要重新打开目标 URL，刷新成功后复用新快照。
+      pageMap = await refreshPageMap(projectKey, pageMap.mapId);
+    }
+
+    return pageMap;
+  }
+
+  return undefined;
 }
 
 /**

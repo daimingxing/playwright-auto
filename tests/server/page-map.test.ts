@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -9,6 +9,9 @@ let root = '';
 let failMessage = '';
 let collectCount = 0;
 let failActionName = '';
+let openedTimeouts: number[] = [];
+let defaultTimeouts: number[] = [];
+let stableTimeouts: number[] = [];
 
 function createContext(title: string, url = '/users') {
   return {
@@ -52,14 +55,17 @@ beforeEach(async () => {
   failMessage = '';
   collectCount = 0;
   failActionName = '';
+  openedTimeouts = [];
+  defaultTimeouts = [];
+  stableTimeouts = [];
   setPageMapRunner(async (input) => {
     let title = '初始页面';
     let url = input.targetUrl;
 
     return {
-      setDefaultTimeout() {},
-      async open() {
+      async open(_targetUrl, timeoutMs, warnings) {
         collectCount += 1;
+        openedTimeouts.push(timeoutMs);
 
         if (failMessage) {
           throw new PageContextError(failMessage);
@@ -79,7 +85,9 @@ beforeEach(async () => {
         title = `${action.targetName}后页面`;
         url = `${input.targetUrl}#${action.id}`;
       },
-      async stable() {},
+      async stable() {
+        stableTimeouts.push(5000);
+      },
       async close() {}
     };
   });
@@ -108,6 +116,108 @@ describe('页面地图业务编排', () => {
     expect(map.states[0]).toMatchObject({ name: '初始页面', title: '初始页面' });
     expect(map.states[0]).not.toHaveProperty('sourceAction');
     expect(existsSync(map.states[0].snapshotPath)).toBe(true);
+  });
+
+  it('页面地图初始打开超时时保留快照并记录 warning', async () => {
+    setPageMapRunner(async (input) => ({
+      async open(_targetUrl, _timeoutMs, warnings) {
+        collectCount += 1;
+        warnings.push('domcontentloaded 等待超时，已继续尝试读取当前页面快照：模拟超时');
+      },
+      async snapshot(warnings) {
+        return {
+          ...createContext('用户列表', input.targetUrl),
+          warnings
+        };
+      },
+      async action() {},
+      async stable() {},
+      async close() {}
+    }));
+    const { getPageMap } = await import('../../server/src/services/ai/page-map');
+
+    const map = await getPageMap({
+      projectKey: 'crm',
+      envKey: 'default',
+      targetUrl: '/users',
+      viewport: { width: 1280, height: 720 },
+      staleDays: 30,
+      steps: [
+        {
+          caseNo: 'TC001',
+          stepNo: 1,
+          actionType: 'click',
+          targetType: 'menu',
+          targetName: '系统管理',
+          actionText: '点击系统管理',
+          targetText: '系统管理菜单',
+          dataKeys: [],
+          note: ''
+        }
+      ]
+    });
+
+    expect(map.status).toBe('ready');
+    expect(map.warnings.join('\n')).toContain('domcontentloaded 等待超时');
+    expect(map.states[0].warnings.join('\n')).toContain('domcontentloaded 等待超时');
+  });
+
+  it('页面地图初始打开超时且快照为空时生成 failed 地图', async () => {
+    setPageMapRunner(async (input) => ({
+      async open(_targetUrl, _timeoutMs, warnings) {
+        collectCount += 1;
+        warnings.push('domcontentloaded 等待超时，已继续尝试读取当前页面快照：模拟超时');
+      },
+      async snapshot(warnings) {
+        return {
+          page: {
+            url: input.targetUrl,
+            title: 'Vite App',
+            headings: []
+          },
+          elements: {
+            buttons: [],
+            inputs: [],
+            selects: [],
+            links: [],
+            navigation: [],
+            tables: []
+          },
+          fields: [],
+          warnings
+        };
+      },
+      async action() {},
+      async stable() {},
+      async close() {}
+    }));
+    const { getPageMap } = await import('../../server/src/services/ai/page-map');
+
+    const map = await getPageMap({
+      projectKey: 'crm',
+      envKey: 'default',
+      targetUrl: '/blank',
+      viewport: { width: 1280, height: 720 },
+      staleDays: 30,
+      steps: [
+        {
+          caseNo: 'TC001',
+          stepNo: 1,
+          actionType: 'click',
+          targetType: 'menu',
+          targetName: '系统管理',
+          actionText: '点击系统管理',
+          targetText: '系统管理菜单',
+          dataKeys: [],
+          note: ''
+        }
+      ]
+    });
+
+    expect(map.status).toBe('failed');
+    expect(map.states).toEqual([]);
+    expect(map.warnings.join('\n')).toContain('页面地图初始快照不可用');
+    expect(map.warnings.join('\n')).toContain('domcontentloaded 等待超时');
   });
 
   it('根据安全动作生成初始状态和探索后的页面状态', async () => {
@@ -145,6 +255,40 @@ describe('页面地图业务编排', () => {
       }
     });
     expect(existsSync(map.states[1].snapshotPath)).toBe(true);
+  });
+
+  it('页面地图采集打开目标 URL 使用 browser.openTimeoutMs', async () => {
+    const configPath = join(root, 'playwright-auto.config.json');
+    await mkdir(root, { recursive: true });
+    await writeFile(configPath, JSON.stringify({ browser: { openTimeoutMs: 45000 } }), 'utf8');
+    process.env.PLAYWRIGHT_AUTO_CONFIG = configPath;
+    const { getPageMap } = await import('../../server/src/services/ai/page-map');
+
+    const map = await getPageMap({
+      projectKey: 'crm',
+      envKey: 'default',
+      targetUrl: '/users',
+      viewport: { width: 1280, height: 720 },
+      staleDays: 30,
+      steps: [
+        {
+          caseNo: 'TC001',
+          stepNo: 1,
+          actionType: 'click',
+          targetType: 'menu',
+          targetName: '系统管理',
+          actionText: '点击系统管理',
+          targetText: '系统管理菜单',
+          dataKeys: [],
+          note: ''
+        }
+      ]
+    });
+
+    expect(map.status).toBe('ready');
+    expect(openedTimeouts).toEqual([45000]);
+    expect(defaultTimeouts).toEqual([]);
+    expect(stableTimeouts).not.toContain(45000);
   });
 
   it('危险动作只记录 warning，不生成探索状态', async () => {

@@ -143,7 +143,8 @@ async function createInitialMap(input: {
   saveFailed?: boolean;
 }) {
   try {
-    const pageMapConfig = getAppConfig().ai.pageMap;
+    const appConfig = getAppConfig();
+    const pageMapConfig = appConfig.ai.pageMap;
     // maxDepth 限制动作路径层级，避免菜单、弹窗、树节点组合后出现指数级状态扩散。
     const maxDepth = pageMapConfig.maxDepth;
     const actionResult = buildPageActions({ steps: input.steps ?? [], maxDepth });
@@ -151,14 +152,14 @@ async function createInitialMap(input: {
     const maxActions = pageMapConfig.maxActions;
     const actions = actionResult.actions.slice(0, maxActions);
     const limitWarnings = actionResult.actions.length > maxActions ? [`已截断超过 ${maxActions} 个的页面探索动作。`] : [];
-    // timeoutMs 是单次页面地图采集的浏览器等待上限，防止网络空闲或控件动画长期阻塞后台任务。
-    const timeoutMs = pageMapConfig.timeoutMs;
+    // openTimeoutMs 仅用于浏览器初始打开业务 URL，不影响 AI 模型请求超时或探索动作等待。
+    const openTimeoutMs = appConfig.browser.openTimeoutMs;
     const collected = await collectMapStates({
       projectKey: input.projectKey,
       envKey: input.envKey,
       targetUrl: input.targetUrl,
       actions,
-      timeoutMs,
+      openTimeoutMs,
       uiLibrary: input.uiLibrary
     });
     const states = await toPageStates(input.projectKey, input.mapId, collected.states, input.now);
@@ -213,7 +214,7 @@ async function collectMapStates(input: {
   envKey: string;
   targetUrl: string;
   actions: PageAction[];
-  timeoutMs: number;
+  openTimeoutMs: number;
   uiLibrary: UiLibrary;
 }) {
   if (input.actions.length === 0) {

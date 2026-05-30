@@ -421,16 +421,18 @@ AI 导入预览页应显示当前导入项使用的页面地图：
 
 ## 配置建议
 
-在 `playwright-auto.config.json` 中增加页面地图配置：
+在 `playwright-auto.config.json` 中增加页面地图配置，并由浏览器配置统一控制初始打开业务 URL 的等待：
 
 ```json
 {
+  "browser": {
+    "openTimeoutMs": 30000
+  },
   "ai": {
     "pageMap": {
       "staleDays": 7,
       "maxActions": 20,
       "maxDepth": 4,
-      "timeoutMs": 60000,
       "autoCreate": true
     }
   }
@@ -442,7 +444,7 @@ AI 导入预览页应显示当前导入项使用的页面地图：
 - `staleDays`：超过多少天提示建议刷新，不强制删除。
 - `maxActions`：单个页面地图最多执行的安全探索动作数量。
 - `maxDepth`：单条探索路径最多层数。
-- `timeoutMs`：单次页面地图生成超时时间。
+- `browser.openTimeoutMs`：平台打开业务 URL 的等待上限，页面地图初始采集和手动登录初始打开共用。
 - `autoCreate`：导入时没有缓存是否自动创建页面地图。
 
 ## 安全策略

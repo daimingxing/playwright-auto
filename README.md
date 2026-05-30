@@ -85,6 +85,9 @@ npm run dev
     "headedWorkers": 1,
     "maxWorkers": 20
   },
+  "browser": {
+    "openTimeoutMs": 30000
+  },
   "steps": {
     "timeouts": {
       "navigation": 20000,
@@ -113,7 +116,8 @@ npm run dev
 - `runner.headlessWorkers`：无头运行默认并发数。
 - `runner.headedWorkers`：可视调试默认并发数。
 - `runner.maxWorkers`：运行中心允许选择的最大并发数。
-- `steps.timeouts.navigation`：手动新增打开页面步骤、录制导入打开页面步骤的默认等待毫秒数。
+- `browser.openTimeoutMs`：平台打开业务 URL 的等待上限，当前用于手动登录初始打开 URL 和 AI 页面地图初始采集 URL。
+- `steps.timeouts.navigation`：生成、运行和实测步骤中打开页面动作的默认等待毫秒数，不用于平台自身打开业务 URL。
 - `steps.timeouts.action`：手动新增点击、输入、选择等操作步骤，和录制导入操作步骤的默认等待毫秒数。
 - `steps.timeouts.wait`：手动新增等待步骤的默认等待毫秒数。
 - `ai.enabled`：是否启用 AI 导入。启用后仍需要配置模型地址和模型名称。
@@ -121,7 +125,7 @@ npm run dev
 - `ai.apiKey`：模型服务密钥。建议真实密钥用环境变量配置，不写入仓库文件。
 - `ai.model`：模型名称，例如 `deepseek-v4-flash`。
 - `ai.temperature`：模型采样温度。导入草稿建议保持较低值。
-- `ai.timeoutMs`：单次模型请求超时时间。
+- `ai.timeoutMs`：单次模型请求超时时间，不影响浏览器打开业务 URL 或步骤执行等待。
 - `ai.maxRetries`：单条导入项失败后的平台级自动重试次数。模型 SDK 内部重试固定关闭，避免实际调用次数被放大。
 - `ai.concurrency`：后台 AI 生成并发数。第一阶段建议保持 `1`，避免本地浏览器和模型服务压力过大。
 
