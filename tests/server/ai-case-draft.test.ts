@@ -2218,6 +2218,51 @@ describe('AI 草稿生成服务', () => {
     expect(await page.locator('#sampleKind').getAttribute('data-value')).toBe('采购');
     await browser.close();
   }, 15000);
+
+  it('执行 data-role-only Kendo 下拉选择时点击触发器后再点击选项', async () => {
+    const browser = await chromium.launch({ executablePath: getChromePath() });
+    const page = await browser.newPage();
+
+    await page.setContent(`
+      <div class="form-row">
+        <label>客户类型</label>
+        <span id="customerKind" data-role="combobox" tabindex="0">
+          <span>请选择</span>
+        </span>
+      </div>
+      <ul id="customerOptions" role="listbox" hidden>
+        <li role="option">普通客户</li>
+        <li role="option">长期客户</li>
+      </ul>
+      <script>
+        const trigger = document.querySelector('#customerKind');
+        const options = document.querySelector('#customerOptions');
+        trigger.addEventListener('click', () => {
+          trigger.setAttribute('data-opened', 'true');
+          options.hidden = false;
+        });
+        options.addEventListener('click', (event) => {
+          if (event.target.matches('[role="option"]')) {
+            trigger.querySelector('span').textContent = event.target.textContent;
+            trigger.setAttribute('data-value', event.target.textContent);
+          }
+        });
+      </script>
+    `);
+
+    await runPageAction(page, {
+      id: 'action-1',
+      type: 'select',
+      targetType: 'select',
+      targetName: '客户类型',
+      value: '长期客户',
+      path: ['客户类型']
+    });
+
+    expect(await page.locator('#customerKind').getAttribute('data-opened')).toBe('true');
+    expect(await page.locator('#customerKind').getAttribute('data-value')).toBe('长期客户');
+    await browser.close();
+  }, 15000);
 });
 
 /**

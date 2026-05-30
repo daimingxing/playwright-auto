@@ -127,6 +127,7 @@ const actionStableTimeoutMs = 5000;
 const minReadyTextLength = 50;
 const kendoSelectSelector = '.k-dropdownlist,.k-combobox,.k-picker,[data-role="dropdownlist"],[data-role="combobox"]';
 const kendoFieldSelector = '.k-dropdownlist,.k-combobox,.k-picker,.k-multiselect,.k-dropdowntree,.k-numerictextbox,.k-datepicker,.k-datetimepicker,.k-timepicker,[data-role="dropdownlist"],[data-role="combobox"],[data-role="datepicker"],[data-role="numerictextbox"]';
+const selectTriggerXpath = 'self::select or @role="combobox" or @data-role="dropdownlist" or @data-role="combobox" or contains(concat(" ", normalize-space(@class), " "), " k-dropdownlist ") or contains(concat(" ", normalize-space(@class), " "), " k-combobox ") or contains(concat(" ", normalize-space(@class), " "), " k-picker ")';
 let pageMapRunnerFactory: PageMapRunnerFactory | undefined;
 
 /**
@@ -442,13 +443,14 @@ async function runSelectAction(page: Page, action: PageAction, locator: Locator)
  */
 async function findSelectTrigger(page: Page, action: PageAction) {
   const name = action.targetName;
-  const labeled = page.getByLabel(name).locator('xpath=ancestor-or-self::*[self::select or @role="combobox" or contains(concat(" ", normalize-space(@class), " "), " k-dropdownlist ") or contains(concat(" ", normalize-space(@class), " "), " k-combobox ") or contains(concat(" ", normalize-space(@class), " "), " k-picker ")]').first();
+  // data-role 是部分 Kendo 页面唯一稳定标记，不能只依赖 role 或 k-* class。
+  const labeled = page.getByLabel(name).locator(`xpath=ancestor-or-self::*[${selectTriggerXpath}]`).first();
 
   if (await labeled.count()) {
     return labeled;
   }
 
-  const nearLabel = page.getByText(name, { exact: true }).locator('xpath=ancestor::*[1]/following-sibling::*//*[self::select or @role="combobox" or contains(concat(" ", normalize-space(@class), " "), " k-dropdownlist ") or contains(concat(" ", normalize-space(@class), " "), " k-combobox ") or contains(concat(" ", normalize-space(@class), " "), " k-picker ")][1] | ancestor::*[1]/following-sibling::*[self::select or @role="combobox" or contains(concat(" ", normalize-space(@class), " "), " k-dropdownlist ") or contains(concat(" ", normalize-space(@class), " "), " k-combobox ") or contains(concat(" ", normalize-space(@class), " "), " k-picker ")][1] | ancestor::*[2]//*[self::select or @role="combobox" or contains(concat(" ", normalize-space(@class), " "), " k-dropdownlist ") or contains(concat(" ", normalize-space(@class), " "), " k-combobox ") or contains(concat(" ", normalize-space(@class), " "), " k-picker ")][1]').first();
+  const nearLabel = page.getByText(name, { exact: true }).locator(`xpath=ancestor::*[1]/following-sibling::*//*[${selectTriggerXpath}][1] | ancestor::*[1]/following-sibling::*[${selectTriggerXpath}][1] | ancestor::*[2]//*[${selectTriggerXpath}][1]`).first();
 
   if (await nearLabel.count()) {
     return nearLabel;
