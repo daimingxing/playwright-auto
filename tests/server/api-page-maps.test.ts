@@ -4,9 +4,10 @@ import { tmpdir } from 'node:os';
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../../server/src/app';
+import { createImportJob, listImportItems, updateImportItem } from '../../server/src/lib/import-store';
 import { createPageMap, readPageMap, readPageMapShot, writePageMapShot } from '../../server/src/lib/page-map-store';
 import { PageContextError } from '../../server/src/services/ai/page-context';
-import type { PageMap } from '../../shared/types';
+import type { ImportCaseSource, ImportStepSource, PageMap } from '../../shared/types';
 
 let root = '';
 const mockState = vi.hoisted(() => ({
@@ -186,6 +187,30 @@ describe('页面地图接口', () => {
     expect(shot.page.title).toBe('旧用户列表');
     expect(shot.warnings).toEqual(['旧快照']);
   });
+
+  it('刷新页面地图时复用关联导入项步骤采集动作后状态', async () => {
+    const app = createApp();
+    const map = createMap();
+
+    await createProject(app);
+    await createPageMap(map);
+    const job = await createImportJob('crm', {
+      fileName: 'cases.xlsx',
+      fileHash: 'hash-refresh-steps',
+      envKey: 'default',
+      cases: [createImportCase('TC001', map.targetUrl)]
+    });
+    const [item] = await listImportItems('crm', job.importId);
+    await updateImportItem('crm', job.importId, item.itemId, {
+      pageMapId: map.mapId
+    });
+
+    const refreshed = await request(app).post(`/api/projects/crm/page-maps/${map.mapId}/refresh`);
+
+    expect(refreshed.status).toBe(200);
+    expect(refreshed.body.states.map((state: { name: string }) => state.name)).toEqual(['初始页面', '令牌管理后页面', '添加令牌后页面']);
+    expect(refreshed.body.actionHash).toMatch(/^actions-/);
+  });
 });
 
 /**
@@ -231,5 +256,66 @@ function createMap(patch: Partial<PageMap> = {}): PageMap {
     createdAt: now,
     updatedAt: now,
     ...patch
+  };
+}
+
+/**
+ * 创建带表单入口动作的导入源。
+ */
+function createImportCase(caseNo: string, targetUrl: string) {
+  const caseInfo: ImportCaseSource = {
+    caseNo,
+    caseName: `${caseNo} 用例`,
+    targetUrl,
+    precondition: '已登录管理员账号',
+    expectedResult: '提交成功',
+    note: ''
+  };
+  const steps: ImportStepSource[] = [
+    {
+      caseNo,
+      stepNo: 1,
+      actionType: 'click',
+      targetType: 'table',
+      targetName: '令牌管理',
+      actionText: '点击(click)',
+      targetText: '表格(table)',
+      dataKeys: [],
+      note: ''
+    },
+    {
+      caseNo,
+      stepNo: 2,
+      actionType: 'click',
+      targetType: 'button',
+      targetName: '添加令牌',
+      actionText: '点击(click)',
+      targetText: '按钮(button)',
+      dataKeys: [],
+      note: ''
+    },
+    {
+      caseNo,
+      stepNo: 3,
+      actionType: 'fill',
+      targetType: 'input',
+      targetName: '名称',
+      inputValue: '测试令牌001',
+      actionText: '输入(fill)',
+      targetText: '输入框(input)',
+      dataKeys: [],
+      note: ''
+    }
+  ];
+
+  return {
+    caseInfo,
+    steps,
+    data: [],
+    rowRefs: {
+      caseRow: 1,
+      stepRows: [1, 2, 3],
+      dataRows: []
+    }
   };
 }

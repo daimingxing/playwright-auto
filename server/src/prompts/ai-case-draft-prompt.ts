@@ -71,7 +71,7 @@ export function buildAiCaseDraftSystemPrompt(uiLibrary: UiLibrary = 'auto') {
     '- fields 有 locators 时优先原样使用最高置信且唯一的候选 selector。',
     '- 优先使用 pageContext 中已有 locator，能匹配自然语言目标时必须原样写入 selector。',
     '- 页面上下文没有可匹配 locator 时，可以基于自然语言尝试推理 Playwright selector。',
-    '- 推理 selector 必须把 targetType 当作主要依据：targetType=button 优先 getByRole("button", { name })；targetType=input 优先 getByLabel(name) 或 getByPlaceholder(name)；targetType=select 优先 getByLabel(name)，但没有 DOM 证明是原生 select 时必须提示可能是自定义下拉框。',
+    '- 推理 selector 必须把 targetType 当作主要依据：targetType=button 优先 getByRole("button", { name })；targetType=input 优先 getByRole("textbox", { name })；targetType=select 优先 getByRole("combobox", { name })，但没有 DOM 证明是原生 select 时必须提示可能是自定义下拉框。',
     ...buildUiRules(uiLibrary),
     '- 只有没有 fields 或 elements 证据时才允许低置信推测 selector，并在 warnings 写明需要人工确认。',
     '- targetType 已给出时，不要把 button/input/select 一律退化成 getByText；只有 targetType 缺失且没有更合适信息时才使用 getByText。',

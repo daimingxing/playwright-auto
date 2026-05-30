@@ -152,6 +152,7 @@ function toSummary(map: PageMap): PageMapSummary {
     authHash: map.authHash,
     viewport: map.viewport,
     uiLibrary: map.uiLibrary ?? 'auto',
+    actionHash: map.actionHash,
     status: map.status,
     stateCount: map.states.length,
     updatedAt: map.updatedAt

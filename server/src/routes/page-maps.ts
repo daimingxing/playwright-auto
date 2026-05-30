@@ -1,5 +1,6 @@
 import { Router } from 'express';
-import type { PageMap, PageState } from '../../../shared/types';
+import type { ImportStepSource, PageMap, PageState, UiLibrary } from '../../../shared/types';
+import { listImportItems, listImportJobs } from '../lib/import-store';
 import { deletePageMap, listPageMaps, readPageMap, readPageMapShot } from '../lib/page-map-store';
 import { refreshPageMap } from '../services/ai/page-map';
 
@@ -41,7 +42,9 @@ pageMapsRouter.get<PageMapParams>('/:mapId', async (req, res, next) => {
  */
 pageMapsRouter.post<PageMapParams>('/:mapId/refresh', async (req, res, next) => {
   try {
-    res.json(await refreshPageMap(req.params.projectKey, req.params.mapId));
+    const steps = await readRefreshSteps(req.params.projectKey, req.params.mapId);
+
+    res.json(await refreshPageMap(req.params.projectKey, req.params.mapId, { steps }));
   } catch (error) {
     next(error);
   }
@@ -70,6 +73,38 @@ async function readPageMapDetail(projectKey: string, mapId: string) {
     ...map,
     states
   };
+}
+
+/**
+ * 读取刷新页面地图时可复用的导入源步骤。
+ */
+async function readRefreshSteps(projectKey: string, mapId: string): Promise<ImportStepSource[]> {
+  const map = await readPageMap(projectKey, mapId);
+  const jobs = await listImportJobs(projectKey);
+  const steps: ImportStepSource[] = [];
+
+  for (const job of jobs) {
+    if (!isSameMapScope(map, job.envKey, job.uiLibrary)) {
+      continue;
+    }
+
+    const items = await listImportItems(projectKey, job.importId);
+
+    for (const item of items) {
+      if (item.pageMapId === mapId || item.groupId === mapId || (!item.pageMapId && item.source.caseInfo.targetUrl.trim() === map.targetUrl)) {
+        steps.push(...item.source.steps);
+      }
+    }
+  }
+
+  return steps;
+}
+
+/**
+ * 判断导入任务是否属于当前页面地图的环境和控件库范围。
+ */
+function isSameMapScope(map: PageMap, envKey: string, uiLibrary: UiLibrary | undefined) {
+  return map.envKey === envKey && (map.uiLibrary ?? 'auto') === (uiLibrary ?? 'auto');
 }
 
 /**

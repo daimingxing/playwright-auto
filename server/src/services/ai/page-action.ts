@@ -7,6 +7,9 @@ interface PageActionInput {
 
 const dangerWords = ['保存', '提交', '删除', '移除', '审批', '确认', '支付', '发送', '导入', '导出', '批量操作', '启用', '禁用'];
 const openWords = ['打开', '展开', '切换', '查看', '选择'];
+const formButtonWords = ['添加', '新增', '新建', '创建', '编辑', '修改', '打开', '进入', '配置', '设置', '管理'];
+const formEntryWords = ['管理', '列表', '详情', '配置', '设置', '进入', '打开', '查看'];
+const formTargetTypes = new Set<TargetType>(['input', 'select', 'date']);
 const safeTargets = new Set<TargetType>(['menu', 'tab', 'dialog', 'select', 'date', 'tree']);
 const safeTypes = new Set<StepType>(['click', 'hover', 'select']);
 
@@ -18,8 +21,9 @@ export function buildPageActions(input: PageActionInput): PageActionResult {
   const warnings: string[] = [];
   const path: string[] = [];
   const maxDepth = Math.max(0, input.maxDepth);
+  const firstFormIndex = input.steps.findIndex(isFormStep);
 
-  for (const step of input.steps) {
+  for (const [index, step] of input.steps.entries()) {
     const dangerWord = findDangerWord(step);
 
     if (dangerWord) {
@@ -27,7 +31,7 @@ export function buildPageActions(input: PageActionInput): PageActionResult {
       continue;
     }
 
-    if (!isSafeStep(step)) {
+    if (!isSafeStep(step, index, firstFormIndex)) {
       continue;
     }
 
@@ -57,7 +61,7 @@ export function buildPageActions(input: PageActionInput): PageActionResult {
 /**
  * 判断步骤是否属于页面地图允许的探索动作。
  */
-function isSafeStep(step: ImportStepSource) {
+function isSafeStep(step: ImportStepSource, index: number, firstFormIndex: number) {
   const actionType = step.actionType ?? 'click';
   const targetType = step.targetType;
   const text = getStepText(step);
@@ -82,8 +86,43 @@ function isSafeStep(step: ImportStepSource) {
     return true;
   }
 
+  if (isFormEntryStep(step, index, firstFormIndex)) {
+    return true;
+  }
+
   // 当结构化 targetType 不够具体时，只允许带有明确探索语义的文本进入页面地图动作。
   return hasAnyWord(text, openWords) && hasAnyWord(text, ['菜单', '页签', '弹窗', '窗口', '下拉', '日期', '折叠', '面板', '树节点', '浮层']);
+}
+
+/**
+ * 判断步骤是否为进入表单前的上下文入口点击。
+ */
+function isFormEntryStep(step: ImportStepSource, index: number, firstFormIndex: number) {
+  if (firstFormIndex <= 0 || index >= firstFormIndex) {
+    return false;
+  }
+
+  // 只有 click 能作为页面导航或打开表单入口，fill/select 等字段动作不在这里放宽。
+  if ((step.actionType ?? 'click') !== 'click') {
+    return false;
+  }
+
+  const text = getStepText(step);
+
+  if (step.targetType === 'button') {
+    return hasAnyWord(text, formButtonWords);
+  }
+
+  return Boolean(step.targetType && ['table', 'link', 'text', 'region'].includes(step.targetType) && hasAnyWord(text, formEntryWords));
+}
+
+/**
+ * 判断步骤是否操作表单字段。
+ */
+function isFormStep(step: ImportStepSource) {
+  const actionType = step.actionType;
+
+  return Boolean(step.targetType && formTargetTypes.has(step.targetType)) || actionType === 'fill' || actionType === 'select';
 }
 
 /**

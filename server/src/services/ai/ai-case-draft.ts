@@ -687,11 +687,11 @@ function inferSelectorByTarget(source: ImportStepSource, type: StepType) {
   }
 
   if (source.targetType === 'input') {
-    return `getByLabel('${escapeSelectorText(name)}')`;
+    return `getByRole('textbox', { name: '${escapeSelectorText(name)}' })`;
   }
 
   if (source.targetType === 'select') {
-    return `getByLabel('${escapeSelectorText(name)}')`;
+    return `getByRole('combobox', { name: '${escapeSelectorText(name)}' })`;
   }
 
   return undefined;

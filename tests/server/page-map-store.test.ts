@@ -63,6 +63,24 @@ describe('页面地图缓存键与路径', () => {
     expect(createPageMapId(createPageMapKey({ ...base, uiLibrary: 'native' }))).not.toBe(baseId);
   });
 
+  it('探索动作变化会生成不同页面地图标识', async () => {
+    const { createPageMapKey, createPageMapId } = await import('../../server/src/lib/path');
+    const base = {
+      projectKey: 'crm',
+      envKey: 'default',
+      targetUrl: 'https://example.com/users',
+      authHash: 'no-auth',
+      viewport: { width: 1280, height: 720 },
+      uiLibrary: 'auto' as const
+    };
+    const baseId = createPageMapId(createPageMapKey(base));
+
+    expect(createPageMapId(createPageMapKey({ ...base, actionHash: 'actions-a' }))).not.toBe(baseId);
+    expect(createPageMapId(createPageMapKey({ ...base, actionHash: 'actions-a' }))).toBe(
+      createPageMapId(createPageMapKey({ ...base, actionHash: 'actions-a' }))
+    );
+  });
+
   it('没有登录态时使用明确的 no-auth 值', async () => {
     const { getAuthHash } = await import('../../server/src/lib/path');
 

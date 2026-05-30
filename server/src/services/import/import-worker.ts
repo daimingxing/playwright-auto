@@ -166,7 +166,7 @@ async function resolveRetryPageMap(
 
     if (pageMap.status === 'failed') {
       // 历史失败项可能残留 failed pageMapId，重试必须先刷新，避免读取缺失的 state-initial 快照。
-      return refreshPageMap(projectKey, pageMap.mapId);
+      return refreshPageMap(projectKey, pageMap.mapId, { steps: item.source.steps });
     }
 
     return pageMap;
@@ -186,7 +186,7 @@ async function resolveRetryPageMap(
 
     if (pageMap.status === 'failed') {
       // 失败缓存可能来自上一次页面地图采集，重试时需要重新打开目标 URL，刷新成功后复用新快照。
-      pageMap = await refreshPageMap(projectKey, pageMap.mapId);
+      pageMap = await refreshPageMap(projectKey, pageMap.mapId, { steps: item.source.steps });
     }
 
     return pageMap;

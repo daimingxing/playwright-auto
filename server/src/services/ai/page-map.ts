@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { ImportStepSource, PageAction, PageMap, PageState, UiLibrary } from '../../../../shared/types';
 import { getAppConfig } from '../../lib/app-config';
 import { badRequest, HttpError } from '../../lib/http-error';
@@ -21,6 +22,17 @@ interface PageMapInput {
   now?: Date;
 }
 
+interface PageActionPlan {
+  actions: PageAction[];
+  warnings: string[];
+  actionHash?: string;
+}
+
+interface RefreshPageMapOptions {
+  now?: Date;
+  steps?: ImportStepSource[];
+}
+
 const msPerDay = 24 * 60 * 60 * 1000;
 const initialStateId = 'state-initial';
 
@@ -31,13 +43,15 @@ export async function getPageMap(input: PageMapInput) {
   const now = input.now ?? new Date();
   const pageMapConfig = getAppConfig().ai.pageMap;
   const staleDays = input.staleDays ?? pageMapConfig.staleDays;
+  const actionPlan = buildActionPlan(input.steps ?? [], pageMapConfig.maxDepth, pageMapConfig.maxActions);
   const key = createPageMapKey({
     projectKey: input.projectKey,
     envKey: input.envKey,
     targetUrl: input.targetUrl,
     authHash: input.authHash ?? await getAuthHash(input.projectKey, input.envKey),
     viewport: input.viewport,
-    uiLibrary: input.uiLibrary ?? 'auto'
+    uiLibrary: input.uiLibrary ?? 'auto',
+    actionHash: actionPlan.actionHash
   });
   const mapId = createPageMapId(key);
   const cached = await readCache(input.projectKey, mapId);
@@ -55,7 +69,8 @@ export async function getPageMap(input: PageMapInput) {
       viewport: key.viewport,
       uiLibrary: key.uiLibrary,
       mapId,
-      now
+      now,
+      actionHash: actionPlan.actionHash
     });
   }
 
@@ -68,15 +83,18 @@ export async function getPageMap(input: PageMapInput) {
     uiLibrary: key.uiLibrary,
     mapId,
     now,
-    steps: input.steps
+    actionHash: actionPlan.actionHash,
+    actionPlan
   });
 }
 
 /**
  * 按已有页面地图关键字段重新采集并覆盖页面地图缓存。
  */
-export async function refreshPageMap(projectKey: string, mapId: string, now = new Date()) {
+export async function refreshPageMap(projectKey: string, mapId: string, options: RefreshPageMapOptions = {}) {
   const oldMap = await readPageMap(projectKey, mapId);
+  const pageMapConfig = getAppConfig().ai.pageMap;
+  const actionPlan = buildActionPlan(options.steps ?? [], pageMapConfig.maxDepth, pageMapConfig.maxActions);
 
   return createInitialMap({
     projectKey: oldMap.projectKey,
@@ -86,7 +104,9 @@ export async function refreshPageMap(projectKey: string, mapId: string, now = ne
     viewport: oldMap.viewport,
     uiLibrary: oldMap.uiLibrary ?? 'auto',
     mapId: oldMap.mapId,
-    now,
+    now: options.now ?? new Date(),
+    actionHash: actionPlan.actionHash ?? oldMap.actionHash,
+    actionPlan,
     saveFailed: false
   });
 }
@@ -106,6 +126,7 @@ function createMissingMap(input: {
   uiLibrary: UiLibrary;
   mapId: string;
   now: Date;
+  actionHash?: string;
 }): PageMap {
   return {
     mapId: input.mapId,
@@ -115,6 +136,7 @@ function createMissingMap(input: {
     authHash: input.authHash,
     viewport: input.viewport,
     uiLibrary: input.uiLibrary,
+    actionHash: input.actionHash,
     status: 'failed',
     states: [],
     // 自动创建关闭时只能返回内存态诊断结果，避免误写 map.json 或 snapshot。
@@ -139,26 +161,20 @@ async function createInitialMap(input: {
   uiLibrary: UiLibrary;
   mapId: string;
   now: Date;
-  steps?: ImportStepSource[];
+  actionHash?: string;
+  actionPlan?: PageActionPlan;
   saveFailed?: boolean;
 }) {
   try {
     const appConfig = getAppConfig();
-    const pageMapConfig = appConfig.ai.pageMap;
-    // maxDepth 限制动作路径层级，避免菜单、弹窗、树节点组合后出现指数级状态扩散。
-    const maxDepth = pageMapConfig.maxDepth;
-    const actionResult = buildPageActions({ steps: input.steps ?? [], maxDepth });
-    // maxActions 限制本次真实浏览器动作数量，避免大模板拖慢导入和页面地图生成。
-    const maxActions = pageMapConfig.maxActions;
-    const actions = actionResult.actions.slice(0, maxActions);
-    const limitWarnings = actionResult.actions.length > maxActions ? [`已截断超过 ${maxActions} 个的页面探索动作。`] : [];
+    const actionPlan = input.actionPlan ?? buildActionPlan([], appConfig.ai.pageMap.maxDepth, appConfig.ai.pageMap.maxActions);
     // openTimeoutMs 仅用于浏览器初始打开业务 URL，不影响 AI 模型请求超时或探索动作等待。
     const openTimeoutMs = appConfig.browser.openTimeoutMs;
     const collected = await collectMapStates({
       projectKey: input.projectKey,
       envKey: input.envKey,
       targetUrl: input.targetUrl,
-      actions,
+      actions: actionPlan.actions,
       openTimeoutMs,
       uiLibrary: input.uiLibrary
     });
@@ -172,9 +188,10 @@ async function createInitialMap(input: {
       authHash: input.authHash,
       viewport: input.viewport,
       uiLibrary: input.uiLibrary,
+      actionHash: input.actionHash ?? actionPlan.actionHash,
       status: 'ready',
       states,
-      warnings: uniqueWarnings([...actionResult.warnings, ...limitWarnings, ...collected.warnings]),
+      warnings: uniqueWarnings([...actionPlan.warnings, ...collected.warnings]),
       createdAt: input.now.toISOString(),
       updatedAt: input.now.toISOString()
     };
@@ -195,6 +212,7 @@ async function createInitialMap(input: {
       authHash: input.authHash,
       viewport: input.viewport,
       uiLibrary: input.uiLibrary,
+      actionHash: input.actionHash,
       status: 'failed',
       states: [],
       warnings: [warning],
@@ -204,6 +222,41 @@ async function createInitialMap(input: {
 
     return createPageMap(map);
   }
+}
+
+/**
+ * 生成页面地图探索动作计划及稳定摘要。
+ */
+function buildActionPlan(steps: ImportStepSource[], maxDepth: number, maxActions: number): PageActionPlan {
+  const actionResult = buildPageActions({ steps, maxDepth });
+  // maxActions 限制本次真实浏览器动作数量，避免大模板拖慢导入和页面地图生成。
+  const actions = actionResult.actions.slice(0, maxActions);
+  const limitWarnings = actionResult.actions.length > maxActions ? [`已截断超过 ${maxActions} 个的页面探索动作。`] : [];
+
+  return {
+    actions,
+    warnings: [...actionResult.warnings, ...limitWarnings],
+    actionHash: createActionHash(actions)
+  };
+}
+
+/**
+ * 为安全探索动作生成缓存摘要。
+ */
+function createActionHash(actions: PageAction[]) {
+  if (actions.length === 0) {
+    return undefined;
+  }
+
+  const text = JSON.stringify(actions.map((action) => ({
+    type: action.type,
+    targetType: action.targetType,
+    targetName: action.targetName,
+    value: action.value,
+    path: action.path
+  })));
+
+  return `actions-${createHash('sha256').update(text).digest('hex').slice(0, 16)}`;
 }
 
 /**

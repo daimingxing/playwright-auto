@@ -182,6 +182,9 @@ describe('AI 草稿生成服务', () => {
 
     expect(kendoInput.system).toContain('uiLibrary');
     expect(kendoInput.system).toContain('Kendo');
+    expect(kendoInput.system).toContain('targetType=input 优先 getByRole("textbox", { name })');
+    expect(kendoInput.system).toContain('targetType=select 优先 getByRole("combobox", { name })');
+    expect(kendoInput.system).not.toContain('targetType=select 优先 getByLabel(name)');
     expect(kendoInput.system).toContain('先点击下拉控件');
     expect(JSON.parse(kendoInput.user).uiLibrary).toBe('kendo');
     expect(JSON.parse(kendoInput.user).pageContext.fields[0]).toMatchObject({
@@ -502,6 +505,28 @@ describe('AI 草稿生成服务', () => {
 
     expect(result.steps[0].selector).toBe("getByLabel('用户名称')");
     expect(result.steps[0].selector).not.toBe("locator('.xr-fc').filter({ hasText: '用户名称' }).locator('input')");
+  });
+
+  it('没有页面地图候选时下拉步骤按控件角色生成低置信 selector', () => {
+    const result = completeDraftSelectorsFromPageMap(createSelectDraft(undefined, '令牌分组'), {
+      steps: [createSelectStep('令牌分组')],
+      pageMap: createEmptyPageMap('/token/group')
+    });
+
+    expect(result.steps[0].selector).toBe("getByRole('combobox', { name: '令牌分组' })");
+    expect(result.steps[0].selector).not.toBe("getByLabel('令牌分组')");
+    expect(result.steps[0].confidence).toBe('low');
+  });
+
+  it('没有页面地图候选时输入步骤按控件角色生成低置信 selector', () => {
+    const result = completeDraftSelectorsFromPageMap(createFillDraft('名称'), {
+      steps: [createFillStep('名称')],
+      pageMap: createEmptyPageMap('/token/group')
+    });
+
+    expect(result.steps[0].selector).toBe("getByRole('textbox', { name: '名称' })");
+    expect(result.steps[0].selector).not.toBe("getByLabel('名称')");
+    expect(result.steps[0].confidence).toBe('low');
   });
 
   it('非唯一 field locator 不压过唯一 elements', () => {
@@ -2233,16 +2258,16 @@ function createGroupPromptInput(): DraftGroupInput {
 /**
  * 创建 Kendo 下拉导入步骤。
  */
-function createSelectStep() {
+function createSelectStep(targetName = '取样类别') {
   return {
     caseNo: 'TC001',
     stepNo: 1,
     actionType: 'select' as const,
     targetType: 'select' as const,
-    targetName: '取样类别',
+    targetName,
     inputValue: '采购',
-    actionText: '选择取样类别',
-    targetText: '取样类别下拉框',
+    actionText: `选择${targetName}`,
+    targetText: `${targetName}下拉框`,
     dataKeys: [],
     note: ''
   };
@@ -2251,9 +2276,9 @@ function createSelectStep() {
 /**
  * 创建缺少 selector 的下拉草稿。
  */
-function createSelectDraft(selector?: string) {
+function createSelectDraft(selector?: string, targetName = '取样类别') {
   return {
-    name: '选择取样类别',
+    name: `选择${targetName}`,
     startPath: '/web/IMQM07',
     steps: [
       {
@@ -2261,7 +2286,7 @@ function createSelectDraft(selector?: string) {
         type: 'select' as const,
         selector,
         value: '采购',
-        text: '选择取样类别',
+        text: `选择${targetName}`,
         confidence: 'high' as const,
         warnings: []
       }
@@ -2275,16 +2300,16 @@ function createSelectDraft(selector?: string) {
 /**
  * 创建输入框导入步骤。
  */
-function createFillStep() {
+function createFillStep(targetName = '用户名称') {
   return {
     caseNo: 'TC001',
     stepNo: 1,
     actionType: 'fill' as const,
     targetType: 'input' as const,
-    targetName: '用户名称',
+    targetName,
     inputValue: '张三',
-    actionText: '填写用户名称',
-    targetText: '用户名称输入框',
+    actionText: `填写${targetName}`,
+    targetText: `${targetName}输入框`,
     dataKeys: [],
     note: ''
   };
@@ -2293,16 +2318,16 @@ function createFillStep() {
 /**
  * 创建缺少 selector 的输入草稿。
  */
-function createFillDraft() {
+function createFillDraft(targetName = '用户名称') {
   return {
-    name: '填写用户名称',
+    name: `填写${targetName}`,
     startPath: '/user/list',
     steps: [
       {
         id: 'ai-1',
         type: 'fill' as const,
         value: '张三',
-        text: '填写用户名称',
+        text: `填写${targetName}`,
         confidence: 'high' as const,
         warnings: []
       }
@@ -2310,6 +2335,29 @@ function createFillDraft() {
     confidence: 'high' as const,
     warnings: [],
     missingInfo: []
+  };
+}
+
+/**
+ * 创建没有任何可用候选的页面地图。
+ */
+function createEmptyPageMap(targetUrl: string): DraftGroupInput['pageMap'] {
+  return {
+    mapId: 'pm-empty',
+    targetUrl,
+    states: [
+      {
+        stateId: 'state-initial',
+        name: '初始页面',
+        context: {
+          page: { url: targetUrl, title: '', headings: [] },
+          elements: { buttons: [], inputs: [], selects: [], links: [], navigation: [], tables: [] },
+          fields: [],
+          warnings: []
+        }
+      }
+    ],
+    warnings: []
   };
 }
 

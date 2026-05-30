@@ -388,6 +388,43 @@ describe('页面地图业务编排', () => {
     expect(second.mapId).toBe(first.mapId);
   });
 
+  it('同一页面的探索动作变化时不复用旧页面地图缓存', async () => {
+    const { getPageMap } = await import('../../server/src/services/ai/page-map');
+
+    const initial = await getPageMap({
+      projectKey: 'crm',
+      envKey: 'default',
+      targetUrl: '/users',
+      viewport: { width: 1280, height: 720 },
+      staleDays: 30
+    });
+    const withAction = await getPageMap({
+      projectKey: 'crm',
+      envKey: 'default',
+      targetUrl: '/users',
+      viewport: { width: 1280, height: 720 },
+      staleDays: 30,
+      steps: [
+        {
+          caseNo: 'TC001',
+          stepNo: 1,
+          actionType: 'click',
+          targetType: 'menu',
+          targetName: '系统管理',
+          actionText: '点击系统管理',
+          targetText: '系统管理菜单',
+          dataKeys: [],
+          note: ''
+        }
+      ]
+    });
+
+    expect(withAction.mapId).not.toBe(initial.mapId);
+    expect(withAction.actionHash).toMatch(/^actions-/);
+    expect(withAction.states.map((state) => state.name)).toEqual(['初始页面', '系统管理后页面']);
+    expect(collectCount).toBe(2);
+  });
+
   it('超过配置天数后标记 stale 且不删除缓存文件', async () => {
     const { getPageMap } = await import('../../server/src/services/ai/page-map');
     const map = await getPageMap({

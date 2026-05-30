@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createImportJob, listImportItems, updateImportItem } from '../../server/src/lib/import-store';
+import { listPageMaps } from '../../server/src/lib/page-map-store';
 import { addProjectEnv, createProject } from '../../server/src/lib/project-store';
 import { readPageMap } from '../../server/src/lib/page-map-store';
 import { setPageMapRunner } from '../../server/src/services/ai/page-context';
@@ -302,9 +303,10 @@ describe('导入 worker 页面地图分组', () => {
     const sameGroupFailed = retryItems.find((item) => item.itemId === failed[1].itemId);
     const success = retryItems.find((item) => item.source.caseInfo.targetUrl === '/users');
 
-    expect(collectCount).toBe(2);
+    expect(collectCount).toBe(3);
     expect(retried?.status).toBe('pendingReview');
-    expect(retried?.pageMapId).toBe(failed[0].groupId);
+    expect(retried?.pageMapId).toMatch(/^pm-/);
+    expect(retried?.pageMapId).not.toBe(failed[0].groupId);
     expect(sameGroupFailed?.status).toBe('failed');
     expect(sameGroupFailed?.pageMapId).toBeUndefined();
     expect(success?.status).toBe('pendingReview');
@@ -323,10 +325,9 @@ describe('导入 worker 页面地图分组', () => {
     await enqueueImportJob('crm', job.importId);
     const failedItems = await waitItems('crm', job.importId, ['pendingReview', 'failed']);
     const failed = failedItems[0];
-    const oldMapId = failed.groupId;
+    const oldMapId = (await listPageMaps('crm')).find((item) => item.targetUrl === failed.source.caseInfo.targetUrl && item.status === 'failed')?.mapId;
 
     expect(oldMapId).toMatch(/^pm-/);
-    await expect(readPageMap('crm', oldMapId!)).resolves.toMatchObject({ status: 'failed' });
 
     failUrl = '';
     await updateImportItem('crm', job.importId, failed.itemId, {
@@ -336,7 +337,7 @@ describe('导入 worker 页面地图分组', () => {
     const firstRetryItems = await listImportItems('crm', job.importId);
     const firstRetry = firstRetryItems[0];
     const mapId = firstRetry.pageMapId;
-    const refreshedMap = await readPageMap('crm', oldMapId!);
+    const refreshedMap = await readPageMap('crm', mapId!);
     const refreshCount = collectCount;
 
     await updateImportItem('crm', job.importId, firstRetry.itemId, {
@@ -350,6 +351,7 @@ describe('导入 worker 页面地图分组', () => {
 
     expect(collectCount).toBe(refreshCount);
     expect(refreshedMap.status).toBe('ready');
+    expect(mapId).toMatch(/^pm-/);
     expect(mapId).toBe(oldMapId);
     expect(secondRetry.status).toBe('pendingReview');
     expect(secondRetry.pageMapId).toBe(mapId);

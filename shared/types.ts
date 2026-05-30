@@ -271,6 +271,7 @@ export interface PageMapSummary {
     height: number;
   };
   uiLibrary?: UiLibrary;
+  actionHash?: string;
   status: PageMapStatus;
   stateCount: number;
   updatedAt: string;
@@ -287,6 +288,7 @@ export interface PageMap {
     height: number;
   };
   uiLibrary?: UiLibrary;
+  actionHash?: string;
   status: PageMapStatus;
   states: PageState[];
   warnings: string[];

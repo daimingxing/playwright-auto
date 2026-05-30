@@ -52,6 +52,26 @@ describe('页面安全动作识别', () => {
     expect(result.actions.map((item) => item.targetName)).toEqual(['打开详情弹窗', '创建日期', '更多筛选折叠面板', '组织树节点', '库存说明浮层']);
   });
 
+  it('表单字段前的非危险入口点击会作为页面地图探索路径', () => {
+    const result = buildPageActions({
+      steps: [
+        step({ stepNo: 1, actionType: 'click', targetType: 'table', targetName: '令牌管理', actionText: '点击(click)', targetText: '表格(table)' }),
+        step({ stepNo: 2, actionType: 'click', targetType: 'button', targetName: '添加令牌', actionText: '点击(click)', targetText: '按钮(button)' }),
+        step({ stepNo: 3, actionType: 'fill', targetType: 'input', targetName: '名称', inputValue: '测试令牌001' }),
+        step({ stepNo: 4, actionType: 'select', targetType: 'select', targetName: '令牌分组', inputValue: 'Codex-Sale' }),
+        step({ stepNo: 5, actionType: 'click', targetType: 'button', targetName: '提交' })
+      ],
+      maxDepth: 2
+    });
+
+    expect(result.actions.map((item) => item.targetName)).toEqual(['令牌管理', '添加令牌']);
+    expect(result.actions.map((item) => item.path)).toEqual([['令牌管理'], ['令牌管理', '添加令牌']]);
+    expect(result.warnings).toEqual([
+      '已截断超过 2 层的动作路径：令牌管理 > 添加令牌 > 令牌分组',
+      '已跳过危险动作：提交'
+    ]);
+  });
+
   it('保存、删除、提交和支付等关键词命中后被禁止', () => {
     const result = buildPageActions({
       steps: [
