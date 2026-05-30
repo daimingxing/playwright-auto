@@ -52,6 +52,12 @@ export function useRunAuth(options: RunAuthOptions) {
     try {
       const session = await startLogin(options.projectKey, { envKey: options.selectedEnv.value });
       sessionId.value = session.sessionId;
+
+      if (session.warning) {
+        ElMessage.warning(session.warning);
+        return;
+      }
+
       ElMessage.success('已打开浏览器，请完成登录后返回本页面保存登录态');
     } catch (error) {
       ElMessage.error(getErrorMessage(error));

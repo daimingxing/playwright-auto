@@ -80,6 +80,27 @@ describe('运行中心登录态组合函数', () => {
     expect(auth.sessionId.value).toBe('');
     expect(auth.hasAuth.value).toBe(false);
   });
+
+  it('登录页自动打开失败时仍保留登录会话', async () => {
+    const reloadReports = vi.fn().mockResolvedValue(undefined);
+    mocks.startLogin.mockResolvedValue({
+      sessionId: 'session-slow',
+      url: 'https://slow.crm.test.local',
+      warning: '浏览器已打开，但目标页面自动打开失败'
+    });
+    const auth = useRunAuth({
+      projectKey: 'crm',
+      selectedEnv: ref('default'),
+      reloadReports
+    });
+
+    await auth.openLogin();
+
+    expect(mocks.startLogin).toHaveBeenCalledWith('crm', { envKey: 'default' });
+    expect(auth.sessionId.value).toBe('session-slow');
+    expect(mocks.message.warning).toHaveBeenCalledWith('浏览器已打开，但目标页面自动打开失败');
+    expect(mocks.message.success).not.toHaveBeenCalled();
+  });
 });
 
 describe('运行中心报告组合函数', () => {

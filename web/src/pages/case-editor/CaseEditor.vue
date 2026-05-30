@@ -82,6 +82,7 @@ const locatorDrawerOpen = ref(false);
 const locatorStepId = ref("");
 const stepReviewPreview = ref(new Map<string, StepReviewPreview>());
 const openPanels = ref<string[]>(editorPanels.filter((panel) => panel.defaultOpen).map((panel) => panel.key));
+const isMetaOpen = computed(() => openPanels.value.includes("meta"));
 const stepFlashMs = 180;
 const reviewDebounceMs = 400;
 // 浏览器环境下 `window.setTimeout` 返回数值型定时器句柄，避免与 Node 的 `Timeout` 类型混淆。
@@ -583,9 +584,12 @@ onMounted(loadCase);
           <template #title>
             <div class="collapse-title">
               <span>用例配置与实测检查</span>
-              <span class="hint">
-                {{ formatCaseStatus(item.status).label }} / {{ formatCheckStatus(item).label }} /
-                实测{{ formatPracticalReviewStatus(item.practicalReview) }}
+              <span class="collapse-meta">
+                <span class="hint">
+                  {{ formatCaseStatus(item.status).label }} / {{ formatCheckStatus(item).label }} /
+                  实测{{ formatPracticalReviewStatus(item.practicalReview) }}
+                </span>
+                <span class="open-cue">{{ isMetaOpen ? "收起配置" : "展开配置" }}</span>
               </span>
             </div>
           </template>
@@ -1037,18 +1041,38 @@ onMounted(loadCase);
 }
 
 .minor-collapse {
-  --el-collapse-border-color: #dbe4ef;
-  background: #ffffff;
-  border: 1px solid #dbe4ef;
+  --el-collapse-border-color: #c7d9ee;
+  background: #f8fbff;
+  border: 1px solid #bfd4ec;
   border-radius: 6px;
   flex: 0 0 auto;
   overflow: hidden;
+  box-shadow: 0 8px 20px rgba(55, 96, 140, 0.08);
 }
 
 .minor-collapse :deep(.el-collapse-item__header) {
+  background: linear-gradient(90deg, #eff7ff 0%, #f8fbff 62%, #ffffff 100%);
   border-bottom: 0;
-  height: 40px;
+  cursor: pointer;
+  height: 46px;
   padding: 0 18px;
+  transition: background-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.minor-collapse :deep(.el-collapse-item__header:hover) {
+  background: #edf6ff;
+  box-shadow: inset 3px 0 0 #409eff;
+}
+
+.minor-collapse :deep(.el-collapse-item__header:focus-visible) {
+  box-shadow: inset 0 0 0 2px #409eff;
+  outline: 0;
+}
+
+.minor-collapse :deep(.el-collapse-item__arrow) {
+  color: #2f5f98;
+  font-size: 16px;
+  font-weight: 700;
 }
 
 .minor-collapse :deep(.el-collapse-item__content) {
@@ -1073,9 +1097,32 @@ onMounted(loadCase);
   font-weight: 600;
 }
 
+.collapse-meta {
+  align-items: center;
+  display: flex;
+  flex: 0 1 auto;
+  gap: 10px;
+  min-width: 0;
+}
+
 .hint {
   color: #64748b;
   font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.open-cue {
+  background: #e8f3ff;
+  border: 1px solid #b7d7f8;
+  border-radius: 999px;
+  color: #1d5f9f;
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 5px 10px;
 }
 
 .meta {

@@ -5,15 +5,48 @@ import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../../server/src/app';
 
+const browserMocks = vi.hoisted(() => ({
+  assertVendorBrowser: vi.fn(),
+  getChromePath: vi.fn(() => 'C:/fake/chrome.exe'),
+  launch: vi.fn(),
+  newContext: vi.fn(),
+  newPage: vi.fn(),
+  goto: vi.fn(),
+  storageState: vi.fn(),
+  close: vi.fn()
+}));
+
+vi.mock('@playwright/test', () => ({
+  chromium: {
+    launch: browserMocks.launch
+  }
+}));
+
+vi.mock('../../server/src/services/playwright/vendor-browser', () => ({
+  assertVendorBrowser: browserMocks.assertVendorBrowser,
+  getChromePath: browserMocks.getChromePath
+}));
+
 let root = '';
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'playwright-auto-auth-'));
   process.env.DATA_ROOT = root;
+  process.env.NODE_ENV = 'test';
+  browserMocks.assertVendorBrowser.mockResolvedValue(undefined);
+  browserMocks.getChromePath.mockReturnValue('C:/fake/chrome.exe');
+  browserMocks.launch.mockReset();
+  browserMocks.newContext.mockReset();
+  browserMocks.newPage.mockReset();
+  browserMocks.goto.mockReset();
+  browserMocks.storageState.mockReset();
+  browserMocks.close.mockReset();
+  browserMocks.close.mockResolvedValue(undefined);
 });
 
 afterEach(async () => {
   delete process.env.DATA_ROOT;
+  delete process.env.NODE_ENV;
   await rm(root, { recursive: true, force: true });
 });
 
@@ -44,6 +77,40 @@ describe('登录接口', () => {
 
     expect(res.status).toBe(201);
     expect(res.body.sessionId).toBeTruthy();
+  });
+
+  it('目标页面打开超时后仍可以保存登录会话', async () => {
+    process.env.NODE_ENV = 'development';
+    const app = createApp();
+    await request(app).post('/api/projects').send({
+      name: 'CCTQ',
+      key: 'cctq',
+      baseUrl: 'https://slow.cctq.ai'
+    });
+    browserMocks.storageState.mockResolvedValue(undefined);
+    browserMocks.goto.mockRejectedValue(new Error('page.goto: Timeout 30000ms exceeded'));
+    browserMocks.newPage.mockResolvedValue({ goto: browserMocks.goto });
+    browserMocks.newContext.mockResolvedValue({
+      newPage: browserMocks.newPage,
+      storageState: browserMocks.storageState
+    });
+    browserMocks.launch.mockResolvedValue({
+      newContext: browserMocks.newContext,
+      close: browserMocks.close
+    });
+
+    const started = await request(app).post('/api/projects/cctq/auth/start').send({});
+    const saved = await request(app).post('/api/projects/cctq/auth/save').send({
+      sessionId: started.body.sessionId
+    });
+
+    expect(started.status).toBe(201);
+    expect(started.body.sessionId).toBeTruthy();
+    expect(saved.status).toBe(201);
+    expect(browserMocks.storageState).toHaveBeenCalledWith({
+      path: expect.stringContaining('default.storageState.json')
+    });
+    expect(browserMocks.close).toHaveBeenCalledTimes(1);
   });
 
   it('可以保存手动登录会话为项目级登录态', async () => {

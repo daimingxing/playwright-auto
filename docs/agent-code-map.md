@@ -22,9 +22,9 @@
 - 用例管理、回收站、导出：`web/src/api/cases.ts`、`server/src/routes/cases.ts`、`server/src/lib/case-store.ts`、`server/src/services/export.ts`
 - 用例状态、批量状态切换：`shared/types.ts`、`web/src/pages/project-detail/ProjectDetail.vue`、`web/src/api/cases.ts`、`server/src/routes/cases.ts`、`server/src/lib/case-store.ts`
 - 基础检查和定位质量检查：`shared/case-review.ts`、`server/src/services/case-review/index.ts`、`web/src/pages/case-editor/case-editor.ts`、`web/src/pages/case-editor/CaseEditor.vue`、`web/src/pages/case-editor/case-editor-composables.ts`，规则文档见 `docs/case-review-rules.md`
-- 定位器构建器：`shared/locator-builder.ts`、`web/src/pages/locator-builder/locator-builder.ts`、`web/src/components/LocatorBuilderDrawer.vue`、`server/src/services/case/case-generator.ts`、`server/src/services/practical-review/practical-review-spec.ts`，设计和能力矩阵见 `docs/locator-builder-development.md`
+- 定位器构建器：`shared/locator-builder.ts`、`web/src/pages/locator-builder/locator-builder.ts`、`web/src/components/LocatorBuilderDrawer.vue`、`server/src/services/case/case-step-render.ts`、`server/src/services/case/case-generator.ts`、`server/src/services/practical-review/practical-review-spec.ts`，设计和能力矩阵见 `docs/locator-builder-development.md`
 - 用例步骤编辑和批量操作：`web/src/pages/case-editor/CaseEditor.vue`、`web/src/pages/case-editor/case-editor.ts`、`web/src/pages/case-editor/case-editor-composables.ts`、`tests/web/case-editor.test.ts`、`tests/web/case-editor-composables.test.ts`
-- 用例步骤生成 Playwright spec：`server/src/services/case/case-generator.ts`
+- 用例步骤生成 Playwright spec：`server/src/services/case/case-generator.ts`、`server/src/services/case/case-step-render.ts`
 - Playwright codegen 录制导入：`server/src/routes/record.ts`、`server/src/services/record/record-session.ts`、`server/src/services/record/codegen-parser.ts`
 - AI 自然语言用例导入：`shared/types.ts`、`server/src/services/import/import-excel.ts`、`server/src/services/import/import-worker.ts`、`server/src/services/ai/ai-case-draft.ts`、`server/src/services/ai/page-context.ts`、`server/src/services/ai/page-map.ts`、`server/src/lib/page-map-store.ts`、`server/src/routes/page-maps.ts`、`web/src/api/page-maps.ts`、`web/src/pages/ai-import/AiImportList.vue`、`web/src/pages/ai-import/AiImportPreview.vue`、`web/src/pages/ai-import/ai-import.ts`，新版两表模板和说明见 `docs/ai-case-import/`
 - AI 导入页面地图缓存与降级生成：`server/src/services/import/import-worker.ts` 负责按目标 URL 分组、复用页面地图 snapshot、分组生成、拆小批降级和单条降级；`server/src/services/ai/page-map.ts` 负责安全探索边界和缓存刷新；`web/src/pages/ai-import/ai-import.ts`、`AiImportPreview.vue` 负责分组状态和降级提示展示
@@ -64,7 +64,7 @@
 - 改共享类型时，同步检查前端页面、前端 API、后端存储和测试
 - 改用例状态或基础检查规则时，同步检查 `shared/types.ts`、`shared/case-review.ts`、`server/src/services/case-review/index.ts`、`case-store.ts`、`routes/cases.ts`、`server/src/services/run/runner.ts`、`ProjectDetail.vue`、`CaseEditor.vue`、`RunCenter.vue` 和相关测试
 - 改 API 路径或响应结构时，同步检查 `web/src/api/*`、`server/src/routes/*` 和对应 `tests/server/*`
-- 改用例步骤类型或定位器草稿结构时，同步检查 `shared/types.ts`、`shared/locator-builder.ts`、`CaseEditor.vue`、`LocatorBuilderDrawer.vue`、`web/src/pages/case-editor/case-editor.ts`、`server/src/services/case/case-generator.ts`、`server/src/services/practical-review/practical-review-spec.ts`、`server/src/services/record/codegen-parser.ts` 和相关测试
+- 改用例步骤类型或定位器草稿结构时，同步检查 `shared/types.ts`、`shared/locator-builder.ts`、`CaseEditor.vue`、`LocatorBuilderDrawer.vue`、`web/src/pages/case-editor/case-editor.ts`、`server/src/services/case/case-step-render.ts`、`server/src/services/case/case-generator.ts`、`server/src/services/practical-review/practical-review-spec.ts`、`server/src/services/record/codegen-parser.ts` 和相关测试
 - 改用例步骤编辑交互、批量操作、登录态、录制或实测检查时，同步检查 `CaseEditor.vue`、`web/src/pages/case-editor/case-editor.ts`、`web/src/pages/case-editor/case-editor-composables.ts`、`tests/web/case-editor.test.ts` 和 `tests/web/case-editor-composables.test.ts`
 - 改配置类型、步骤默认等待时间或前端可见配置时，同步检查 `playwright-auto.config.json`、`shared/types.ts`、`app-config.ts`、`web/src/api/projects.ts`、`CaseEditor.vue`、`web/src/pages/case-editor/case-editor-composables.ts`、`server/src/services/record/codegen-parser.ts` 和相关测试
 - 改 `server.corsOrigins` 或本地服务来源限制时，同步检查 `playwright-auto.config.json`、`app-config.ts`、`app.ts`、`README.md` 和 `tests/server/api-projects.test.ts`

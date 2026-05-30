@@ -58,6 +58,12 @@ interface ManualLoginInput {
   envKey?: string;
 }
 
+interface ManualLoginResult {
+  sessionId: string;
+  url: string;
+  warning?: string;
+}
+
 interface ManualSession {
   projectKey: string;
   envKey: string;
@@ -70,11 +76,13 @@ interface ManualSession {
 
 const sessions = new Map<string, ManualSession>();
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
+// 与 Playwright 默认导航超时保持一致，超时后只提示用户手动处理，不中断登录会话。
+const LOGIN_NAV_TIMEOUT_MS = 30 * 1000;
 
 /**
  * 打开有头浏览器让用户手动登录。
  */
-export async function startLoginSession(projectKey: string, input: ManualLoginInput = {}) {
+export async function startLoginSession(projectKey: string, input: ManualLoginInput = {}): Promise<ManualLoginResult> {
   const { envKey, envMeta } = await getAuthEnv(projectKey, input.envKey);
 
   if (process.env.NODE_ENV === 'test') {
@@ -114,11 +122,12 @@ export async function startLoginSession(projectKey: string, input: ManualLoginIn
     timer
   });
 
-  await page.goto(envMeta.baseUrl);
+  const warning = await openLoginUrl(page, envMeta.baseUrl);
 
   return {
     sessionId,
-    url: envMeta.baseUrl
+    url: envMeta.baseUrl,
+    ...(warning ? { warning } : {})
   };
 }
 
@@ -138,6 +147,7 @@ export async function saveLoginSession(projectKey: string, sessionId: string) {
   if (session.context && session.browser) {
     await session.context.storageState({ path: statePath });
     await session.browser.close();
+    session.browser = undefined;
   } else {
     await createAuthState(projectKey, { cookies: [], origins: [] }, session.envKey);
   }
@@ -190,6 +200,21 @@ function createSessionTimer(sessionId: string) {
 
   timer.unref?.();
   return timer;
+}
+
+/**
+ * 自动打开登录地址，打开失败时保留手动登录会话。
+ */
+async function openLoginUrl(page: Page, url: string) {
+  try {
+    // 登录页本身可能位于慢内网，30 秒超时后仍允许用户在已打开浏览器中手动刷新或输入地址。
+    await page.goto(url, { timeout: LOGIN_NAV_TIMEOUT_MS });
+    return '';
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    return `浏览器已打开，但目标页面自动打开失败：${message}。请在浏览器中手动刷新或输入地址，登录后返回本页面保存登录态。`;
+  }
 }
 
 /**

@@ -9,7 +9,7 @@ export interface LoginInput {
  * 打开浏览器让用户手动登录。
  */
 export function startLogin(projectKey: string, input: LoginInput = {}) {
-  return requestJson<{ sessionId: string; url: string }>(`/api/projects/${projectKey}/auth/start`, {
+  return requestJson<{ sessionId: string; url: string; warning?: string }>(`/api/projects/${projectKey}/auth/start`, {
     method: 'POST',
     body: JSON.stringify(input)
   });

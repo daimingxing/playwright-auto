@@ -1,6 +1,7 @@
 import type { CaseStep } from '../../../../shared/types';
 import { renderLocatorExpression } from '../../../../shared/locator-builder';
 import { quoteText } from '../case/code-literal';
+import { isCustomSelect, renderOptionLocator } from '../case/case-step-render';
 import { renderPracticalLocator } from './practical-review-locator';
 
 interface GenerateInput {
@@ -136,45 +137,6 @@ function renderStepLocator(step: CaseStep) {
   }
 
   return renderPracticalLocator(step.selector);
-}
-
-/**
- * 判断 selector 是否明显指向非原生下拉控件。
- */
-function isCustomSelect(step: CaseStep) {
-  const value = normalizeSelector(step.selector ?? '');
-
-  if (step.selectorDraft || isNativeSelect(value)) {
-    return false;
-  }
-
-  // 仅在 selector 自身包含 Kendo 或同类组件证据时改用点击，避免误伤原生 select 的 combobox role。
-  return /\.k-(dropdownlist|picker|combobox|multiselect|dropdowntree)\b|data-role=["']?(dropdownlist|combobox)/.test(value);
-}
-
-/**
- * 判断 selector 是否明确选择原生 select 元素。
- */
-function isNativeSelect(value: string) {
-  return /(^|[("'`\s>])select(\b|[#.:[\s>])/.test(value);
-}
-
-/**
- * 生成自定义下拉选项定位器。
- */
-function renderOptionLocator(value: string) {
-  return `page.getByRole('option', { name: ${quote(value)} }).or(page.getByText(${quote(value)}, { exact: true })).first()`;
-}
-
-/**
- * 兼容历史数据中的页面别名前缀。
- */
-function normalizeSelector(value: string) {
-  if (/^page\d+\./.test(value)) {
-    return value.replace(/^page\d+\./, '');
-  }
-
-  return value;
 }
 
 function renderTimeoutArg(step: CaseStep) {
