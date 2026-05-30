@@ -9,6 +9,15 @@
 
 ---
 
+## 2026-05-30 Kendo 自定义下拉识别边界
+
+- 状态：已解决
+- 问题：Kendo 官方下拉既可能通过 `.k-dropdownlist` 等 class 暴露，也可能只通过 `data-role="combobox"` 或 `data-role="dropdownlist"` 暴露；但裸 `getByRole('combobox', { name })` 同时也是原生 select 的兜底定位，不能仅因 role 名称就升级为自定义下拉。
+- 处理：本轮只确认并补充 Kendo class / data-role 选择器在最终用例和实测检查中都渲染为“点击控件 + 点击 option”；裸 role combobox 和 aria-label locator 继续走 `selectOption`。Semi 控件识别暂缓，避免在没有明确 selector 证据前扩大误判范围。
+- 经验：自定义下拉识别应以 selector 自身的组件证据为边界；Kendo 先行，Semi 等其他组件库需要在采集证据和回归样例齐备后再接入。
+
+---
+
 ## 2026-05-30 Kendo label 同容器字段归属丢失
 
 - 状态：已解决

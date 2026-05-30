@@ -196,6 +196,31 @@ describe('用例生成器', () => {
     expect(code).not.toContain('.selectOption(');
   });
 
+  it('Kendo data-role 下拉生成点击控件和选项文本', () => {
+    const item: CaseMeta = {
+      name: '选择客户',
+      key: 'case-kendo-data-role',
+      status: 'draft',
+      startPath: '/customers',
+      createdAt: '2026-05-30T00:00:00.000Z',
+      updatedAt: '2026-05-30T00:00:00.000Z',
+      steps: [
+        {
+          id: 's1',
+          type: 'select',
+          selector: "locator('[data-role=\"combobox\"]')",
+          value: '长期客户'
+        }
+      ]
+    };
+
+    const code = generateSpec(item);
+
+    expect(code).toContain("await page.locator('[data-role=\"combobox\"]').click();");
+    expect(code).toContain("await page.getByRole('option', { name: \"长期客户\" }).or(page.getByText(\"长期客户\", { exact: true })).first().click();");
+    expect(code).not.toContain('.selectOption(');
+  });
+
   it('原生 select 的 combobox role 和 aria-label locator 保持 selectOption', () => {
     const item: CaseMeta = {
       name: '选择状态',

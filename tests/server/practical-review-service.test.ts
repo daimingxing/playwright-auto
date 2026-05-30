@@ -199,6 +199,26 @@ describe('实测检查服务', () => {
     expect(code).not.toContain('.selectOption(');
   });
 
+  it('生成实测脚本时 Kendo data-role 下拉使用点击控件和选项文本', () => {
+    const code = generatePracticalReviewSpec({
+      startUrl: 'https://crm.test.local/orders',
+      resultPath: 'D:/tmp/review-result.json',
+      screenshotDir: 'D:/tmp/screenshots',
+      steps: [
+        {
+          id: 's1',
+          type: 'select',
+          selector: "locator('[data-role=\"combobox\"]')",
+          value: '长期客户'
+        }
+      ]
+    });
+
+    expect(code).toContain("page.locator('[data-role=\"combobox\"]').click()");
+    expect(code).toContain("page.getByRole('option', { name: \"长期客户\" }).or(page.getByText(\"长期客户\", { exact: true })).first().click()");
+    expect(code).not.toContain('.selectOption(');
+  });
+
   it('生成实测脚本时原生 select 的 combobox role 和 aria-label locator 保持 selectOption', () => {
     const code = generatePracticalReviewSpec({
       startUrl: 'https://crm.test.local/orders',
