@@ -1,5 +1,5 @@
-import { mkdtemp, rm } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -144,6 +144,52 @@ describe('页面地图接口', () => {
     });
   });
 
+  it('查看同 targetUrl 多状态页面地图时按各自 snapshot 展开 fields', async () => {
+    const app = createApp();
+    const initialPath = join(root, 'projects', 'crm', 'page-maps', 'pm-abc123abc123abcd', 'snapshots', 'custom', 'initial.json');
+    const dialogPath = join(root, 'projects', 'crm', 'page-maps', 'pm-abc123abc123abcd', 'snapshots', 'custom', 'dialog.json');
+    const map = createMap({
+      states: [
+        createState('state-initial', '初始页面', '/users', initialPath),
+        createState('state-dialog', '新增弹窗', '/users', dialogPath)
+      ]
+    });
+
+    await createProject(app);
+    await createPageMap(map);
+    await writePageMapShot('crm', map.mapId, 'state-initial', createShot('/users', '用户列表', '错误字段'));
+    await writePageMapShot('crm', map.mapId, 'state-dialog', createShot('/users', '新增弹窗', '错误字段'));
+    await writeShot(initialPath, createShot('/users', '用户列表', '用户名称'));
+    await writeShot(dialogPath, createShot('/users', '新增弹窗', '角色名称'));
+
+    const detail = await request(app).get(`/api/projects/crm/page-maps/${map.mapId}`);
+
+    expect(detail.status).toBe(200);
+    expect(detail.body.states).toHaveLength(2);
+    expect(detail.body.states[0].fields).toHaveLength(1);
+    expect(detail.body.states[1].fields).toHaveLength(1);
+    expect(detail.body.states[0].fields[0].name).toBe('用户名称');
+    expect(detail.body.states[1].fields[0].name).toBe('角色名称');
+  });
+
+  it('查看页面地图详情时拒绝读取 map 目录外的 snapshotPath', async () => {
+    const app = createApp();
+    const outsidePath = join(root, 'projects', 'crm', 'outside-shots', 'leaked.json');
+    const map = createMap({
+      states: [createState('state-initial', '初始页面', '/users', outsidePath)]
+    });
+
+    await createProject(app);
+    await createPageMap(map);
+    await writeShot(outsidePath, createShot('/users', '外部快照', '泄漏字段'));
+
+    const detail = await request(app).get(`/api/projects/crm/page-maps/${map.mapId}`);
+
+    expect(detail.status).toBe(200);
+    expect(detail.body.states[0].fields).toEqual([]);
+    expect(detail.body.states[0].warnings).toContain('页面状态快照路径越界，字段语义未展开');
+  });
+
   it('删除不存在的页面地图时返回中文错误', async () => {
     const app = createApp();
 
@@ -256,6 +302,68 @@ function createMap(patch: Partial<PageMap> = {}): PageMap {
     createdAt: now,
     updatedAt: now,
     ...patch
+  };
+}
+
+/**
+ * 创建页面地图状态测试数据。
+ */
+function createState(stateId: string, name: string, targetUrl: string, snapshotPath?: string): PageMap['states'][number] {
+  const now = '2026-05-28T00:00:00.000Z';
+
+  return {
+    stateId,
+    name,
+    url: targetUrl,
+    title: name,
+    snapshotPath: snapshotPath ?? join(root, 'projects', 'crm', 'page-maps', 'pm-abc123abc123abcd', 'snapshots', `${stateId}.json`),
+    warnings: [],
+    createdAt: now
+  };
+}
+
+/**
+ * 写入指定路径的页面状态快照。
+ */
+async function writeShot(path: string, snapshot: ReturnType<typeof createShot>) {
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, `${JSON.stringify(snapshot, null, 2)}\n`, 'utf8');
+}
+
+/**
+ * 创建带字段语义的页面状态快照。
+ */
+function createShot(targetUrl: string, title: string, fieldName: string) {
+  return {
+    page: { url: targetUrl, title, headings: [title] },
+    elements: {
+      buttons: [],
+      inputs: [],
+      selects: [],
+      links: [],
+      navigation: [],
+      tables: []
+    },
+    fields: [
+      {
+        name: fieldName,
+        type: 'input' as const,
+        ui: 'kendo-textbox',
+        value: '',
+        locators: [
+          {
+            selector: `locator('.xr-fc').filter({ hasText: '${fieldName}' }).locator('input')`,
+            kind: 'field-container' as const,
+            unique: true,
+            confidence: 'high' as const,
+            reason: '字段名来自同一字段容器内的 label'
+          }
+        ],
+        source: 'label-container' as const,
+        confidence: 'high' as const
+      }
+    ],
+    warnings: []
   };
 }
 

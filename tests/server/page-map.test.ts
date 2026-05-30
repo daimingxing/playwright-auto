@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readPageMapShot } from '../../server/src/lib/page-map-store';
 import { PageContextError, setPageMapRunner } from '../../server/src/services/ai/page-context';
 
 let root = '';
@@ -116,6 +117,63 @@ describe('页面地图业务编排', () => {
     expect(map.states[0]).toMatchObject({ name: '初始页面', title: '初始页面' });
     expect(map.states[0]).not.toHaveProperty('sourceAction');
     expect(existsSync(map.states[0].snapshotPath)).toBe(true);
+  });
+
+  it('生成页面地图时把 Kendo 字段语义写入状态 snapshot', async () => {
+    setPageMapRunner(async (input) => ({
+      async open() {
+        collectCount += 1;
+      },
+      async snapshot(warnings) {
+        return {
+          ...createContext('取样规则管理', input.targetUrl),
+          fields: [createKendoField('取样类别')],
+          warnings
+        };
+      },
+      async action() {},
+      async stable() {},
+      async close() {}
+    }));
+    const { getPageMap } = await import('../../server/src/services/ai/page-map');
+
+    const map = await getPageMap({
+      projectKey: 'crm',
+      envKey: 'default',
+      targetUrl: '/web/IMQM07',
+      viewport: { width: 1280, height: 720 },
+      uiLibrary: 'kendo',
+      staleDays: 30,
+      steps: [
+        {
+          caseNo: 'TC001',
+          stepNo: 1,
+          actionType: 'click',
+          targetType: 'menu',
+          targetName: '系统管理',
+          actionText: '点击系统管理',
+          targetText: '系统管理菜单',
+          dataKeys: [],
+          note: ''
+        }
+      ]
+    });
+    const snapshot = await readPageMapShot('crm', map.mapId, map.states[0].stateId);
+
+    expect(map.status).toBe('ready');
+    expect(snapshot.fields?.[0]).toMatchObject({
+      name: '取样类别',
+      type: 'select',
+      ui: 'kendo-dropdownlist',
+      value: '---请选择---',
+      source: 'label-container',
+      confidence: 'high'
+    });
+    expect(snapshot.fields?.[0].locators[0]).toMatchObject({
+      selector: "locator('.xr-fc').filter({ hasText: '取样类别' }).locator('.k-dropdownlist')",
+      unique: true,
+      confidence: 'high'
+    });
   });
 
   it('页面地图初始打开超时时保留快照并记录 warning', async () => {
@@ -501,3 +559,26 @@ describe('页面地图业务编排', () => {
     expect(existsSync(join(root, 'projects', 'crm', 'page-maps', map.mapId, 'snapshots'))).toBe(false);
   });
 });
+
+/**
+ * 创建页面地图测试用 Kendo 字段语义。
+ */
+function createKendoField(name: string) {
+  return {
+    name,
+    type: 'select' as const,
+    ui: 'kendo-dropdownlist',
+    value: '---请选择---',
+    locators: [
+      {
+        selector: `locator('.xr-fc').filter({ hasText: '${name}' }).locator('.k-dropdownlist')`,
+        kind: 'field-container' as const,
+        unique: true,
+        confidence: 'high' as const,
+        reason: '字段名来自同一字段容器内的 label'
+      }
+    ],
+    source: 'label-container' as const,
+    confidence: 'high' as const
+  };
+}

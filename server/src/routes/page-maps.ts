@@ -1,7 +1,10 @@
 import { Router } from 'express';
+import { isAbsolute, relative, resolve } from 'node:path';
 import type { ImportStepSource, PageMap, PageState, UiLibrary } from '../../../shared/types';
+import { readJson } from '../lib/fs';
 import { listImportItems, listImportJobs } from '../lib/import-store';
-import { deletePageMap, listPageMaps, readPageMap, readPageMapShot } from '../lib/page-map-store';
+import { deletePageMap, listPageMaps, readPageMap } from '../lib/page-map-store';
+import { getPageMapPath } from '../lib/path';
 import { refreshPageMap } from '../services/ai/page-map';
 
 interface ProjectParams {
@@ -67,7 +70,7 @@ pageMapsRouter.delete<PageMapParams>('/:mapId', async (req, res, next) => {
  */
 async function readPageMapDetail(projectKey: string, mapId: string) {
   const map = await readPageMap(projectKey, mapId);
-  const states = await Promise.all(map.states.map((state) => expandStateFields(projectKey, map.mapId, state)));
+  const states = await Promise.all(map.states.map((state) => expandStateFields(projectKey, mapId, state)));
 
   return {
     ...map,
@@ -111,8 +114,12 @@ function isSameMapScope(map: PageMap, envKey: string, uiLibrary: UiLibrary | und
  * 从状态快照中展开字段语义，兼容旧快照缺失或损坏的情况。
  */
 async function expandStateFields(projectKey: string, mapId: string, state: PageState): Promise<PageMap['states'][number] & { fields?: unknown[] }> {
+  if (!isSafeSnapshotPath(projectKey, mapId, state.snapshotPath)) {
+    return withEmptyFields(state, '页面状态快照路径越界，字段语义未展开');
+  }
+
   try {
-    const snapshot = await readPageMapShot(projectKey, mapId, state.stateId);
+    const snapshot = await readJson<{ fields?: unknown[] }>(state.snapshotPath);
     const fields = Array.isArray(snapshot.fields) ? snapshot.fields : [];
 
     return {
@@ -120,13 +127,31 @@ async function expandStateFields(projectKey: string, mapId: string, state: PageS
       fields
     };
   } catch {
-    const warning = '页面状态快照读取失败，字段语义未展开';
-
-    return {
-      ...state,
-      fields: [],
-      // 旧缓存可能只有 map.json 没有 snapshot，详情仍应可打开，同时把降级原因暴露给前端。
-      warnings: state.warnings.includes(warning) ? state.warnings : [...state.warnings, warning]
-    };
+    return withEmptyFields(state, '页面状态快照读取失败，字段语义未展开');
   }
+}
+
+/**
+ * 判断快照路径是否仍位于当前页面地图目录内。
+ */
+function isSafeSnapshotPath(projectKey: string, mapId: string, snapshotPath: string) {
+  const mapPath = getPageMapPath(projectKey, mapId);
+  const resolvedMapPath = resolve(mapPath);
+  const resolvedSnapshotPath = resolve(snapshotPath);
+  const childPath = relative(resolvedMapPath, resolvedSnapshotPath);
+
+  // relative 会按路径片段计算包含关系，可避免 C:\foo\bar2 被当作 C:\foo\bar 的子目录。
+  return childPath === '' || (!childPath.startsWith('..') && !isAbsolute(childPath));
+}
+
+/**
+ * 返回字段语义降级后的页面状态。
+ */
+function withEmptyFields(state: PageState, warning: string): PageMap['states'][number] & { fields: unknown[] } {
+  return {
+    ...state,
+    fields: [],
+    // 旧缓存可能只有 map.json 没有 snapshot，详情仍应可打开，同时把降级原因暴露给前端。
+    warnings: state.warnings.includes(warning) ? state.warnings : [...state.warnings, warning]
+  };
 }
