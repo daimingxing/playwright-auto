@@ -79,11 +79,68 @@ describe('页面地图接口', () => {
     });
     expect(detail.status).toBe(200);
     expect(detail.body.states[0].name).toBe('初始页面');
+    expect(detail.body.states[0].fields).toEqual([]);
+    expect(detail.body.states[0].warnings).toContain('页面状态快照读取失败，字段语义未展开');
     expect(refreshed.status).toBe(200);
     expect(refreshed.body.mapId).toBe(map.mapId);
     expect(refreshed.body.updatedAt).not.toBe(map.updatedAt);
     expect(removed.status).toBe(204);
     expect(nextList.body).toEqual([]);
+  });
+
+  it('查看页面地图详情时展开 snapshot 中的字段语义', async () => {
+    const app = createApp();
+    const map = createMap();
+
+    await createProject(app);
+    await createPageMap(map);
+    await writePageMapShot('crm', map.mapId, 'state-initial', {
+      page: { url: map.targetUrl, title: '用户列表', headings: ['用户列表'] },
+      elements: {
+        buttons: [],
+        inputs: [],
+        selects: [],
+        links: [],
+        navigation: [],
+        tables: []
+      },
+      fields: [
+        {
+          name: '取样类别',
+          type: 'select',
+          ui: 'kendo-dropdownlist',
+          value: '---请选择---',
+          locators: [
+            {
+              selector: "locator('.xr-fc').filter({ hasText: '取样类别' }).locator('.k-dropdownlist')",
+              kind: 'field-container',
+              unique: true,
+              confidence: 'high',
+              reason: '字段名来自同一字段容器内的 label'
+            }
+          ],
+          source: 'label-container',
+          confidence: 'high'
+        }
+      ],
+      warnings: []
+    });
+
+    const detail = await request(app).get(`/api/projects/crm/page-maps/${map.mapId}`);
+
+    expect(detail.status).toBe(200);
+    expect(detail.body.states[0].fields[0]).toMatchObject({
+      name: '取样类别',
+      type: 'select',
+      ui: 'kendo-dropdownlist',
+      value: '---请选择---',
+      source: 'label-container',
+      confidence: 'high'
+    });
+    expect(detail.body.states[0].fields[0].locators[0]).toMatchObject({
+      unique: true,
+      confidence: 'high'
+    });
   });
 
   it('删除不存在的页面地图时返回中文错误', async () => {

@@ -19,6 +19,30 @@ import {
   getPendingCount
 } from './ai-import';
 
+interface PageFieldLocatorView {
+  selector?: string;
+  unique?: boolean;
+  confidence?: string;
+  reason?: string;
+}
+
+interface PageFieldView {
+  name?: string;
+  type?: string;
+  ui?: string;
+  value?: string;
+  locators?: PageFieldLocatorView[];
+  source?: string;
+  confidence?: string;
+}
+
+interface PageStateFieldView {
+  fields?: PageFieldView[];
+  context?: {
+    fields?: PageFieldView[];
+  };
+}
+
 const route = useRoute();
 const router = useRouter();
 const projectKey = String(route.params.projectKey);
@@ -215,6 +239,54 @@ async function removeMap(map: PageMapSummary) {
   }
 }
 
+/**
+ * 读取页面状态中的字段语义，兼容历史缓存和后端详情结构差异。
+ */
+function getStateFields(state: PageStateFieldView) {
+  const directFields = Array.isArray(state.fields) ? state.fields : undefined;
+  const contextFields = Array.isArray(state.context?.fields) ? state.context.fields : undefined;
+
+  // 详情接口可能直接展开字段，也可能把字段保留在快照 context 内，优先展示已展开字段。
+  return directFields ?? contextFields ?? [];
+}
+
+/**
+ * 读取字段首选定位器。
+ */
+function getBestFieldLocator(field: PageFieldView) {
+  return field.locators?.[0];
+}
+
+/**
+ * 格式化字段当前值，避免空值撑破表格语义。
+ */
+function formatFieldValue(value?: string) {
+  return value?.trim() || '-';
+}
+
+/**
+ * 格式化字段定位唯一性。
+ */
+function formatFieldUnique(field: PageFieldView) {
+  const locator = getBestFieldLocator(field);
+
+  if (!locator) {
+    return '-';
+  }
+
+  return locator.unique ? '是' : '否';
+}
+
+/**
+ * 格式化字段来源和置信度。
+ */
+function formatFieldSource(field: PageFieldView) {
+  const source = field.source || '-';
+  const confidence = field.confidence || '-';
+
+  return `${source} / ${confidence}`;
+}
+
 onMounted(loadAll);
 onBeforeUnmount(() => {
   if (timer) {
@@ -353,7 +425,7 @@ onBeforeUnmount(() => {
       </el-card>
     </div>
 
-    <el-drawer v-model="mapOpen" size="560px" title="页面地图详情">
+    <el-drawer v-model="mapOpen" size="720px" title="页面地图详情">
       <div v-if="mapDetail" class="map-detail">
         <dl class="info-grid">
           <dt>目标页面</dt>
@@ -372,6 +444,42 @@ onBeforeUnmount(() => {
           <el-table-column prop="url" label="页面地址" min-width="220" show-overflow-tooltip />
           <el-table-column prop="title" label="标题" min-width="140" show-overflow-tooltip />
         </el-table>
+        <section class="field-detail">
+          <h3>字段语义</h3>
+          <el-collapse>
+            <el-collapse-item v-for="state in getMapStates(mapDetail)" :key="state.stateId" :name="state.stateId">
+              <template #title>
+                <span class="field-state-title">{{ state.name || '未命名状态' }}</span>
+                <el-tag size="small" effect="plain">{{ getStateFields(state).length }} 个字段</el-tag>
+              </template>
+              <el-table :data="getStateFields(state)" border stripe empty-text="当前状态暂无字段语义">
+                <el-table-column prop="name" label="字段名" min-width="120" show-overflow-tooltip />
+                <el-table-column prop="type" label="类型" width="90" />
+                <el-table-column prop="ui" label="UI" min-width="140" show-overflow-tooltip />
+                <el-table-column label="当前值" min-width="120" show-overflow-tooltip>
+                  <template #default="{ row }">
+                    {{ formatFieldValue(row.value) }}
+                  </template>
+                </el-table-column>
+                <el-table-column label="首选 selector" min-width="260" show-overflow-tooltip>
+                  <template #default="{ row }">
+                    {{ getBestFieldLocator(row)?.selector || '-' }}
+                  </template>
+                </el-table-column>
+                <el-table-column label="唯一" width="72">
+                  <template #default="{ row }">
+                    {{ formatFieldUnique(row) }}
+                  </template>
+                </el-table-column>
+                <el-table-column label="来源 / 置信度" min-width="140" show-overflow-tooltip>
+                  <template #default="{ row }">
+                    {{ formatFieldSource(row) }}
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-collapse-item>
+          </el-collapse>
+        </section>
       </div>
     </el-drawer>
   </section>
@@ -540,6 +648,27 @@ onBeforeUnmount(() => {
 .map-detail {
   display: grid;
   gap: 16px;
+}
+
+.field-detail {
+  display: grid;
+  gap: 8px;
+}
+
+.field-detail h3 {
+  color: #1f2937;
+  font-size: 15px;
+  margin: 0;
+}
+
+.field-state-title {
+  display: inline-block;
+  font-weight: 600;
+  margin-right: 8px;
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .info-grid {

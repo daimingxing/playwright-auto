@@ -28,6 +28,7 @@
 - Playwright codegen 录制导入：`server/src/routes/record.ts`、`server/src/services/record/record-session.ts`、`server/src/services/record/codegen-parser.ts`
 - AI 自然语言用例导入：`shared/types.ts`、`server/src/services/import/import-excel.ts`、`server/src/services/import/import-worker.ts`、`server/src/services/ai/ai-case-draft.ts`、`server/src/services/ai/page-context.ts`、`server/src/services/ai/page-map.ts`、`server/src/lib/page-map-store.ts`、`server/src/routes/page-maps.ts`、`web/src/api/page-maps.ts`、`web/src/pages/ai-import/AiImportList.vue`、`web/src/pages/ai-import/AiImportPreview.vue`、`web/src/pages/ai-import/ai-import.ts`，新版两表模板和说明见 `docs/ai-case-import/`
 - AI 导入页面地图缓存与降级生成：`server/src/services/import/import-worker.ts` 负责按目标 URL 分组、复用页面地图 snapshot、分组生成、拆小批降级和单条降级；`server/src/services/ai/page-map.ts` 负责安全探索边界和缓存刷新；`web/src/pages/ai-import/ai-import.ts`、`AiImportPreview.vue` 负责分组状态和降级提示展示
+- 页面地图字段语义层：`server/src/services/ai/page-context.ts` 定义并采集 `PageContext.fields`，Kendo 控件优先从同一字段容器内的 `label` 归属字段名；`server/src/services/ai/ai-case-draft.ts` 在 AI 输入摘要和 selector 补全中优先消费 `fields`，找不到字段证据再回退旧 `elements`；`server/src/routes/page-maps.ts` 的详情接口从 snapshot 展开 `fields` 到状态响应；`web/src/pages/ai-import/AiImportList.vue` 的页面地图详情抽屉展示字段名、类型、UI、当前值、首选 selector、唯一性和来源置信度，便于诊断页面地图质量。
 - 运行项目与报告：`web/src/api/runs.ts`、`web/src/pages/run-center/RunCenter.vue`、`web/src/pages/run-center/run-center.ts`、`server/src/routes/runs.ts`、`server/src/services/run/runner.ts`、`server/src/lib/run-store.ts`
 - 登录态：`web/src/api/auth.ts`、`server/src/routes/auth.ts`、`server/src/services/auth-session.ts`
 - 本地应用配置、CORS 来源和步骤默认等待时间：`playwright-auto.config.json`、`shared/types.ts`、`server/src/lib/app-config.ts`、`server/src/app.ts`、`web/src/api/projects.ts`
@@ -56,6 +57,7 @@
 - `web/src/state/project-ui.ts` 保存项目环境选择、项目页状态筛选和运行中心用例选择
 - AI 导入按项目、环境、目标 URL、登录态、视口和控件库命中页面地图缓存；分组生成失败时先拆小批，再降级单条生成，降级过程复用同一页面地图 snapshot，不重新采集页面
 - 页面地图探索会跳过保存、删除、提交等高风险动作，相关提示写入页面地图 warning，预览页只展示提示，不把它当作生成失败
+- `PageContext.fields` 是页面地图 snapshot 内的字段语义层，页面地图详情接口会只读 snapshot 并展开到状态字段；如果旧缓存缺少 snapshot，详情仍可返回并在状态 warning 中说明字段语义未展开。Kendo options 展开采集暂未实现，后续如补充下拉选项读取，需要同步检查 `page-context.ts`、`page-map.ts`、AI 摘要和页面地图详情展示。
 
 ## 修改提醒
 
