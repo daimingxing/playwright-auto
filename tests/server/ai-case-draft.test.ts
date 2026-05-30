@@ -1911,7 +1911,7 @@ describe('AI 草稿生成服务', () => {
     await browser.close();
   }, 15000);
 
-  it('auto 模式检测到 Kendo 特征时采集字段语义', async () => {
+  it('auto 模式只按 Kendo 结构采集字段语义并区分字段名和值', async () => {
     const browser = await chromium.launch({ executablePath: getChromePath() });
     const page = await browser.newPage();
 
@@ -1926,8 +1926,79 @@ describe('AI 草稿生成服务', () => {
     `);
 
     const context = await readPageSnapshot(page, [], 'auto');
+    const field = context.fields?.find((item) => item.name === '取样类别');
 
-    expect(context.fields?.map((field) => field.name)).toContain('取样类别');
+    expect(field).toMatchObject({
+      name: '取样类别',
+      type: 'select',
+      ui: 'kendo-dropdownlist',
+      value: '---请选择---',
+      source: 'label-container'
+    });
+    expect(field?.name).not.toBe('---请选择---');
+    expect(field?.locators[0].selector).not.toContain("getByLabel('---请选择---')");
+    await browser.close();
+  }, 15000);
+
+  it('普通 combobox 不会被 Kendo 下拉摘要误读为 Kendo 候选', async () => {
+    const browser = await chromium.launch({ executablePath: getChromePath() });
+    const page = await browser.newPage();
+
+    await page.setContent(`
+      <div class="search-field">
+        <label id="cityLabel">城市</label>
+        <div role="combobox" aria-labelledby="cityLabel" aria-expanded="false">
+          <input aria-label="城市" value="上海">
+        </div>
+      </div>
+    `);
+
+    const context = await readPageSnapshot(page, [], 'auto');
+
+    expect(context.elements.selects).toEqual([]);
+    expect(context.fields ?? []).toEqual([]);
+    await browser.close();
+  }, 15000);
+
+  it('auto 模式页面只有 Kendo 数值或日期控件时仍采集字段语义', async () => {
+    const browser = await chromium.launch({ executablePath: getChromePath() });
+    const page = await browser.newPage();
+
+    await page.setContent(`
+      <div class="xr-fc">
+        <label><span>数量</span></label>
+        <span class="k-numerictextbox">
+          <input id="sampleQty" name="sampleQty" value="12" data-role="numerictextbox">
+        </span>
+      </div>
+      <div class="xr-fc">
+        <label><span>取样日期</span></label>
+        <span class="k-datepicker">
+          <span class="k-input-value-text">2026-05-30</span>
+          <input id="sampleDate" value="2026-05-30" data-role="datepicker" style="display: none;">
+        </span>
+      </div>
+    `);
+
+    const context = await readPageSnapshot(page, [], 'auto');
+    const qtyField = context.fields?.find((field) => field.name === '数量');
+    const dateField = context.fields?.find((field) => field.name === '取样日期');
+
+    expect(qtyField).toMatchObject({
+      name: '数量',
+      type: 'input',
+      ui: 'kendo-numerictextbox',
+      value: '12',
+      state: 'enabled'
+    });
+    expect(dateField).toMatchObject({
+      name: '取样日期',
+      type: 'date',
+      ui: 'kendo-datepicker',
+      value: '2026-05-30',
+      state: 'enabled'
+    });
+    expect(context.elements.selects).toEqual([]);
     await browser.close();
   }, 15000);
 

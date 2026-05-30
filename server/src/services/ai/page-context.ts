@@ -125,6 +125,8 @@ const maxText = 80;
 const readyTimeoutMs = 12000;
 const actionStableTimeoutMs = 5000;
 const minReadyTextLength = 50;
+const kendoSelectSelector = '.k-dropdownlist,.k-combobox,.k-picker,[data-role="dropdownlist"],[data-role="combobox"]';
+const kendoFieldSelector = '.k-dropdownlist,.k-combobox,.k-picker,.k-multiselect,.k-dropdowntree,.k-numerictextbox,.k-datepicker,.k-datetimepicker,.k-timepicker,[data-role="dropdownlist"],[data-role="combobox"],[data-role="datepicker"],[data-role="numerictextbox"]';
 let pageMapRunnerFactory: PageMapRunnerFactory | undefined;
 
 /**
@@ -611,7 +613,7 @@ async function readSelects(page: Page, uiLibrary: UiLibrary) {
 async function readKendoSelects(page: Page): Promise<PageElement[]> {
   const values: Array<Omit<PageElement, 'unique'>> = [];
   const counts: number[] = [];
-  const locator = page.locator('.k-dropdownlist,.k-combobox,.k-picker,[role="combobox"]');
+  const locator = page.locator(kendoSelectSelector);
   const count = Math.min(await locator.count(), maxItems);
 
   for (let index = 0; index < count; index += 1) {
@@ -689,7 +691,7 @@ async function shouldCollectKendoFields(page: Page, uiLibrary: UiLibrary) {
     return true;
   }
 
-  return (await page.locator('.k-dropdownlist,.k-combobox,.k-picker,.k-multiselect,.k-dropdowntree,.k-numerictextbox,.k-datepicker,.k-datetimepicker,.k-timepicker,[data-role="dropdownlist"],[data-role="combobox"],[data-role="datepicker"],[data-role="numerictextbox"]').count()) > 0;
+  return (await page.locator(kendoFieldSelector).count()) > 0;
 }
 
 /**
@@ -697,7 +699,7 @@ async function shouldCollectKendoFields(page: Page, uiLibrary: UiLibrary) {
  */
 async function readKendoFields(page: Page): Promise<PageField[]> {
   const fields: PageField[] = [];
-  const locator = page.locator('.k-dropdownlist,.k-combobox,.k-picker[role="combobox"],.k-multiselect,.k-dropdowntree,.k-numerictextbox,.k-datepicker,.k-datetimepicker,.k-timepicker,[data-role="dropdownlist"],[data-role="combobox"]');
+  const locator = page.locator(kendoFieldSelector);
   const count = Math.min(await locator.count(), maxItems);
 
   for (let index = 0; index < count; index += 1) {
@@ -1023,7 +1025,7 @@ async function readKendoFields(page: Page): Promise<PageField[]> {
 function buildKendoFieldSelector(info: { name: string; containerTag: string; containerClass: string }) {
   const tag = info.containerTag || '*';
   const classPredicate = buildClassPredicate(info.containerClass);
-  const controlPredicate = 'self::*[@role="combobox" or contains(concat(" ", normalize-space(@class), " "), " k-dropdownlist ") or contains(concat(" ", normalize-space(@class), " "), " k-combobox ") or contains(concat(" ", normalize-space(@class), " "), " k-picker ") or contains(concat(" ", normalize-space(@class), " "), " k-multiselect ") or contains(concat(" ", normalize-space(@class), " "), " k-dropdowntree ") or contains(concat(" ", normalize-space(@class), " "), " k-numerictextbox ") or contains(concat(" ", normalize-space(@class), " "), " k-datepicker ") or contains(concat(" ", normalize-space(@class), " "), " k-datetimepicker ") or contains(concat(" ", normalize-space(@class), " "), " k-timepicker ")]';
+  const controlPredicate = 'self::*[contains(concat(" ", normalize-space(@class), " "), " k-dropdownlist ") or contains(concat(" ", normalize-space(@class), " "), " k-combobox ") or contains(concat(" ", normalize-space(@class), " "), " k-picker ") or contains(concat(" ", normalize-space(@class), " "), " k-multiselect ") or contains(concat(" ", normalize-space(@class), " "), " k-dropdowntree ") or contains(concat(" ", normalize-space(@class), " "), " k-numerictextbox ") or contains(concat(" ", normalize-space(@class), " "), " k-datepicker ") or contains(concat(" ", normalize-space(@class), " "), " k-datetimepicker ") or contains(concat(" ", normalize-space(@class), " "), " k-timepicker ")]';
 
   // 字段名只用于限制容器，不作为控件可访问名，避免把当前值误当成 label。
   return `xpath=//${tag}[${classPredicate}][.//*[self::label or contains(concat(" ", normalize-space(@class), " "), " field-label ") or contains(concat(" ", normalize-space(@class), " "), " label ")][contains(normalize-space(.), ${xpathLiteral(info.name)})]]//*[${controlPredicate}][1]`;
