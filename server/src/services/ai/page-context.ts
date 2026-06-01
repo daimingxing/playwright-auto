@@ -966,16 +966,15 @@ async function readKendoFields(page: Page): Promise<PageField[]> {
     }
 
     const locators: PageLocator[] = [];
+    const attrSelector = buildKendoAttrSelector(info);
 
-    if (info.source === 'label-container' && info.hasContainerLabel) {
-      const selector = buildKendoFieldSelector(info);
-
+    if (attrSelector) {
       locators.push({
-        selector,
-        kind: 'field-container',
-        unique: await page.locator(selector).count().then((matchCount) => matchCount === 1).catch(() => false),
+        selector: attrSelector,
+        kind: 'attr',
+        unique: await countPageLocator(page, attrSelector),
         confidence: 'high',
-        reason: '字段名来自同一字段容器内的 label'
+        reason: '隐藏输入提供了 id 或 name 属性'
       });
     }
 
@@ -985,21 +984,21 @@ async function readKendoFields(page: Page): Promise<PageField[]> {
       locators.push({
         selector: ariaSelector,
         kind: 'label',
-        unique: await page.locator(ariaSelector).count().then((matchCount) => matchCount === 1).catch(() => false),
+        unique: await countPageLocator(page, ariaSelector),
         confidence: 'medium',
         reason: '字段名来自控件 aria-label'
       });
     }
 
-    const attrSelector = buildKendoAttrSelector(info);
+    if (locators.length === 0 && info.source === 'label-container' && info.hasContainerLabel) {
+      const selector = buildKendoFieldSelector(info);
 
-    if (attrSelector) {
       locators.push({
-        selector: attrSelector,
-        kind: 'attr',
-        unique: await page.locator(attrSelector).count().then((matchCount) => matchCount === 1).catch(() => false),
-        confidence: 'medium',
-        reason: '隐藏输入提供了 id 或 name 属性'
+        selector,
+        kind: 'field-container',
+        unique: await countPageLocator(page, selector),
+        confidence: 'low',
+        reason: '缺少可用 id/name/aria 时按字段容器兜底'
       });
     }
 
@@ -1045,18 +1044,78 @@ function buildKendoAriaSelector(info: { ariaLabel: string }) {
 }
 
 /**
- * 构造隐藏 input 属性定位器，作为字段容器定位失败时的候选。
+ * 构造隐藏 input 属性定位器，优先返回短且可执行的 Playwright 定位器。
  */
-function buildKendoAttrSelector(info: { inputName: string; inputId: string }) {
+function buildKendoAttrSelector(info: { inputName: string; inputId: string; type: string; ui: string }) {
+  const inputSelector = buildInputSelector(info);
+
+  if (!inputSelector) {
+    return undefined;
+  }
+
+  if (info.type === 'select') {
+    const control = getKendoControlSelector(info.ui);
+
+    return `locator('${control}:has(${inputSelector})')`;
+  }
+
+  return inputSelector;
+}
+
+/**
+ * 构造 input 的短 CSS 定位器。
+ */
+function buildInputSelector(info: { inputName: string; inputId: string }) {
+  if (info.inputId) {
+    return isSimpleCssId(info.inputId) ? `input#${info.inputId}` : `input[id=${cssString(info.inputId)}]`;
+  }
+
   if (info.inputName) {
     return `input[name=${cssString(info.inputName)}]`;
   }
 
-  if (info.inputId) {
-    return `input[id=${cssString(info.inputId)}]`;
-  }
-
   return undefined;
+}
+
+/**
+ * 根据 Kendo UI 类型选择外层控件 class。
+ */
+function getKendoControlSelector(ui: string) {
+  const selectors: Record<string, string> = {
+    'kendo-combobox': '.k-combobox',
+    'kendo-multiselect': '.k-multiselect',
+    'kendo-dropdowntree': '.k-dropdowntree',
+    'kendo-datepicker': '.k-datepicker',
+    'kendo-numerictextbox': '.k-numerictextbox',
+    'kendo-dropdownlist': '.k-dropdownlist'
+  };
+
+  return selectors[ui] ?? '.k-picker';
+}
+
+/**
+ * 判断 id 是否可直接用于短 CSS id 选择器。
+ */
+function isSimpleCssId(value: string) {
+  return /^[A-Za-z_][A-Za-z0-9_-]*$/.test(value);
+}
+
+/**
+ * 统计页面定位器匹配数，支持平台字段候选中的 locator('css') 形态。
+ */
+async function countPageLocator(page: Page, selector: string) {
+  const css = readLocatorCss(selector);
+
+  return page.locator(css ?? selector).count().then((matchCount) => matchCount === 1).catch(() => false);
+}
+
+/**
+ * 读取 locator('css') 里的 CSS 选择器。
+ */
+function readLocatorCss(selector: string) {
+  const match = selector.match(/^locator\((['"])(.*)\1\)$/);
+
+  return match?.[2];
 }
 
 /**

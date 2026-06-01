@@ -5,6 +5,7 @@ import { buildCaseDraftGroupInput, buildCaseDraftInput, completeDraftSelectors, 
 import type { DraftGroupInput } from '../../server/src/services/ai/ai-case-draft';
 import { assertPageAvailable, readPageSnapshot, resolveUnique, runPageAction, waitForPageReady } from '../../server/src/services/ai/page-context';
 import { getChromePath } from '../../server/src/services/playwright/vendor-browser';
+import { parseLocatorSelector } from '../../shared/locator-builder';
 
 describe('AI 草稿生成服务', () => {
   it('分组 prompt 包含页面地图摘要和多条用例', () => {
@@ -182,9 +183,10 @@ describe('AI 草稿生成服务', () => {
 
     expect(kendoInput.system).toContain('uiLibrary');
     expect(kendoInput.system).toContain('Kendo');
-    expect(kendoInput.system).toContain('targetType=input 优先 getByRole("textbox", { name })');
-    expect(kendoInput.system).toContain('targetType=select 优先 getByRole("combobox", { name })');
-    expect(kendoInput.system).not.toContain('targetType=select 优先 getByLabel(name)');
+    expect(kendoInput.system).toContain('优先使用 pageContext.fields 里唯一且可执行的 locator');
+    expect(kendoInput.system).toContain('字段名只作为匹配语义，不默认等于可访问名');
+    expect(kendoInput.system).not.toContain('targetType=input 优先 getByRole("textbox", { name })');
+    expect(kendoInput.system).not.toContain('targetType=select 优先 getByRole("combobox", { name })');
     expect(kendoInput.system).toContain('先点击下拉控件');
     expect(JSON.parse(kendoInput.user).uiLibrary).toBe('kendo');
     expect(JSON.parse(kendoInput.user).pageContext.fields[0]).toMatchObject({
@@ -1902,12 +1904,12 @@ describe('AI 草稿生成服务', () => {
       }
     });
     expect(field?.locators[0]).toMatchObject({
-      kind: 'field-container',
+      kind: 'attr',
       unique: true,
       confidence: 'high'
     });
     expect(field?.locators[0].selector).not.toContain("getByLabel('---请选择---')");
-    expect(await page.locator(field?.locators[0].selector ?? 'body').count()).toBe(1);
+    expect(await page.locator(readCssLocator(field?.locators[0].selector)).count()).toBe(1);
     await browser.close();
   }, 15000);
 
@@ -2039,10 +2041,103 @@ describe('AI 草稿生成服务', () => {
     const context = await readPageSnapshot(page, [], 'kendo');
     const attrLocator = context.fields?.[0].locators.find((locator) => locator.kind === 'attr');
 
-    expect(attrLocator?.selector).toBe('input[id="123:sample.type"]');
-    expect(await page.locator(attrLocator?.selector ?? 'body').count()).toBe(1);
+    expect(attrLocator?.selector).toBe('locator(\'.k-dropdownlist:has(input[id="123:sample.type"])\')');
+    expect(await page.locator(readCssLocator(attrLocator?.selector)).count()).toBe(1);
     await browser.close();
   }, 15000);
+
+  it('Kendo 文本字段优先输出短 input locator 而不是 getByRole textbox', async () => {
+    const browser = await chromium.launch({ executablePath: getChromePath() });
+    const page = await browser.newPage();
+
+    await page.setContent(`
+      <div class="xr-fc">
+        <label for="edit-0-userName"><span>用户名称</span></label>
+        <span class="k-input k-picker" role="textbox">
+          <input id="edit-0-userName" name="edit-0-userName" value="张三">
+        </span>
+      </div>
+    `);
+
+    const context = await readPageSnapshot(page, [], 'kendo');
+    const field = context.fields?.[0];
+
+    expect(field?.locators[0].selector).toBe('input#edit-0-userName');
+    expect(field?.locators.some((locator) => locator.selector.startsWith("getByRole('textbox'"))).toBe(false);
+    await browser.close();
+  }, 15000);
+
+  it('Kendo 下拉字段优先输出短 locator 而不是长 XPath', async () => {
+    const browser = await chromium.launch({ executablePath: getChromePath() });
+    const page = await browser.newPage();
+
+    await page.setContent(`
+      <div class="xr-fc">
+        <label for="edit-0-eachOtherCheckFlag"><span>是否互检</span></label>
+        <span class="k-picker k-dropdownlist" role="combobox">
+          <span class="k-input-value-text">---请选择---</span>
+          <input id="edit-0-eachOtherCheckFlag" name="edit-0-eachOtherCheckFlag" required value="" data-role="dropdownlist" style="display: none;">
+        </span>
+      </div>
+    `);
+
+    const context = await readPageSnapshot(page, [], 'kendo');
+    const field = context.fields?.[0];
+
+    expect(field?.locators[0].selector).toBe("locator('.k-dropdownlist:has(input#edit-0-eachOtherCheckFlag)')");
+    expect(field?.locators.some((locator) => locator.selector.startsWith('xpath='))).toBe(false);
+    await browser.close();
+  }, 15000);
+
+  it('页面地图字段补全优先消费短 locator 而不是长 XPath', () => {
+    const result = completeDraftSelectorsFromPageMap(createSelectDraft(), {
+      steps: [createSelectStep()],
+      pageMap: {
+        mapId: 'pm-short-locator',
+        targetUrl: '/web/IMQM07',
+        uiLibrary: 'kendo',
+        states: [
+          {
+            stateId: 'state-initial',
+            name: '初始页面',
+            context: {
+              page: { url: '/web/IMQM07', title: '取样规则管理', headings: [] },
+              elements: { buttons: [], inputs: [], selects: [], links: [], navigation: [], tables: [] },
+              fields: [
+                {
+                  name: '取样类别',
+                  type: 'select',
+                  ui: 'kendo-dropdownlist',
+                  value: '---请选择---',
+                  locators: [
+                    {
+                      selector: "locator('.k-dropdownlist:has(input#edit-0-sampleType)')",
+                      kind: 'attr',
+                      unique: true,
+                      confidence: 'medium'
+                    },
+                    {
+                      selector: "xpath=//div[contains(@class, 'xr-fc')]//*[contains(@class, 'k-dropdownlist')]",
+                      kind: 'field-container',
+                      unique: true,
+                      confidence: 'high'
+                    }
+                  ],
+                  source: 'label-container',
+                  confidence: 'high'
+                }
+              ],
+              warnings: []
+            }
+          }
+        ],
+        warnings: []
+      }
+    });
+
+    expect(result.steps[0].selector).toBe("locator('.k-dropdownlist:has(input#edit-0-sampleType)')");
+    expect(result.steps[0].warnings).not.toContain('平台根据页面上下文自动补充 selector，但该定位器当前匹配不唯一，请人工确认。');
+  });
 
   it('只有 aria-label 的 Kendo 字段不会把空字段容器定位器排在首位', async () => {
     const browser = await chromium.launch({ executablePath: getChromePath() });
@@ -2065,7 +2160,7 @@ describe('AI 草稿生成服务', () => {
       source: 'aria'
     });
     expect(field?.locators[0].kind).not.toBe('field-container');
-    expect(await page.locator(field?.locators[0].selector ?? 'body').count()).toBeGreaterThan(0);
+    expect(await page.locator(readCssLocator(field?.locators[0].selector)).count()).toBeGreaterThan(0);
     await browser.close();
   }, 15000);
 
@@ -2369,6 +2464,19 @@ function createGroupPromptInput(): DraftGroupInput {
       }
     ]
   };
+}
+
+/**
+ * 从平台保存的 locator 表达式中读取可直接交给 Playwright 的 CSS。
+ */
+function readCssLocator(selector?: string) {
+  const state = parseLocatorSelector(selector ?? '');
+
+  if (state.mode !== 'css' || typeof state.value !== 'string') {
+    throw new Error(`测试只支持简单 CSS locator：${selector ?? ''}`);
+  }
+
+  return state.value;
 }
 
 /**

@@ -957,7 +957,38 @@ function getFieldMatchRank(fieldName: string, targetName: string) {
 function chooseUniqueFieldLocator(locators: PageLocator[]) {
   return locators
     .filter((locator) => locator.unique)
-    .sort((left, right) => levelRank[right.confidence] - levelRank[left.confidence])[0];
+    .filter((locator) => !isLongXPathLocator(locator.selector))
+    .sort((left, right) => {
+      const priorityDiff = getFieldLocatorPriority(right) - getFieldLocatorPriority(left);
+
+      if (priorityDiff !== 0) {
+        return priorityDiff;
+      }
+
+      return levelRank[right.confidence] - levelRank[left.confidence];
+    })[0];
+}
+
+/**
+ * 判断字段候选是否是长 XPath，避免把它作为最终 selector 输出。
+ */
+function isLongXPathLocator(selector: string) {
+  return selector.trim().startsWith('xpath=');
+}
+
+/**
+ * 计算字段定位器优先级，真实属性和短 Playwright CSS 优先于容器语义。
+ */
+function getFieldLocatorPriority(locator: PageLocator) {
+  if (locator.kind === 'attr') {
+    return 3;
+  }
+
+  if (locator.kind === 'label' || locator.kind === 'role') {
+    return 2;
+  }
+
+  return 1;
 }
 
 /**
