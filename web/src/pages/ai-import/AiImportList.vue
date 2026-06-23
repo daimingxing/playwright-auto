@@ -4,9 +4,11 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import type { UploadFile } from 'element-plus';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import type { PageMap, PageMapSummary, ImportJob, UiLibrary } from '../../../../shared/types';
+import type { EnvMeta, PageMap, PageMapSummary, ImportJob, UiLibrary } from '../../../../shared/types';
 import { createAiImport, deleteImport, listImports } from '../../api/imports';
 import { deletePageMap, getPageMap, listPageMaps, refreshPageMap } from '../../api/page-maps';
+import { getProject } from '../../api/projects';
+import { getProjectEnv, setProjectEnv } from '../../state/project-env';
 import { getErrorMessage } from '../../utils/error';
 import {
   formatImportStatus,
@@ -50,6 +52,9 @@ const loading = ref(false);
 const uploading = ref(false);
 const jobs = ref<ImportJob[]>([]);
 const maps = ref<PageMapSummary[]>([]);
+const envs = ref<EnvMeta[]>([]);
+const activeEnv = ref<EnvMeta | null>(null);
+const selectedEnv = ref('');
 const mapDetail = ref<PageMap | null>(null);
 const mapOpen = ref(false);
 const file = ref<File | null>(null);
@@ -58,6 +63,27 @@ let timer: ReturnType<typeof window.setInterval> | undefined;
 
 const hasRunning = computed(() => jobs.value.some((job) => job.status === 'running'));
 const mapCountText = computed(() => `共 ${maps.value.length} 条缓存`);
+
+/**
+ * 加载项目环境状态。
+ */
+async function loadProjectEnv() {
+  const project = await getProject(projectKey);
+  envs.value = project.envs;
+  activeEnv.value = getProjectEnv(project) ?? null;
+  selectedEnv.value = activeEnv.value?.key ?? '';
+}
+
+/**
+ * 切换 AI 导入使用的项目环境。
+ */
+function changeEnv() {
+  activeEnv.value = envs.value.find((env) => env.key === selectedEnv.value) ?? null;
+
+  if (activeEnv.value) {
+    setProjectEnv(projectKey, activeEnv.value.key);
+  }
+}
 
 /**
  * 加载 AI 导入任务列表。
@@ -130,7 +156,7 @@ async function uploadFile() {
   uploading.value = true;
 
   try {
-    const job = await createAiImport(projectKey, file.value, { uiLibrary: uiLibrary.value });
+    const job = await createAiImport(projectKey, file.value, { envKey: selectedEnv.value, uiLibrary: uiLibrary.value });
     ElMessage.success(job.reused ? '检测到已有导入任务，已打开原任务' : '导入任务已创建');
     await router.push(`/projects/${projectKey}/imports/${job.importId}`);
   } catch (error) {
@@ -287,7 +313,9 @@ function formatFieldSource(field: PageFieldView) {
   return `${source} / ${confidence}`;
 }
 
-onMounted(loadAll);
+onMounted(async () => {
+  await Promise.all([loadProjectEnv(), loadAll()]);
+});
 onBeforeUnmount(() => {
   if (timer) {
     window.clearInterval(timer);
@@ -314,6 +342,19 @@ onBeforeUnmount(() => {
             <span>上传模板</span>
           </template>
           <div class="upload-row">
+            <div class="import-settings">
+              <label class="import-field">
+                <span>导入环境</span>
+                <el-select v-model="selectedEnv" class="env-select" @change="changeEnv">
+                  <el-option
+                    v-for="env in envs"
+                    :key="env.key"
+                    :label="`${env.name}（${env.key}）`"
+                    :value="env.key"
+                  />
+                </el-select>
+              </label>
+            </div>
             <el-upload
               class="upload-box"
               drag
@@ -530,7 +571,7 @@ onBeforeUnmount(() => {
   display: grid;
   flex: 1;
   gap: 10px;
-  grid-template-rows: minmax(176px, 28vh) minmax(280px, 1fr);
+  grid-template-rows: minmax(220px, 32vh) minmax(280px, 1fr);
   min-height: 0;
   overflow: hidden;
 }
@@ -566,9 +607,36 @@ onBeforeUnmount(() => {
   align-items: stretch;
   display: grid;
   gap: 10px;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   height: 100%;
   min-height: 0;
+}
+
+.import-settings {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.import-field {
+  align-items: center;
+  display: flex;
+  flex: 1 1 220px;
+  gap: 8px;
+  min-width: 0;
+}
+
+.import-field span {
+  color: #475569;
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.env-select {
+  min-width: 0;
 }
 
 .upload-box {

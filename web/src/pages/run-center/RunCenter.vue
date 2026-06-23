@@ -28,6 +28,7 @@ const router = useRouter();
 const projectKey = String(route.params.projectKey);
 const projectUi = useProjectUiStore();
 const envs = ref<EnvMeta[]>([]);
+const activeEnv = ref<EnvMeta | null>(null);
 const selectedEnv = ref('default');
 const runMode = ref<RunMode>('headless');
 const runConfig = ref<RunConfig>({
@@ -62,6 +63,8 @@ const {
   saveAuth
 } = useRunAuth({
   projectKey,
+  envs,
+  activeEnv,
   selectedEnv,
   reloadReports: loadReports
 });
@@ -89,7 +92,8 @@ async function loadProject() {
   const [project, config, items] = await Promise.all([getProject(projectKey), getRunConfig(projectKey), listCases(projectKey)]);
 
   envs.value = project.envs;
-  selectedEnv.value = getProjectEnv(project)?.key ?? '';
+  activeEnv.value = getProjectEnv(project) ?? null;
+  selectedEnv.value = activeEnv.value?.key ?? '';
   runConfig.value = config;
   workers.value = config.headlessWorkers;
   cases.value = items.filter(isRunnableCase);

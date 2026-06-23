@@ -6,10 +6,11 @@ import {
   Delete,
   Download,
   EditPen,
+  InfoFilled,
 } from "@element-plus/icons-vue";
 import { computed, onMounted, reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import type { CaseMeta, CaseStatus } from "../../../../shared/types";
+import type { CaseMeta, CaseStatus, EnvMeta } from "../../../../shared/types";
 import {
   batchUpdateCaseStatus,
   copyCase,
@@ -22,6 +23,9 @@ import {
   restoreCase,
   updateCaseStatus,
 } from "../../api/cases";
+import { getProject } from "../../api/projects";
+import { useProjectAuth } from "../../composables/project-auth";
+import { getProjectEnv } from "../../state/project-env";
 import { useProjectUiStore, type CaseStatusFilter } from "../../state/project-ui";
 import { getErrorIssues, getErrorMessage } from "../../utils/error";
 import {
@@ -38,6 +42,9 @@ const projectUi = useProjectUiStore();
 const dialogOpen = ref(false);
 const cases = ref<CaseMeta[]>([]);
 const trash = ref<CaseMeta[]>([]);
+const envs = ref<EnvMeta[]>([]);
+const activeEnv = ref<EnvMeta | null>(null);
+const selectedEnv = ref("");
 const selectedKeys = ref<string[]>([]);
 const statusFilter = ref<CaseStatusFilter>(projectUi.getCaseStatusFilter(projectKey));
 const trashOpen = ref<string[]>([]);
@@ -56,6 +63,35 @@ const filteredCases = computed(() =>
   statusFilter.value === "all" ? cases.value : cases.value.filter((item) => item.status === statusFilter.value),
 );
 const trashTitle = computed(() => `回收站（${trash.value.length}）`);
+const auth = useProjectAuth({
+  projectKey,
+  envs,
+  activeEnv,
+  selectedEnv,
+  savedMessage: "登录态已保存，AI 导入、实测检查和运行测试会自动复用",
+});
+const {
+  hasAuth,
+  authPath,
+  sessionId,
+  loading: loadingLogin,
+  saving: savingLogin,
+  loadAuthState,
+  changeEnv,
+  openLogin,
+  saveAuth,
+} = auth;
+
+/**
+ * 加载项目环境和登录态状态。
+ */
+async function loadProjectAuth() {
+  const project = await getProject(projectKey);
+  envs.value = project.envs;
+  activeEnv.value = getProjectEnv(project) ?? null;
+  selectedEnv.value = activeEnv.value?.key ?? "";
+  await loadAuthState();
+}
 
 /**
  * 加载项目用例和回收站。
@@ -262,7 +298,9 @@ async function removeTrashItem(item: CaseMeta) {
   }
 }
 
-onMounted(loadData);
+onMounted(async () => {
+  await Promise.all([loadData(), loadProjectAuth()]);
+});
 </script>
 
 <template>
@@ -293,6 +331,38 @@ onMounted(loadData);
     </div>
 
     <div class="content">
+      <section class="auth-strip">
+        <div class="auth-title">
+          <strong>项目环境与登录态</strong>
+          <span>{{ activeEnv ? `${activeEnv.name}（${activeEnv.key}）` : "未配置环境" }}</span>
+        </div>
+        <div class="auth-controls btn-shadow-md">
+          <el-select v-model="selectedEnv" class="env-select" size="large" @change="changeEnv">
+            <el-option
+              v-for="env in envs"
+              :key="env.key"
+              :label="`${env.name}（${env.key}）`"
+              :value="env.key"
+            />
+          </el-select>
+          <el-tag :type="hasAuth ? 'success' : 'warning'" effect="light" class="auth-tag">
+            登录态：{{ hasAuth ? "已保存" : "未保存" }}
+          </el-tag>
+          <el-tooltip v-if="authPath" :content="authPath" placement="top">
+            <el-icon class="auth-help"><InfoFilled /></el-icon>
+          </el-tooltip>
+          <el-button :loading="loadingLogin" @click="openLogin">打开浏览器登录</el-button>
+          <el-button
+            type="primary"
+            plain
+            :disabled="!sessionId"
+            :loading="savingLogin"
+            @click="saveAuth"
+          >
+            我已完成登录，保存登录态
+          </el-button>
+        </div>
+      </section>
       <section class="list-block">
         <h3>用例列表</h3>
         <div class="table-wrap">
@@ -531,9 +601,61 @@ onMounted(loadData);
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 10px;
   overflow: hidden;
+}
+
+.auth-strip {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #dbe4ef;
+  border-radius: 8px;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 16px;
+  justify-content: space-between;
+  min-width: 0;
+  padding: 12px 14px;
+}
+
+.auth-title {
+  display: grid;
+  gap: 3px;
+  min-width: 160px;
+}
+
+.auth-title strong {
+  color: #1f2937;
+  font-size: 15px;
+}
+
+.auth-title span {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.auth-controls {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.env-select {
+  width: 220px;
+}
+
+.auth-tag {
+  flex: 0 0 auto;
+}
+
+.auth-help {
+  color: #64748b;
+  cursor: help;
+  font-size: 16px;
 }
 
 .list-block {

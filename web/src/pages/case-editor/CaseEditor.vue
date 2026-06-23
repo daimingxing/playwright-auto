@@ -10,7 +10,6 @@ import {
   CopyDocument,
   Delete,
   Finished,
-  InfoFilled,
   MoreFilled,
   Plus,
   Select,
@@ -33,7 +32,7 @@ import {
   updateCaseStatus,
 } from "../../api/cases";
 import { getAppStepConfig, getProject } from "../../api/projects";
-import { getProjectEnv } from "../../state/project-env";
+import { getProjectEnv, setProjectEnv } from "../../state/project-env";
 import { getErrorIssues, getErrorMessage } from "../../utils/error";
 import { formatDateTime } from "../../utils/time";
 import { reviewCaseStep } from "../../../../shared/case-review";
@@ -62,7 +61,7 @@ import {
   stepLabels,
   stepTimeouts,
 } from "./case-editor";
-import { useCaseAuth, useCasePractical, useCaseRecord, useStepBatch } from "./case-editor-composables";
+import { useCasePractical, useCaseRecord, useStepBatch } from "./case-editor-composables";
 import { formatLocatorSummary, type LocatorBuilderState } from "../locator-builder/locator-builder";
 
 const route = useRoute();
@@ -121,22 +120,6 @@ const startPreview = computed(() => getStartPreview(item.value, activeEnv.value)
 const activeLocatorStep = computed(() => item.value?.steps.find((row) => row.id === locatorStepId.value));
 const activeLocatorSelector = computed(() => activeLocatorStep.value?.selector ?? "");
 const activeLocatorDraft = computed(() => activeLocatorStep.value?.selectorDraft);
-const {
-  hasAuth,
-  authPath,
-  loginId,
-  loadingLogin,
-  savingLogin,
-  loadAuthState,
-  changeEnv,
-  openLogin,
-  saveAuth,
-} = useCaseAuth({
-  projectKey,
-  envs,
-  activeEnv,
-  selectedEnv,
-});
 const {
   isBatchMode,
   batchIds,
@@ -228,7 +211,17 @@ async function loadCase() {
   envs.value = project.envs;
   activeEnv.value = getProjectEnv(project) ?? null;
   selectedEnv.value = activeEnv.value?.key ?? "";
-  await loadAuthState();
+}
+
+/**
+ * 切换当前实测检查环境。
+ */
+function changeEnv() {
+  activeEnv.value = envs.value.find((env) => env.key === selectedEnv.value) ?? null;
+
+  if (activeEnv.value) {
+    setProjectEnv(projectKey, activeEnv.value.key);
+  }
 }
 
 /**
@@ -632,26 +625,6 @@ onMounted(loadCase);
                 </el-form-item>
                 <el-form-item label="实际地址">
                   <div class="start-preview">{{ startPreview || "-" }}</div>
-                </el-form-item>
-                <el-form-item label="登录态">
-                  <div class="auth-status-wrap btn-shadow-md">
-                    <el-tag :type="hasAuth ? 'success' : 'info'" effect="light" class="auth-tag">
-                      {{ hasAuth ? "已保存" : "未保存" }}
-                    </el-tag>
-                    <el-tooltip v-if="authPath" :content="authPath" placement="top">
-                      <el-icon class="auth-help"><InfoFilled /></el-icon>
-                    </el-tooltip>
-                    <el-button :loading="loadingLogin" @click="openLogin">打开浏览器登录</el-button>
-                    <el-button
-                      :disabled="!loginId"
-                      :loading="savingLogin"
-                      type="primary"
-                      plain
-                      @click="saveAuth"
-                    >
-                      我已完成登录，保存登录态
-                    </el-button>
-                  </div>
                 </el-form-item>
               </el-form>
 
@@ -1210,13 +1183,6 @@ onMounted(loadCase);
   margin: 12px 0 0;
 }
 
-.auth-status-wrap {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
 .case-state-row {
   display: flex;
   align-items: center;
@@ -1226,17 +1192,6 @@ onMounted(loadCase);
 
 .case-state-select {
   width: 128px;
-}
-
-.auth-tag {
-  min-width: 54px;
-  text-align: center;
-}
-
-.auth-help {
-  color: #8796aa;
-  cursor: help;
-  font-size: 14px;
 }
 
 .start-preview {

@@ -13,6 +13,16 @@ afterEach(() => {
 });
 
 describe('AI 导入前端 API', () => {
+  it('创建导入任务时必须提交当前项目环境', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(makeResponse({ importId: 'import-20260526-120000-ab12' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await createAiImport('crm', new File(['demo'], 'cases.xlsx'), { envKey: 'pre' });
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect((init.body as FormData).get('envKey')).toBe('pre');
+  });
+
   it('上传 Excel 使用 FormData 且不设置 JSON 请求头', async () => {
     const fetchMock = vi.fn().mockResolvedValue(makeResponse({ importId: 'import-20260526-120000-ab12' }));
     vi.stubGlobal('fetch', fetchMock);

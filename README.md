@@ -169,13 +169,13 @@ $env:PLAYWRIGHT_AUTO_AI_API_KEY="你的模型密钥"
 - 用例状态：支持草稿、待启用、启用；运行中心只展示启用且基础检查通过的用例
 - 基础检查：自动检查用例完整性、必填字段、等待时间范围和定位质量，并在步骤表展示问题原因与建议
 - 定位器构建器：在用例编辑页通过角色、文本、标签、占位符、测试 ID、标题、图片文本、CSS（高级）等方式生成 selector，支持全量 role 搜索、正则、description、可见性过滤、包含/排除文本、包含/排除简单子定位器，同时保留手写定位模式；当前能力矩阵和 Playwright 已支持但尚未放入 UI 的候选能力见 `docs/locator-builder-development.md`
-- AI 用例导入：通过标准 Excel 模板批量导入自然语言测试用例，后端异步采集目标页面上下文并生成可编辑草稿；入口在项目详情页的 `AI导入`，模板位于 `docs/ai-case-import/AI自然语言用例导入模板.xlsx`
+- AI 用例导入：通过标准 Excel 模板批量导入自然语言测试用例，后端按当前项目环境和登录态异步采集目标页面上下文并生成可编辑草稿；入口在项目详情页的 `AI导入`，模板位于 `docs/ai-case-import/AI自然语言用例导入模板.xlsx`
 - 草稿保存：编辑页支持只保存 `case.json` 草稿，不生成测试文件；草稿保存也会执行基础检查，但不会因检查不通过而阻断；开始实测检查前会自动保存当前草稿
 - 测试文件生成：保存并生成测试文件、切换到待启用或启用时会执行基础检查，检查不通过会返回具体问题并阻断生成
 - 用例导出：导出单条用例目录，包含结构化数据和 Playwright spec
 - 步骤编辑：支持跳转、点击、右键、双击、悬停、输入、选择、等待和断言步骤；支持选中步骤后插入、单步上移下移、单步复制和批量删除、批量上移下移、批量复制、全选、取消批量
 - 录制导入：通过 Playwright codegen 录制操作，并把录制步骤插入到当前选中步骤后方；未选中步骤时追加到末尾
-- 登录态：通过有头浏览器手动登录，保存 storageState 后复用；不需要登录的项目可以直接运行
+- 登录态：在用例管理页或运行中心维护项目环境对应的 storageState，AI 导入和编辑页实测检查会复用；不需要登录的项目可以直接运行
 - 运行管理：按项目运行测试，查看运行状态、报告地址并导出报告
 
 ## 数据目录
@@ -263,7 +263,7 @@ npm run test:e2e
 - `server/src/lib/page-map-store.ts`：页面地图摘要和页面状态 snapshot 的文件持久化。
 - `server/src/routes/imports.ts`：AI 导入 HTTP API，包括上传、列表、预览项、重试、跳过、保存草稿和放弃导入记录。
 - `server/src/routes/page-maps.ts`：页面地图 HTTP API，包括列表、查看、刷新和删除。
-- `web/src/pages/ai-import/AiImportList.vue`：导入记录、上传页面和页面地图管理入口。
+- `web/src/pages/ai-import/AiImportList.vue`：导入记录、上传页面、导入环境选择和页面地图管理入口。
 - `web/src/pages/ai-import/AiImportPreview.vue`：导入预览、筛选、详情、重试、跳过、批量保存、分组状态、降级提示和页面地图摘要；点开单条导入项详情，可以在“AI 调试信息”中查看系统提示词、用户输入、模型原始输出、解析后的 JSON 和结构错误。
 - `web/src/api/imports.ts`：前端 AI 导入 API 封装。
 - `web/src/api/page-maps.ts`：前端页面地图 API 封装。

@@ -30,7 +30,7 @@
 - AI 导入页面地图缓存与降级生成：`server/src/services/import/import-worker.ts` 负责按目标 URL 分组、复用页面地图 snapshot、分组生成、拆小批降级和单条降级；`server/src/services/ai/page-map.ts` 负责安全探索边界和缓存刷新；`web/src/pages/ai-import/ai-import.ts`、`AiImportPreview.vue` 负责分组状态和降级提示展示
 - 页面地图字段语义层：`server/src/services/ai/page-context.ts` 定义并采集 `PageContext.fields`，Kendo 控件优先从同一字段容器内的 `label` 归属字段名；`server/src/services/ai/ai-case-draft.ts` 在 AI 输入摘要和 selector 补全中优先消费 `fields`，找不到字段证据再回退旧 `elements`；`server/src/routes/page-maps.ts` 的详情接口从 snapshot 展开 `fields` 到状态响应；`web/src/pages/ai-import/AiImportList.vue` 的页面地图详情抽屉展示字段名、类型、UI、当前值、首选 selector、唯一性和来源置信度，便于诊断页面地图质量。
 - 运行项目与报告：`web/src/api/runs.ts`、`web/src/pages/run-center/RunCenter.vue`、`web/src/pages/run-center/run-center.ts`、`server/src/routes/runs.ts`、`server/src/services/run/runner.ts`、`server/src/lib/run-store.ts`
-- 登录态：`web/src/api/auth.ts`、`server/src/routes/auth.ts`、`server/src/services/auth-session.ts`
+- 登录态：`web/src/composables/project-auth.ts`、`web/src/api/auth.ts`、`server/src/routes/auth.ts`、`server/src/services/auth-session.ts`；用例管理页和运行中心维护项目环境登录态，AI 导入和编辑页实测检查复用
 - 本地应用配置、CORS 来源、浏览器打开业务 URL 等待和步骤默认等待时间：`playwright-auto.config.json`、`shared/types.ts`、`server/src/lib/app-config.ts`、`server/src/app.ts`、`web/src/api/projects.ts`
 - 离线浏览器依赖：`server/src/services/playwright/vendor-browser.ts`、`server/src/services/playwright/browser-path.ts`、`scripts/install-browsers.mjs`
 - 开发启动健康检查：`scripts/wait-for-server.ts`、`package.json`
@@ -74,6 +74,6 @@
 - 改错误状态码时，同步检查 `http-error.ts`、`app.ts`、前端错误提示和相关 API 测试
 - 改 Playwright 子进程启动、输出收集、退出码、取消或清理策略时，同步检查 `playwright.config.ts`、`server/src/services/playwright/playwright-cli.ts`、`server/src/services/run/runner.ts`、`server/src/services/practical-review/practical-review.ts`、`server/src/services/record/record-session.ts` 和相关服务测试
 - 改运行报告时，同步检查 `runner.ts`、`run-store.ts`、`routes/runs.ts` 和 `tests/server/api-runs.test.ts`
-- 改登录态时，同步检查 `auth-session.ts`、`routes/auth.ts`、`web/src/pages/run-center/RunCenter.vue`、`tests/web/run-center.test.ts` 和 `tests/server/api-auth.test.ts`
+- 改登录态时，同步检查 `web/src/composables/project-auth.ts`、`auth-session.ts`、`routes/auth.ts`、`web/src/pages/project-detail/ProjectDetail.vue`、`web/src/pages/ai-import/AiImportList.vue`、`web/src/pages/run-center/RunCenter.vue`、`tests/web/project-auth.test.ts`、`tests/web/project-auth-layout.test.ts`、`tests/web/run-center.test.ts` 和 `tests/server/api-auth.test.ts`
 - 改开发启动顺序时，同步检查 `package.json`、`scripts/wait-for-server.ts`、`docs/agent-commands.md` 和 `tests/scripts/wait-for-server.test.ts`
 - 改 AI 导入模板、源字段、页面地图、分组降级或预览展示时，同步检查 `shared/types.ts`、`import-excel.ts`、`import-worker.ts`、`ai-case-draft.ts`、`page-map.ts`、`page-map-store.ts`、`routes/imports.ts`、`routes/page-maps.ts`、`AiImportPreview.vue`、`ai-import.ts`、`tests/server/import-worker.test.ts`、`tests/server/api-imports.test.ts`、`tests/server/import-excel.test.ts`、`tests/server/api-page-maps.test.ts`、`tests/web/ai-import.test.ts` 和 `docs/ai-case-import/`

@@ -1,9 +1,8 @@
 import { ref, type Ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import type { CaseMeta, RunMeta, RunMode } from '../../../../shared/types';
-import { getAuthState, saveLogin, startLogin } from '../../api/auth';
+import type { CaseMeta, EnvMeta, RunMeta, RunMode } from '../../../../shared/types';
 import { deleteRun, exportRun, listRuns, runProject } from '../../api/runs';
-import { setProjectEnv } from '../../state/project-env';
+import { useProjectAuth } from '../../composables/project-auth';
 import { getErrorMessage } from '../../utils/error';
 import { getReportUrl } from './run-center';
 
@@ -11,6 +10,8 @@ const REFRESH_DELAY_MS = 480;
 
 interface RunAuthOptions {
   projectKey: string;
+  envs: Ref<EnvMeta[]>;
+  activeEnv: Ref<EnvMeta | null>;
   selectedEnv: Ref<string>;
   reloadReports: () => Promise<void>;
 }
@@ -19,87 +20,39 @@ interface RunAuthOptions {
  * 管理运行中心登录态和环境切换。
  */
 export function useRunAuth(options: RunAuthOptions) {
-  const loading = ref(false);
-  const saving = ref(false);
-  const authPath = ref('');
-  const hasAuth = ref(false);
-  const sessionId = ref('');
+  const auth = useProjectAuth({
+    projectKey: options.projectKey,
+    envs: options.envs,
+    activeEnv: options.activeEnv,
+    selectedEnv: options.selectedEnv,
+    savedMessage: '登录态已保存，后续运行测试会自动复用'
+  });
 
   /**
    * 加载当前环境登录态，并同步刷新报告列表。
    */
   async function loadAuthState() {
-    const [state] = await Promise.all([getAuthState(options.projectKey, options.selectedEnv.value), options.reloadReports()]);
-    hasAuth.value = state.exists;
-    authPath.value = state.path;
+    await Promise.all([auth.loadAuthState(), options.reloadReports()]);
   }
 
   /**
    * 切换运行环境并重载登录态。
    */
   async function changeEnv() {
-    setProjectEnv(options.projectKey, options.selectedEnv.value);
-    sessionId.value = '';
-    await loadAuthState();
-  }
-
-  /**
-   * 打开浏览器登录会话。
-   */
-  async function openLogin() {
-    loading.value = true;
-
-    try {
-      const session = await startLogin(options.projectKey, { envKey: options.selectedEnv.value });
-      sessionId.value = session.sessionId;
-
-      if (session.warning) {
-        ElMessage.warning(session.warning);
-        return;
-      }
-
-      ElMessage.success('已打开浏览器，请完成登录后返回本页面保存登录态');
-    } catch (error) {
-      ElMessage.error(getErrorMessage(error));
-    } finally {
-      loading.value = false;
-    }
-  }
-
-  /**
-   * 保存当前浏览器登录会话。
-   */
-  async function saveAuth() {
-    if (!sessionId.value) {
-      ElMessage.warning('请先打开浏览器完成登录');
-      return;
-    }
-
-    saving.value = true;
-
-    try {
-      const auth = await saveLogin(options.projectKey, sessionId.value);
-      authPath.value = auth.path;
-      hasAuth.value = true;
-      sessionId.value = '';
-      ElMessage.success('登录态已保存，后续运行测试会自动复用');
-    } catch (error) {
-      ElMessage.error(getErrorMessage(error));
-    } finally {
-      saving.value = false;
-    }
+    await auth.changeEnv();
+    await options.reloadReports();
   }
 
   return {
-    loading,
-    saving,
-    authPath,
-    hasAuth,
-    sessionId,
+    loading: auth.loading,
+    saving: auth.saving,
+    authPath: auth.authPath,
+    hasAuth: auth.hasAuth,
+    sessionId: auth.sessionId,
     loadAuthState,
     changeEnv,
-    openLogin,
-    saveAuth
+    openLogin: auth.openLogin,
+    saveAuth: auth.saveAuth
   };
 }
 

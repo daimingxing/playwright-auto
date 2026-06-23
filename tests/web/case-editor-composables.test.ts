@@ -1,12 +1,9 @@
 import { ref } from 'vue';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CaseMeta, CaseStep, EnvMeta, PracticalReviewRecord } from '../../shared/types';
-import { useCaseAuth, useCasePractical, useCaseRecord, useStepBatch } from '../../web/src/pages/case-editor/case-editor-composables';
+import { useCasePractical, useCaseRecord, useStepBatch } from '../../web/src/pages/case-editor/case-editor-composables';
 
 const mocks = vi.hoisted(() => ({
-  getAuthState: vi.fn(),
-  startLogin: vi.fn(),
-  saveLogin: vi.fn(),
   startRecord: vi.fn(),
   stopRecord: vi.fn(),
   getCase: vi.fn(),
@@ -21,12 +18,6 @@ const mocks = vi.hoisted(() => ({
     error: vi.fn()
   },
   confirm: vi.fn()
-}));
-
-vi.mock('../../web/src/api/auth', () => ({
-  getAuthState: mocks.getAuthState,
-  startLogin: mocks.startLogin,
-  saveLogin: mocks.saveLogin
 }));
 
 vi.mock('../../web/src/api/cases', () => ({
@@ -53,44 +44,6 @@ vi.mock('element-plus', () => ({
 afterEach(() => {
   vi.restoreAllMocks();
   vi.clearAllMocks();
-});
-
-describe('用例编辑器登录态组合函数', () => {
-  it('切换环境时保存环境并重新加载登录态', async () => {
-    const activeEnv = ref<EnvMeta | null>(makeEnv('default'));
-    const selectedEnv = ref('pre');
-    const auth = useCaseAuth({
-      projectKey: 'crm',
-      envs: ref([makeEnv('default'), makeEnv('pre')]),
-      activeEnv,
-      selectedEnv
-    });
-    auth.loginId.value = 'old-session';
-    mocks.getAuthState.mockResolvedValue({ exists: true, path: 'auth/pre.storageState.json' });
-
-    await auth.changeEnv();
-
-    expect(activeEnv.value?.key).toBe('pre');
-    expect(mocks.setProjectEnv).toHaveBeenCalledWith('crm', 'pre');
-    expect(mocks.getAuthState).toHaveBeenCalledWith('crm', 'pre');
-    expect(auth.loginId.value).toBe('');
-    expect(auth.hasAuth.value).toBe(true);
-    expect(auth.authPath.value).toBe('auth/pre.storageState.json');
-  });
-
-  it('没有项目环境时阻止打开登录浏览器', async () => {
-    const auth = useCaseAuth({
-      projectKey: 'crm',
-      envs: ref([]),
-      activeEnv: ref(null),
-      selectedEnv: ref('')
-    });
-
-    await auth.openLogin();
-
-    expect(mocks.startLogin).not.toHaveBeenCalled();
-    expect(mocks.message.warning).toHaveBeenCalledWith('请先配置项目环境');
-  });
 });
 
 describe('用例编辑器录制组合函数', () => {

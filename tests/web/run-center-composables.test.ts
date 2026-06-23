@@ -1,6 +1,6 @@
 import { ref } from 'vue';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { RunMeta } from '../../shared/types';
+import type { EnvMeta, RunMeta } from '../../shared/types';
 import { useRunAuth, useRunReports, useRunStart } from '../../web/src/pages/run-center/run-center-composables';
 
 const mocks = vi.hoisted(() => ({
@@ -55,6 +55,8 @@ describe('运行中心登录态组合函数', () => {
     mocks.getAuthState.mockResolvedValue({ exists: true, path: 'auth/default.storageState.json' });
     const auth = useRunAuth({
       projectKey: 'crm',
+      envs: ref([makeEnv('default')]),
+      activeEnv: ref(makeEnv('default')),
       selectedEnv: ref('default'),
       reloadReports
     });
@@ -71,7 +73,13 @@ describe('运行中心登录态组合函数', () => {
     const selectedEnv = ref('pre');
     const reloadReports = vi.fn().mockResolvedValue(undefined);
     mocks.getAuthState.mockResolvedValue({ exists: false, path: '' });
-    const auth = useRunAuth({ projectKey: 'crm', selectedEnv, reloadReports });
+    const auth = useRunAuth({
+      projectKey: 'crm',
+      envs: ref([makeEnv('default'), makeEnv('pre')]),
+      activeEnv: ref(makeEnv('default')),
+      selectedEnv,
+      reloadReports
+    });
     auth.sessionId.value = 'session-old';
 
     await auth.changeEnv();
@@ -90,6 +98,8 @@ describe('运行中心登录态组合函数', () => {
     });
     const auth = useRunAuth({
       projectKey: 'crm',
+      envs: ref([makeEnv('default')]),
+      activeEnv: ref(makeEnv('default')),
       selectedEnv: ref('default'),
       reloadReports
     });
@@ -216,5 +226,16 @@ function makeRun(id: string): RunMeta {
     reportUrl: `/api/projects/crm/runs/${id}/report/`,
     createdAt: '2026-05-24T00:00:00.000Z',
     updatedAt: '2026-05-24T00:00:00.000Z'
+  };
+}
+
+/**
+ * 创建项目环境测试数据。
+ */
+function makeEnv(key: string): EnvMeta {
+  return {
+    key,
+    name: `${key}环境`,
+    baseUrl: `https://${key}.example.test`
   };
 }
