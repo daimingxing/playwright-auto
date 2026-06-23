@@ -2,7 +2,8 @@ import type { AiDebugInfo, CaseMeta, CaseStep, ImportGenMode, ImportItem } from 
 import { reviewCase } from '../case-review';
 import { AiDraftError, generateCaseDraft, generateCaseDraftGroup, type DraftPageMap } from '../ai/ai-case-draft';
 import type { PageContext } from '../ai/page-context';
-import { markDraftReady, markFailed, markGenerating } from './import-state-repo';
+import { transitionImportItems } from '../../lib/import-store';
+import { markDraftReady, markFailed } from './import-state-repo';
 
 type GenMode = ImportGenMode;
 
@@ -115,16 +116,23 @@ async function generateSingleItem(input: GenInput, item: ImportItem, reason: str
 }
 
 /**
- * 标记一批导入项进入生成中状态。
+ * 标记一批导入项进入生成中状态：走批量转移通道，规避 N 次单条全量重扫。
  */
 async function markItemsGenerating(projectKey: string, importId: string, items: ImportItem[], mode: GenMode, reason?: string) {
-  for (const item of items) {
-    await markGenerating(projectKey, importId, item.itemId, {
-      mode,
-      fallbackReason: reason,
-      retryCount: 0
-    });
-  }
+  await transitionImportItems(
+    projectKey,
+    importId,
+    items.map((item) => ({
+      itemId: item.itemId,
+      patch: {
+        status: 'generating',
+        errorMessage: undefined,
+        genMode: mode,
+        fallbackReason: reason,
+        retryCount: 0
+      }
+    }))
+  );
 }
 
 /**

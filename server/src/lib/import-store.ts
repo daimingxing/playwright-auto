@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { readdir, rm } from 'node:fs/promises';
 import { createHash, randomBytes } from 'node:crypto';
 import { join } from 'node:path';
-import type { ImportItem, ImportJob, UiLibrary } from '../../../shared/types';
+import type { ImportItem, ImportItemStatus, ImportJob, ImportStatus, UiLibrary } from '../../../shared/types';
 import type { ParsedImportCase } from '../services/import/import-excel';
 import { ensureDir, readJson, writeJson } from './fs';
 import { getImportItemPath, getImportPath, getImportsPath } from './path';
@@ -15,6 +15,32 @@ export interface CreateImportJobInput {
   uiLibrary?: UiLibrary;
   cases: ParsedImportCase[];
 }
+
+/**
+ * 单次状态转移对任务摘要计数的增量。
+ */
+export interface SummaryDelta {
+  generatedDelta: number;
+  savedDelta: number;
+  failedDelta: number;
+  skippedDelta: number;
+}
+
+/**
+ * 写入导入项并返回前后对象，供调用方按需读取旧值。
+ */
+export interface ImportItemTransition {
+  prev: ImportItem;
+  next: ImportItem;
+}
+
+const ZERO_DELTA: SummaryDelta = {
+  generatedDelta: 0,
+  savedDelta: 0,
+  failedDelta: 0,
+  skippedDelta: 0
+};
+const importJobDeltaQueues = new Map<string, Promise<void>>();
 
 /**
  * 创建持久化导入任务和导入项文件。
@@ -165,21 +191,156 @@ export async function getImportItem(projectKey: string, importId: string, itemId
 }
 
 /**
- * 更新导入项并同步任务摘要。
+ * 更新导入项：仅写单条文件，并把状态转移作为增量应用到任务摘要。
  */
-export async function updateImportItem(projectKey: string, importId: string, itemId: string, patch: Partial<ImportItem>) {
-  const item = await getImportItem(projectKey, importId, itemId);
-  const nextItem: ImportItem = {
-    ...item,
+export async function updateImportItem(
+  projectKey: string,
+  importId: string,
+  itemId: string,
+  patch: Partial<ImportItem>
+) {
+  const { next } = await transitionImportItem(projectKey, importId, itemId, patch);
+
+  return next;
+}
+
+/**
+ * 把一次状态变更以“读旧值 → 写新值 → 增量改任务计数”的方式原子化。
+ * 替代旧版在 updateImportItem 内做全量目录扫描的实现，避免大批量场景下的重复 I/O。
+ */
+export async function transitionImportItem(
+  projectKey: string,
+  importId: string,
+  itemId: string,
+  patch: Partial<ImportItem>
+): Promise<ImportItemTransition> {
+  const prev = await getImportItem(projectKey, importId, itemId);
+  const next: ImportItem = {
+    ...prev,
     ...patch,
-    itemId: item.itemId,
+    itemId: prev.itemId,
     updatedAt: new Date().toISOString()
   };
 
-  await writeJson(getImportItemPath(projectKey, importId, itemId), nextItem);
-  await updateImportJobSummary(projectKey, importId);
+  await writeJson(getImportItemPath(projectKey, importId, itemId), next);
+  await applyImportJobDelta(projectKey, importId, buildSummaryDelta(prev.status, next.status));
 
-  return nextItem;
+  return { prev, next };
+}
+
+/**
+ * 批量更新导入项：只读一次目录、聚合计数后写一次任务摘要，适合分组生成等高频批量场景。
+ */
+export async function transitionImportItems(
+  projectKey: string,
+  importId: string,
+  patches: Array<{ itemId: string; patch: Partial<ImportItem> }>
+): Promise<ImportItemTransition[]> {
+  if (patches.length === 0) {
+    return [];
+  }
+
+  const items = await listImportItems(projectKey, importId);
+  const itemMap = new Map(items.map((item) => [item.itemId, item]));
+  const now = new Date().toISOString();
+  const aggregate: SummaryDelta = { ...ZERO_DELTA };
+  const transitions: ImportItemTransition[] = [];
+
+  for (const { itemId, patch } of patches) {
+    const prev = itemMap.get(itemId);
+
+    if (!prev) {
+      // 跳过已不存在的导入项，避免在删除任务后又收到旧事件时把任务目录“复活”。
+      continue;
+    }
+
+    const next: ImportItem = {
+      ...prev,
+      ...patch,
+      itemId: prev.itemId,
+      updatedAt: now
+    };
+    const delta = buildSummaryDelta(prev.status, next.status);
+
+    aggregate.generatedDelta += delta.generatedDelta;
+    aggregate.savedDelta += delta.savedDelta;
+    aggregate.failedDelta += delta.failedDelta;
+    aggregate.skippedDelta += delta.skippedDelta;
+
+    transitions.push({ prev, next });
+  }
+
+  await Promise.all(
+    transitions.map(({ next }) => writeJson(getImportItemPath(projectKey, importId, next.itemId), next))
+  );
+
+  if (transitions.length > 0) {
+    await applyImportJobDelta(projectKey, importId, aggregate);
+  }
+
+  return transitions;
+}
+
+/**
+ * 把任务摘要计数变化量应用到任务文件，并按新计数重算任务状态。
+ */
+export async function applyImportJobDelta(
+  projectKey: string,
+  importId: string,
+  delta: SummaryDelta
+): Promise<ImportJob> {
+  return runImportJobDeltaLocked(projectKey, importId, async () => applyImportJobDeltaUnlocked(projectKey, importId, delta));
+}
+
+/**
+ * 串行执行同一导入任务的摘要增量写入，避免并发读改写覆盖计数。
+ */
+async function runImportJobDeltaLocked<T>(projectKey: string, importId: string, task: () => Promise<T>): Promise<T> {
+  const key = `${projectKey}/${importId}`;
+  const prev = importJobDeltaQueues.get(key) ?? Promise.resolve();
+  const run = (async () => {
+    // 前序写入失败也不能阻塞后续修正任务继续读取当前文件状态。
+    await prev.catch(() => undefined);
+
+    return task();
+  })();
+  const next = run.then(() => undefined, () => undefined);
+
+  importJobDeltaQueues.set(key, next);
+
+  try {
+    return await run;
+  } finally {
+    if (importJobDeltaQueues.get(key) === next) {
+      importJobDeltaQueues.delete(key);
+    }
+  }
+}
+
+/**
+ * 执行实际摘要增量写入；调用方必须保证同一任务维度已经串行化。
+ */
+async function applyImportJobDeltaUnlocked(
+  projectKey: string,
+  importId: string,
+  delta: SummaryDelta
+): Promise<ImportJob> {
+  const job = await getImportJob(projectKey, importId);
+  const nextJob: ImportJob = {
+    ...job,
+    generatedCount: clampNonNegative(job.generatedCount + delta.generatedDelta),
+    savedCount: clampNonNegative(job.savedCount + delta.savedDelta),
+    failedCount: clampNonNegative(job.failedCount + delta.failedDelta),
+    skippedCount: clampNonNegative(job.skippedCount + delta.skippedDelta),
+    status: 'running',
+    updatedAt: new Date().toISOString()
+  };
+
+  nextJob.status = deriveStatusFromCounts(nextJob);
+
+  await writeJson(getJobPath(projectKey, importId), nextJob);
+
+  return nextJob;
 }
 
 /**
@@ -202,13 +363,18 @@ export async function recoverImportItems(projectKey: string, importId: string) {
     recovered.push(item.itemId);
   }
 
+  // 恢复阶段只对受影响条目做单条 delta，结尾再校准一次以兜底历史状态异常。
+  if (recovered.length > 0) {
+    await rebuildImportJobSummary(projectKey, importId);
+  }
+
   return recovered;
 }
 
 /**
- * 根据导入项状态刷新任务摘要。
+ * 低频使用的全量重建入口：仅在恢复任务、数据修复或校验脚本里调用。
  */
-export async function updateImportJobSummary(projectKey: string, importId: string) {
+export async function rebuildImportJobSummary(projectKey: string, importId: string) {
   const job = await getImportJob(projectKey, importId);
   const items = await listImportItems(projectKey, importId);
   const generatedCount = items.filter((item) => item.status === 'pendingReview' || item.status === 'saved').length;
@@ -217,13 +383,15 @@ export async function updateImportJobSummary(projectKey: string, importId: strin
   const skippedCount = items.filter((item) => item.status === 'skipped').length;
   const nextJob: ImportJob = {
     ...job,
-    status: getJobStatus(items),
+    status: 'running',
     generatedCount,
     savedCount,
     failedCount,
     skippedCount,
     updatedAt: new Date().toISOString()
   };
+
+  nextJob.status = deriveStatusFromCounts(nextJob);
 
   await writeJson(getJobPath(projectKey, importId), nextJob);
 
@@ -283,22 +451,62 @@ function createSourceHash(item: ParsedImportCase) {
 }
 
 /**
- * 根据导入项状态推导任务状态。
+ * 把单项状态转移换算成对任务摘要计数的增量。
  */
-function getJobStatus(items: ImportItem[]): ImportJob['status'] {
-  if (items.some((item) => item.status === 'pending' || item.status === 'generating')) {
+function buildSummaryDelta(prevStatus: ImportItemStatus, nextStatus: ImportItemStatus): SummaryDelta {
+  return {
+    generatedDelta: contributesToGenerated(nextStatus) - contributesToGenerated(prevStatus),
+    savedDelta: contributesToSaved(nextStatus) - contributesToSaved(prevStatus),
+    failedDelta: contributesToFailed(nextStatus) - contributesToFailed(prevStatus),
+    skippedDelta: contributesToSkipped(nextStatus) - contributesToSkipped(prevStatus)
+  };
+}
+
+function contributesToGenerated(status: ImportItemStatus) {
+  return status === 'pendingReview' || status === 'saved' ? 1 : 0;
+}
+
+function contributesToSaved(status: ImportItemStatus) {
+  return status === 'saved' ? 1 : 0;
+}
+
+function contributesToFailed(status: ImportItemStatus) {
+  return status === 'failed' ? 1 : 0;
+}
+
+function contributesToSkipped(status: ImportItemStatus) {
+  return status === 'skipped' ? 1 : 0;
+}
+
+/**
+ * 从任务摘要计数推导出任务状态，避免在高频更新路径里再读一次全量 item。
+ */
+function deriveStatusFromCounts(job: ImportJob): ImportStatus {
+  const inProgressCount =
+    job.totalCount - job.generatedCount - job.failedCount - job.skippedCount;
+  const pendingReviewCount = job.generatedCount - job.savedCount;
+  const hasSavedOrSkipped = job.savedCount + job.skippedCount > 0;
+
+  if (inProgressCount > 0) {
     return 'running';
   }
 
-  if (items.length > 0 && items.every((item) => item.status === 'saved' || item.status === 'skipped')) {
+  if (job.totalCount > 0 && pendingReviewCount === 0 && job.failedCount === 0) {
     return 'completed';
   }
 
-  if (items.some((item) => item.status === 'pendingReview')) {
-    return items.some((item) => item.status === 'saved' || item.status === 'skipped') ? 'partialSaved' : 'pendingReview';
+  if (pendingReviewCount > 0) {
+    return hasSavedOrSkipped ? 'partialSaved' : 'pendingReview';
   }
 
   return 'failed';
+}
+
+/**
+ * 把负数修正为 0，理论上 delta 不会越界，但保留防御避免历史脏数据把计数打成负值。
+ */
+function clampNonNegative(value: number) {
+  return value < 0 ? 0 : value;
 }
 
 /**

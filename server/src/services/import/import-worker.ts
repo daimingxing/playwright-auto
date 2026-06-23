@@ -5,8 +5,9 @@ import {
   getImportJob,
   listImportItems,
   listImportJobs,
+  rebuildImportJobSummary,
   recoverImportItems,
-  updateImportJobSummary
+  transitionImportItems
 } from '../../lib/import-store';
 import { listProjects } from '../../lib/project-store';
 import { createPageMapId, createPageMapKey, getAuthHash } from '../../lib/path';
@@ -16,7 +17,7 @@ import { AiDraftError, generateCaseDraft, type DraftPageMap } from '../ai/ai-cas
 import { getPageMap, refreshPageMap } from '../ai/page-map';
 import { collectPageContext, PageContextError, type PageContext } from '../ai/page-context';
 import { generateItems } from './import-gen-flow';
-import { bindGroupMeta, markDraftReady, markFailed, markGenerating, markMapFailed } from './import-state-repo';
+import { markDraftReady, markFailed, markGenerating, bindGroupMeta } from './import-state-repo';
 
 interface QueueTask {
   projectKey: string;
@@ -208,7 +209,8 @@ function drainQueue() {
     processImportItem(task.projectKey, task.importId, task.itemId, task.pageMapId)
       .catch(async () => {
         try {
-          await updateImportJobSummary(task.projectKey, task.importId);
+          // 兜底重建一次任务摘要，确保异常路径下任务计数仍然一致。
+          await rebuildImportJobSummary(task.projectKey, task.importId);
         } catch {
           // 测试或重启过程中任务目录可能已被清理，队列不能因此留下未处理拒绝。
         }
@@ -279,15 +281,18 @@ async function prepareGroupMap(
       return;
     }
 
-    for (let index = 0; index < group.items.length; index += 1) {
-      const item = group.items[index];
-
-      await bindGroupMeta(projectKey, importId, item.itemId, {
-        groupId: group.groupId,
-        groupIndex: index,
-        pageMapId: pageMap.mapId
-      });
-    }
+    await transitionImportItems(
+      projectKey,
+      importId,
+      group.items.map((item, index) => ({
+        itemId: item.itemId,
+        patch: {
+          groupId: group.groupId,
+          groupIndex: index,
+          pageMapId: pageMap.mapId
+        }
+      }))
+    );
 
     await processImportGroup(projectKey, importId, group, pageMap);
   } catch (error) {
@@ -355,15 +360,24 @@ async function failImportGroup(
   group: ImportGroup,
   message: string
 ) {
-  for (let index = 0; index < group.items.length; index += 1) {
-    const item = group.items[index];
-
-    await markMapFailed(projectKey, importId, item.itemId, {
-      groupId: group.groupId,
-      groupIndex: index,
-      message
-    });
-  }
+  await transitionImportItems(
+    projectKey,
+    importId,
+    group.items.map((item, index) => ({
+      itemId: item.itemId,
+      patch: {
+        status: 'failed',
+        groupId: group.groupId,
+        groupIndex: index,
+        // 页面地图失败没有可复用快照，重试时必须重新采集。
+        pageMapId: undefined,
+        errorMessage: message,
+        genMode: 'group',
+        fallbackReason: undefined,
+        retryCount: 0
+      }
+    }))
+  );
 }
 
 /**

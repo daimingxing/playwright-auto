@@ -104,6 +104,7 @@ export const PageContextError = PageSessionError;
 
 interface PageMapRunner {
   open(targetUrl: string, openTimeoutMs: number, warnings: string[]): Promise<void>;
+  ready(warnings: string[]): Promise<void>;
   snapshot(warnings: string[]): Promise<PageContext>;
   action(action: PageAction): Promise<void>;
   stable(warnings: string[]): Promise<void>;
@@ -211,6 +212,7 @@ export async function collectPageMapStates(input: CollectPageMapInput): Promise<
 
   try {
     await runner.open(input.targetUrl, input.openTimeoutMs, warnings);
+    await runner.ready(warnings);
     const initialContext = await runner.snapshot([...warnings]);
 
     assertUsablePageContext(initialContext);
@@ -292,6 +294,9 @@ function wrapSessionAsRunner(session: PageSession, input: CollectPageMapInput): 
     open(targetUrl, openTimeoutMs, warnings) {
       return session.open({ targetUrl, openTimeoutMs, warnings });
     },
+    ready(warnings) {
+      return session.waitForReady(warnings);
+    },
     snapshot(warnings) {
       return readPageSnapshot(session.page, warnings, input.uiLibrary);
     },
@@ -316,6 +321,7 @@ function createTestRunner(input: CollectPageMapInput): PageMapRunner {
 
   return {
     async open() {},
+    async ready() {},
     async snapshot(warnings) {
       const context = testContextBuilder
         ? testContextBuilder({ caseInfo: { caseNo: 'PAGE-MAP', caseName: title, targetUrl: url, precondition: '', expectedResult: '', note: '' } })

@@ -112,6 +112,7 @@ beforeEach(async () => {
         throw new Error('模拟页面不可访问');
       }
     },
+    async ready() {},
     async snapshot(warnings) {
       return {
         page: {

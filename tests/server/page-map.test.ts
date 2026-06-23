@@ -72,6 +72,7 @@ beforeEach(async () => {
           throw new PageContextError(failMessage);
         }
       },
+      async ready() {},
       async snapshot(warnings) {
         return {
           ...createContext(title, url),
@@ -119,11 +120,78 @@ describe('页面地图业务编排', () => {
     expect(existsSync(map.states[0].snapshotPath)).toBe(true);
   });
 
+  it('生成页面地图时初始 snapshot 在页面 ready 后读取', async () => {
+    const events: string[] = [];
+
+    setPageMapRunner(async (input) => {
+      let ready = false;
+
+      return {
+        async open() {
+          events.push('open');
+        },
+        async ready() {
+          events.push('ready');
+          ready = true;
+        },
+        async snapshot(warnings) {
+          events.push(`snapshot:${ready ? 'ready' : 'cold'}`);
+
+          return {
+            ...createContext(ready ? '用户列表' : 'Vite App', input.targetUrl),
+            elements: {
+              buttons: ready ? [{ text: '新增', locator: "getByRole('button', { name: '新增' })", unique: true }] : [],
+              inputs: [],
+              selects: [],
+              links: [],
+              navigation: ready ? [{ text: '系统管理', locator: "getByText('系统管理', { exact: true })", unique: true }] : [],
+              tables: []
+            },
+            warnings
+          };
+        },
+        async action() {},
+        async stable() {
+          events.push('stable');
+          ready = true;
+        },
+        async close() {}
+      };
+    });
+    const { getPageMap } = await import('../../server/src/services/ai/page-map');
+
+    const map = await getPageMap({
+      projectKey: 'crm',
+      envKey: 'default',
+      targetUrl: '/users',
+      viewport: { width: 1280, height: 720 },
+      staleDays: 30,
+      steps: [
+        {
+          caseNo: 'TC001',
+          stepNo: 1,
+          actionType: 'click',
+          targetType: 'menu',
+          targetName: '系统管理',
+          actionText: '点击系统管理',
+          targetText: '系统管理菜单',
+          dataKeys: [],
+          note: ''
+        }
+      ]
+    });
+
+    expect(events).toEqual(['open', 'ready', 'snapshot:ready', 'stable', 'snapshot:ready']);
+    expect(map.status).toBe('ready');
+    expect(map.states[0].title).toBe('用户列表');
+  });
+
   it('生成页面地图时把 Kendo 字段语义写入状态 snapshot', async () => {
     setPageMapRunner(async (input) => ({
       async open() {
         collectCount += 1;
       },
+      async ready() {},
       async snapshot(warnings) {
         return {
           ...createContext('取样规则管理', input.targetUrl),
@@ -182,6 +250,7 @@ describe('页面地图业务编排', () => {
         collectCount += 1;
         warnings.push('domcontentloaded 等待超时，已继续尝试读取当前页面快照：模拟超时');
       },
+      async ready() {},
       async snapshot(warnings) {
         return {
           ...createContext('用户列表', input.targetUrl),
@@ -226,6 +295,7 @@ describe('页面地图业务编排', () => {
         collectCount += 1;
         warnings.push('domcontentloaded 等待超时，已继续尝试读取当前页面快照：模拟超时');
       },
+      async ready() {},
       async snapshot(warnings) {
         return {
           page: {
