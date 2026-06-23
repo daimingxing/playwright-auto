@@ -2062,7 +2062,7 @@ rtk npm run dev
 
 Manual flow:
 
-1. Open `http://localhost:5173`.
+1. Open `http://localhost:5177`.
 2. Enter project detail page.
 3. Click `AI导入`.
 4. Upload `docs/ai-case-import/AI自然语言用例导入模板.xlsx`.

@@ -49,10 +49,10 @@ const DEFAULT_CONFIG = {
   server: {
     port: 3001,
     dataRoot: 'data',
-    corsOrigins: ['http://localhost:5173', 'http://127.0.0.1:5173']
+    corsOrigins: ['http://localhost:5177', 'http://127.0.0.1:5177']
   },
   web: {
-    origin: 'http://localhost:5173',
+    origin: 'http://localhost:5177',
     apiBase: ''
   },
   runner: {

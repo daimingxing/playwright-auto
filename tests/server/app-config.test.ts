@@ -30,10 +30,10 @@ describe('应用配置', () => {
       server: {
         port: 3001,
         dataRoot: 'data',
-        corsOrigins: ['http://localhost:5173', 'http://127.0.0.1:5173']
+        corsOrigins: ['http://localhost:5177', 'http://127.0.0.1:5177']
       },
       web: {
-        origin: 'http://localhost:5173',
+        origin: 'http://localhost:5177',
         apiBase: ''
       },
       runner: {
@@ -103,7 +103,7 @@ describe('应用配置', () => {
       server: {
         port: 3100,
         dataRoot: 'custom-data',
-        corsOrigins: ['http://localhost:5173', 'http://127.0.0.1:5173', 'https://ui.example', 'https://tool.example']
+        corsOrigins: ['http://localhost:5177', 'http://127.0.0.1:5177', 'https://ui.example', 'https://tool.example']
       },
       web: {
         origin: 'https://ui.example',
@@ -175,10 +175,10 @@ describe('应用配置', () => {
       server: {
         port: 3200,
         dataRoot: 'env-data',
-        corsOrigins: ['http://localhost:5173', 'http://127.0.0.1:5173', 'https://env.example']
+        corsOrigins: ['http://localhost:5177', 'http://127.0.0.1:5177', 'https://env.example']
       },
       web: {
-        origin: 'http://localhost:5173',
+        origin: 'http://localhost:5177',
         apiBase: 'https://env-api.example'
       },
       runner: {

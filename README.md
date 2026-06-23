@@ -56,7 +56,7 @@ npm run dev
 
 默认地址：
 
-- 前端页面：http://localhost:5173
+- 前端页面：http://localhost:5177
 - 本地服务：http://localhost:3001
 - 健康检查：http://localhost:3001/health
 
@@ -72,12 +72,12 @@ npm run dev
     "port": 3001,
     "dataRoot": "data",
     "corsOrigins": [
-      "http://localhost:5173",
-      "http://127.0.0.1:5173"
+      "http://localhost:5177",
+      "http://127.0.0.1:5177"
     ]
   },
   "web": {
-    "origin": "http://localhost:5173",
+    "origin": "http://localhost:5177",
     "apiBase": ""
   },
   "runner": {
@@ -110,7 +110,7 @@ npm run dev
 
 - `server.port`：后端服务端口。
 - `server.dataRoot`：项目、用例、登录态和报告数据目录。
-- `server.corsOrigins`：允许访问本地 API 的前端来源列表。这是 `playwright-auto.config.json` 中 `server` 对象下的字段，不是单独文件。默认允许 `http://localhost:5173` 和 `http://127.0.0.1:5173`。
+- `server.corsOrigins`：允许访问本地 API 的前端来源列表。这是 `playwright-auto.config.json` 中 `server` 对象下的字段，不是单独文件。默认允许 `http://localhost:5177` 和 `http://127.0.0.1:5177`。
 - `web.origin`：前端页面来源，会自动加入本地 API 的 CORS 允许列表。
 - `web.apiBase`：前端请求 API 的基础地址。默认空字符串表示使用相对路径 `/api`，开发服务会通过 Vite proxy 转发到后端；需要前端直接跨端口访问后端时可设置为 `http://localhost:3001`。
 - `runner.headlessWorkers`：无头运行默认并发数。

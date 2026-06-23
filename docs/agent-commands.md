@@ -36,7 +36,7 @@ npm run test:e2e
 
 ## 运行地址
 
-- 前端页面：http://localhost:5173
+- 前端页面：http://localhost:5177
 - 本地服务：http://localhost:3001
 - 健康检查：http://localhost:3001/health
 - `npm run dev` 会先启动后端，再通过 `scripts/wait-for-server.ts` 等待健康检查通过后启动前端
@@ -48,7 +48,7 @@ npm run test:e2e
 - `browser.openTimeoutMs` 用于平台自身打开业务 URL，包括手动登录初始打开和 AI 页面地图初始采集
 - `ai.timeoutMs` 只用于模型请求；`steps.timeouts` 只用于生成、运行和实测步骤等待，三者不要混用
 - 完整配置类型定义在 `shared/types.ts`，后端读取完整配置，`/api/app-config` 只返回前端需要的安全子集
-- 默认允许来源：`http://localhost:5173`、`http://127.0.0.1:5173`
+- 默认允许来源：`http://localhost:5177`、`http://127.0.0.1:5177`
 - 临时追加允许来源：`$env:PLAYWRIGHT_AUTO_CORS_ORIGINS='https://tool.example,http://localhost:5174'`
 - 改服务端配置后需要重启已有 Node 服务
 

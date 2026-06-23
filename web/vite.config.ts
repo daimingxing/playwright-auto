@@ -10,7 +10,7 @@ export default defineConfig({
   root: resolve(process.cwd(), 'web'),
   base: './',
   server: {
-    port: 5173,
+    port: 5177,
     proxy: {
       '/api': 'http://localhost:3001',
       '/health': 'http://localhost:3001'
