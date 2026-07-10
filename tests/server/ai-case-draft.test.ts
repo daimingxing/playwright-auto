@@ -2067,6 +2067,99 @@ describe('AI 草稿生成服务', () => {
     await browser.close();
   }, 15000);
 
+  it('Kendo 模式从 IMMS 输入容器采集普通文本字段语义', async () => {
+    const browser = await chromium.launch({ executablePath: getChromePath() });
+    const page = await browser.newPage();
+
+    await page.setContent(`
+      <div class="i-col i-col-12 i-input xr-fc">
+        <div class="i-row">
+          <div class="i-col i-col-8 i-input-inner-left">
+            <label><span class="i-input-required">*</span><span>取样名称</span></label>
+          </div>
+          <div class="i-col i-col-16">
+            <input id="edit-0-sampleName" name="edit-0-sampleName" value="" />
+          </div>
+        </div>
+      </div>
+    `);
+
+    const context = await readPageSnapshot(page, [], 'kendo');
+    const field = context.fields?.find((item) => item.name === '取样名称');
+
+    expect(field).toMatchObject({
+      name: '取样名称',
+      type: 'input',
+      ui: 'kendo-input',
+      required: true,
+      state: 'enabled',
+      source: 'label-container',
+      confidence: 'high',
+      attrs: {
+        inputId: 'edit-0-sampleName',
+        inputName: 'edit-0-sampleName'
+      }
+    });
+    expect(field?.locators[0]).toMatchObject({
+      selector: 'input#edit-0-sampleName',
+      kind: 'attr',
+      unique: true,
+      confidence: 'high'
+    });
+    expect(await page.locator(field?.locators[0].selector ?? '').count()).toBe(1);
+    await browser.close();
+  }, 15000);
+
+  it('页面地图字段补全用 IMMS 普通文本字段覆盖失败的 role selector', () => {
+    const result = completeDraftSelectorsFromPageMap(createFillDraft('取样名称', "getByRole('textbox', { name: '取样名称' })"), {
+      steps: [createFillStep('取样名称')],
+      pageMap: {
+        mapId: 'pm-imms-input',
+        targetUrl: '/web/IMQM07',
+        uiLibrary: 'kendo',
+        states: [
+          {
+            stateId: 'state-action-1',
+            name: '新增',
+            context: {
+              page: { url: '/web/IMQM07', title: '取样规则管理', headings: [] },
+              elements: { buttons: [], inputs: [], selects: [], links: [], navigation: [], tables: [] },
+              fields: [
+                {
+                  name: '取样名称',
+                  type: 'input',
+                  ui: 'kendo-input',
+                  required: true,
+                  state: 'enabled',
+                  locators: [
+                    {
+                      selector: 'input#edit-0-sampleName',
+                      kind: 'attr',
+                      unique: true,
+                      confidence: 'high',
+                      reason: '输入框提供了 id 或 name 属性'
+                    }
+                  ],
+                  attrs: {
+                    inputId: 'edit-0-sampleName',
+                    inputName: 'edit-0-sampleName'
+                  },
+                  source: 'label-container',
+                  confidence: 'high'
+                }
+              ],
+              warnings: []
+            }
+          }
+        ],
+        warnings: []
+      }
+    });
+
+    expect(result.steps[0].selector).toBe('input#edit-0-sampleName');
+    expect(result.steps[0].selector).not.toBe("getByRole('textbox', { name: '取样名称' })");
+  });
+
   it('Kendo 下拉字段优先输出短 locator 而不是长 XPath', async () => {
     const browser = await chromium.launch({ executablePath: getChromePath() });
     const page = await browser.newPage();
@@ -2540,9 +2633,9 @@ function createFillStep(targetName = '用户名称') {
 }
 
 /**
- * 创建缺少 selector 的输入草稿。
+ * 创建输入草稿，可传入 selector 模拟模型已返回定位器。
  */
-function createFillDraft(targetName = '用户名称') {
+function createFillDraft(targetName = '用户名称', selector?: string) {
   return {
     name: `填写${targetName}`,
     startPath: '/user/list',
@@ -2550,6 +2643,7 @@ function createFillDraft(targetName = '用户名称') {
       {
         id: 'ai-1',
         type: 'fill' as const,
+        selector,
         value: '张三',
         text: `填写${targetName}`,
         confidence: 'high' as const,

@@ -2,8 +2,10 @@ import type { Page } from '@playwright/test';
 import type { TargetType, UiLibrary } from '../../../../../shared/types';
 import type { PageElement, PageField, PageLocator } from '../page-context';
 
+const kendoControlSelector = '.k-dropdownlist,.k-combobox,.k-picker,.k-multiselect,.k-dropdowntree,.k-numerictextbox,.k-datepicker,.k-datetimepicker,.k-timepicker,[data-role="dropdownlist"],[data-role="combobox"],[data-role="datepicker"],[data-role="numerictextbox"]';
+const kendoTextSelector = '.xr-fc input:not([type="hidden"]):not([data-role]),.xr-fc textarea,.i-input input:not([type="hidden"]):not([data-role]),.i-input textarea,.k-form-field input:not([type="hidden"]):not([data-role]),.k-form-field textarea';
 // 字段容器定位时只需要这些 class，避免把通用 class 一起塞进 XPath 影响匹配。
-const kendoFieldSelector = '.k-dropdownlist,.k-combobox,.k-picker,.k-multiselect,.k-dropdowntree,.k-numerictextbox,.k-datepicker,.k-datetimepicker,.k-timepicker,[data-role="dropdownlist"],[data-role="combobox"],[data-role="datepicker"],[data-role="numerictextbox"]';
+const kendoFieldSelector = `${kendoControlSelector},${kendoTextSelector}`;
 const maxItems = 20;
 const maxText = 80;
 
@@ -29,6 +31,7 @@ interface KendoFieldInfo {
  */
 export async function readKendoFields(page: Page): Promise<PageField[]> {
   const fields: PageField[] = [];
+  const fieldKeys = new Set<string>();
   const locator = page.locator(kendoFieldSelector);
   const count = Math.min(await locator.count(), maxItems);
 
@@ -39,7 +42,7 @@ export async function readKendoFields(page: Page): Promise<PageField[]> {
       continue;
     }
 
-    const info = await item.evaluate((element) => {
+    const info = await item.evaluate((element, controlSelector) => {
       const control = findKendoControl(element);
       const input = findKendoInput(control);
       const field = findFieldInfo(control, input);
@@ -74,9 +77,15 @@ export async function readKendoFields(page: Page): Promise<PageField[]> {
       };
 
       function findKendoControl(target: Element) {
-        return target.matches('.k-dropdownlist,.k-combobox,.k-picker,.k-multiselect,.k-dropdowntree,.k-numerictextbox,.k-datepicker,.k-datetimepicker,.k-timepicker')
+        if (target.matches('input,textarea')) {
+          const fieldControl = target.closest(controlSelector);
+
+          return fieldControl ?? target;
+        }
+
+        return target.matches(controlSelector)
           ? target
-          : target.closest('.k-dropdownlist,.k-combobox,.k-picker,.k-multiselect,.k-dropdowntree,.k-numerictextbox,.k-datepicker,.k-datetimepicker,.k-timepicker') ?? target;
+          : target.closest(controlSelector) ?? target;
       }
 
       function findKendoInput(controlElement: Element) {
@@ -221,15 +230,19 @@ export async function readKendoFields(page: Page): Promise<PageField[]> {
           return 'kendo-dropdowntree';
         }
 
-        if (classNameValue.includes('k-datepicker') || classNameValue.includes('k-datetimepicker') || classNameValue.includes('k-timepicker')) {
+        if (classNameValue.includes('k-datepicker') || classNameValue.includes('k-datetimepicker') || classNameValue.includes('k-timepicker') || dataRoleValue === 'datepicker') {
           return 'kendo-datepicker';
         }
 
-        if (classNameValue.includes('k-numerictextbox')) {
+        if (classNameValue.includes('k-numerictextbox') || dataRoleValue === 'numerictextbox') {
           return 'kendo-numerictextbox';
         }
 
-        return 'kendo-dropdownlist';
+        if (classNameValue.includes('k-dropdownlist') || dataRoleValue === 'dropdownlist') {
+          return 'kendo-dropdownlist';
+        }
+
+        return 'kendo-input';
       }
 
       function getKendoType(classNameValue: string, dataRoleValue: string) {
@@ -243,12 +256,20 @@ export async function readKendoFields(page: Page): Promise<PageField[]> {
 
         return 'input';
       }
-    });
+    }, kendoControlSelector);
     const name = normalizeText(info.name);
 
     if (!name) {
       continue;
     }
+
+    const fieldKey = getFieldKey(info, name);
+
+    if (fieldKeys.has(fieldKey)) {
+      continue;
+    }
+
+    fieldKeys.add(fieldKey);
 
     const locators: PageLocator[] = [];
     const attrSelector = buildKendoAttrSelector(info);
@@ -259,7 +280,7 @@ export async function readKendoFields(page: Page): Promise<PageField[]> {
         kind: 'attr',
         unique: await countPageLocator(page, attrSelector),
         confidence: 'high',
-        reason: '隐藏输入提供了 id 或 name 属性'
+        reason: '输入控件提供了 id 或 name 属性'
       });
     }
 
@@ -387,7 +408,7 @@ export async function shouldCollectKendoFields(page: Page, uiLibrary: UiLibrary)
     return true;
   }
 
-  return (await page.locator(kendoFieldSelector).count()) > 0;
+  return (await page.locator(kendoControlSelector).count()) > 0;
 }
 
 /**
@@ -441,6 +462,21 @@ function buildInputSelector(info: Pick<KendoFieldInfo, 'inputName' | 'inputId'>)
   }
 
   return undefined;
+}
+
+/**
+ * 生成字段去重键，避免同一个控件被外层 Kendo 结构和内部 input 重复采集。
+ */
+function getFieldKey(info: Pick<KendoFieldInfo, 'inputName' | 'inputId' | 'ui' | 'containerTag' | 'containerClass'>, name: string) {
+  if (info.inputId) {
+    return `id:${info.inputId}`;
+  }
+
+  if (info.inputName) {
+    return `name:${info.inputName}`;
+  }
+
+  return `field:${name}:${info.ui}:${info.containerTag}:${info.containerClass}`;
 }
 
 function getKendoControlSelector(ui: string) {

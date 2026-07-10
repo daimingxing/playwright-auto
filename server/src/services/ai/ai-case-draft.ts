@@ -609,7 +609,7 @@ function shouldDropSelector(selector: string, source: ImportStepSource, contexts
     return true;
   }
 
-  return Boolean(isValueSelector(selector, source, contexts));
+  return Boolean(isValueSelector(selector, source, contexts) || isRoleNameSelectorCoveredByField(selector, source, contexts));
 }
 
 /**
@@ -653,6 +653,38 @@ function isValueSelector(selector: string, source: ImportStepSource, contexts: P
     .filter((value): value is string => Boolean(value));
 
   return values.some((value) => isTextLocator(selector, value));
+}
+
+/**
+ * 判断 role/name 推测是否已有更可靠的字段语义定位器可替换。
+ */
+function isRoleNameSelectorCoveredByField(selector: string, source: ImportStepSource, contexts: PageContext[]) {
+  if (!source.targetType || !['input', 'select', 'date'].includes(source.targetType)) {
+    return false;
+  }
+
+  const targetName = readTargetName(source);
+
+  if (!targetName || !isRoleNameSelector(selector, source.targetType, targetName)) {
+    return false;
+  }
+
+  return contexts
+    .flatMap((context) => context.fields ?? [])
+    .filter((field) => isOperableField(field, { type: source.actionType ?? 'fill', target: source.targetType }))
+    .filter((field) => isFieldTargetMatch(field, source.targetType))
+    .some((field) => getFieldMatchRank(field.name, targetName) > 0 && Boolean(chooseUniqueFieldLocator(field.locators)));
+}
+
+/**
+ * 判断 selector 是否是按字段名生成的角色定位推测。
+ */
+function isRoleNameSelector(selector: string, target: TargetType, targetName: string) {
+  const role = target === 'select' ? 'combobox' : 'textbox';
+  const escaped = escapeRegExp(targetName);
+  const pattern = new RegExp(`^getByRole\\((['"])${role}\\1,\\s*\\{\\s*name:\\s*(['"])${escaped}\\2\\s*\\}\\)`);
+
+  return pattern.test(selector.trim());
 }
 
 /**
