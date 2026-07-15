@@ -1,13 +1,12 @@
-import type { AiDebugInfo, CaseMeta, CaseStep, ImportGenMode, ImportItem } from '../../../../shared/types';
-import { reviewCase } from '../case-review';
+import type { AiDebugInfo, ImportGenMode, ImportItem } from '../../../../shared/types';
 import { AiDraftError, generateCaseDraft, generateCaseDraftGroup, type DraftPageMap } from '../ai/ai-case-draft';
 import type { PageContext } from '../ai/page-context';
-import { transitionImportItems } from '../../lib/import-store';
-import { markDraftReady, markFailed } from './import-state-repo';
+import { buildDraftReview } from './import-draft-review';
+import { markDraftReady, markFailed, markItemsGenerating } from './import-state-repo';
 
 type GenMode = ImportGenMode;
 
-interface GenInput {
+export interface GenInput {
   projectKey: string;
   importId: string;
   items: ImportItem[];
@@ -116,26 +115,6 @@ async function generateSingleItem(input: GenInput, item: ImportItem, reason: str
 }
 
 /**
- * 标记一批导入项进入生成中状态：走批量转移通道，规避 N 次单条全量重扫。
- */
-async function markItemsGenerating(projectKey: string, importId: string, items: ImportItem[], mode: GenMode, reason?: string) {
-  await transitionImportItems(
-    projectKey,
-    importId,
-    items.map((item) => ({
-      itemId: item.itemId,
-      patch: {
-        status: 'generating',
-        errorMessage: undefined,
-        genMode: mode,
-        fallbackReason: reason,
-        retryCount: 0
-      }
-    }))
-  );
-}
-
-/**
  * 保存 AI 草稿并同步基础检查结果。
  */
 async function saveDraftItem(
@@ -158,7 +137,7 @@ async function saveDraftItem(
     return;
   }
 
-  const review = reviewCase(createReviewCase(draft));
+  const review = buildDraftReview(draft);
 
   await markDraftReady(projectKey, importId, item.itemId, {
     draft,
@@ -215,21 +194,4 @@ function readGroupError(item: unknown) {
   const error = item.error;
 
   return typeof error === 'string' ? error : undefined;
-}
-
-/**
- * 创建用于基础检查的临时用例对象。
- */
-function createReviewCase(draft: { name: string; startPath: string; steps: CaseStep[] }): CaseMeta {
-  const now = new Date().toISOString();
-
-  return {
-    name: draft.name,
-    key: 'ai-import-draft',
-    status: 'draft',
-    startPath: draft.startPath,
-    steps: draft.steps,
-    createdAt: now,
-    updatedAt: now
-  };
 }
