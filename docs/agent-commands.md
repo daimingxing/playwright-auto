@@ -60,7 +60,3 @@ npm run test:e2e
 - 服务端代码变更后，如果没有使用 `npm run dev:server:watch`，提醒开发人员重启已有服务
 - 前端结构拆分后，至少运行 `npm run typecheck`、相关 `tests/web/*.test.ts` 和必要时的 `npm run build`
 - 改 AI 导入分组、页面地图缓存、降级生成或预览展示后，至少运行 AI 导入专项测试、`npm run typecheck` 和 `npm run test`
-- 摘要类命令优先使用 `rtk`
-- Playwright 命令不要用 `rtk` 包裹
-- Playwright 运行和实测检查的子进程输出、退出码、启动错误和取消信号由 `server/src/services/playwright/playwright-cli.ts` 统一处理
-- 需要原样读取中文文档时使用 `pwsh`
