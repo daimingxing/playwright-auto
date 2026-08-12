@@ -10,3 +10,17 @@
 ## 交付
 - 完成功能或修复后，说明改动内容和手动测试方法。
 - 变更影响用户行为、配置、运行或测试方式时，更新对应 `docs/` 或 `README.md`；未影响时明确说明无需更新。
+
+## Agent skills
+
+### Issue tracker
+
+任务与规格使用 GitHub Issues 管理。见 `docs/agents/issue-tracker.md`。
+
+### Triage labels
+
+使用默认五类 triage 标签。见 `docs/agents/triage-labels.md`。
+
+### Domain docs
+
+使用单一上下文布局：根目录 `CONTEXT.md` 与 `docs/adr/`。见 `docs/agents/domain.md`。
