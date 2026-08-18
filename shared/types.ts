@@ -34,41 +34,7 @@ export const stepTypeLabels: Record<StepType, string> = {
   assertTitle: '检查标题'
 };
 
-export const targetTypes = [
-  'page',
-  'button',
-  'input',
-  'select',
-  'link',
-  'menu',
-  'tab',
-  'dialog',
-  'text',
-  'table',
-  'tree',
-  'date',
-  'region'
-] as const;
-
-export type TargetType = typeof targetTypes[number];
-
 export type MatchType = 'contains' | 'equals' | 'regex';
-
-export const targetTypeLabels: Record<TargetType, string> = {
-  page: '页面',
-  button: '按钮',
-  input: '输入框',
-  select: '下拉框',
-  link: '链接',
-  menu: '菜单',
-  tab: '页签',
-  dialog: '弹窗',
-  text: '文本',
-  table: '表格',
-  tree: '树节点',
-  date: '日期控件',
-  region: '区域'
-};
 
 export const matchTypeLabels: Record<MatchType, string> = {
   contains: '包含',
@@ -76,28 +42,11 @@ export const matchTypeLabels: Record<MatchType, string> = {
   regex: '正则'
 };
 
-export const uiLibraries = ['auto', 'native', 'kendo'] as const;
-
-export type UiLibrary = typeof uiLibraries[number];
-
-export const uiLibraryLabels: Record<UiLibrary, string> = {
-  auto: '自动识别',
-  native: '原生控件',
-  kendo: 'Kendo UI'
-};
-
 /**
  * 格式化动作类型中文名。
  */
 export function formatStepType(type: StepType) {
   return stepTypeLabels[type];
-}
-
-/**
- * 格式化导入目标类型中文名。
- */
-export function formatTargetTypeText(type: TargetType) {
-  return targetTypeLabels[type];
 }
 
 /**
@@ -136,220 +85,9 @@ export interface CaseStep {
   opensPageAlias?: string;
 }
 
-export interface AiConfig {
-  enabled: boolean;
-  baseUrl: string;
-  apiKey: string;
-  model: string;
-  temperature: number;
-  timeoutMs: number;
-  maxRetries: number;
-  concurrency: number;
-  pageMap: PageMapConfig;
-}
-
 export interface BrowserConfig {
   openTimeoutMs: number;
 }
-
-export interface PageMapConfig {
-  staleDays: number;
-  maxActions: number;
-  maxDepth: number;
-  autoCreate: boolean;
-}
-
-export type ImportStatus = 'running' | 'pendingReview' | 'partialSaved' | 'completed' | 'failed';
-
-export type ImportItemStatus = 'pending' | 'generating' | 'pendingReview' | 'failed' | 'saved' | 'skipped';
-
-export type ImportGenMode = 'group' | 'batch' | 'single';
-
-export type SavedCaseState = 'active' | 'missing';
-
-export type AiLevel = 'high' | 'medium' | 'low';
-
-export interface ImportStepSource {
-  caseNo: string;
-  stepNo: number;
-  actionType?: StepType;
-  targetType?: TargetType;
-  targetName?: string;
-  inputValue?: string;
-  matchType?: MatchType;
-  actionText: string;
-  targetText: string;
-  dataKeys: string[];
-  note: string;
-}
-
-export interface ImportDataSource {
-  caseNo: string;
-  dataKey: string;
-  dataName: string;
-  dataValue: string;
-  note: string;
-}
-
-export interface ImportCaseSource {
-  caseNo: string;
-  caseName: string;
-  targetUrl: string;
-  precondition: string;
-  expectedResult: string;
-  note: string;
-}
-
-export interface AiDraftStep {
-  id: string;
-  type: StepType;
-  selector?: string;
-  value?: string;
-  timeout?: number;
-  match?: MatchType;
-  text: string;
-  confidence: AiLevel;
-  warnings: string[];
-}
-
-export interface AiCaseDraft {
-  name: string;
-  startPath: string;
-  steps: AiDraftStep[];
-  confidence: AiLevel;
-  warnings: string[];
-  missingInfo: string[];
-}
-
-export interface AiDebugInfo {
-  system: string;
-  user: string;
-  response?: string;
-  parsed?: unknown;
-  error?: string;
-  updatedAt: string;
-}
-
-export type PageMapStatus = 'ready' | 'stale' | 'failed';
-
-export interface PageAction {
-  id: string;
-  type: StepType;
-  targetType?: TargetType;
-  targetName: string;
-  note?: string;
-  selector?: string;
-  value?: string;
-  path: string[];
-  warning?: string;
-}
-
-export interface PageActionResult {
-  actions: PageAction[];
-  warnings: string[];
-}
-
-export interface PageState {
-  stateId: string;
-  name: string;
-  url: string;
-  title?: string;
-  snapshotPath: string;
-  sourceAction?: PageAction;
-  warnings: string[];
-  createdAt: string;
-}
-
-export interface PageMapSummary {
-  mapId: string;
-  projectKey: string;
-  envKey: string;
-  targetUrl: string;
-  authHash: string;
-  viewport: {
-    width: number;
-    height: number;
-  };
-  uiLibrary?: UiLibrary;
-  actionHash?: string;
-  status: PageMapStatus;
-  stateCount: number;
-  updatedAt: string;
-}
-
-export interface PageMap {
-  mapId: string;
-  projectKey: string;
-  envKey: string;
-  targetUrl: string;
-  authHash: string;
-  viewport: {
-    width: number;
-    height: number;
-  };
-  uiLibrary?: UiLibrary;
-  actionHash?: string;
-  status: PageMapStatus;
-  states: PageState[];
-  warnings: string[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface ImportJob {
-  importId: string;
-  fileName: string;
-  fileHash: string;
-  envKey: string;
-  uiLibrary?: UiLibrary;
-  status: ImportStatus;
-  totalCount: number;
-  generatedCount: number;
-  savedCount: number;
-  failedCount: number;
-  skippedCount: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface ImportItem {
-  itemId: string;
-  caseNo: string;
-  caseName: string;
-  groupId?: string;
-  groupIndex?: number;
-  rowRefs: {
-    caseRow: number;
-    stepRows: number[];
-    dataRows: number[];
-  };
-  sourceHash: string;
-  source: {
-    caseInfo: ImportCaseSource;
-    steps: ImportStepSource[];
-    data: ImportDataSource[];
-  };
-  draft?: AiCaseDraft;
-  aiDebug?: AiDebugInfo;
-  review?: CaseReview;
-  status: ImportItemStatus;
-  errorMessage?: string;
-  genMode?: ImportGenMode;
-  fallbackReason?: string;
-  savedCaseKey?: string;
-  savedCaseState?: SavedCaseState;
-  pageMapId?: string;
-  pageMap?: PageMapSummary;
-  savedAt?: string;
-  retryCount: number;
-  updatedAt: string;
-}
-
-export interface ImportSaveResult {
-  saved: Array<{ itemId: string; caseKey: string }>;
-  failed: Array<{ itemId: string; message: string }>;
-}
-
 export type ReviewLevel = 'error' | 'danger' | 'warning' | 'info';
 
 export type ReviewGroup = 'integrity' | 'locator' | 'assertion' | 'timeout';
@@ -565,13 +303,11 @@ export interface FullAppConfig {
   runner: RunConfig;
   browser: BrowserConfig;
   steps: StepConfig;
-  ai: AiConfig;
 }
 
 export interface PublicAppConfig {
   browser: BrowserConfig;
   steps: StepConfig;
-  ai: Omit<AiConfig, 'apiKey'> & { configured: boolean };
 }
 
 export type AppConfig = PublicAppConfig;

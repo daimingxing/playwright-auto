@@ -12,7 +12,6 @@ npm run dev:web
 npm run typecheck
 npm run test
 npm test -- tests/web/case-editor.test.ts
-npm test -- tests/server/api-imports.test.ts tests/server/import-worker.test.ts tests/server/ai-case-draft.test.ts tests/web/ai-import.test.ts
 npm run build
 npm run build:web
 npm run test:e2e
@@ -29,7 +28,6 @@ npm run test:e2e
 - `npm run typecheck`：执行 TypeScript 类型检查。
 - `npm run test`：执行全部 Vitest 测试。
 - `npm test -- <测试文件>`：执行指定测试文件，适合局部迭代。
-- `npm test -- tests/server/api-imports.test.ts tests/server/import-worker.test.ts tests/server/ai-case-draft.test.ts tests/web/ai-import.test.ts`：验证 AI 导入接口、页面地图分组、草稿生成和预览工具。
 - `npm run build`：先执行类型检查，再构建前端产物。
 - `npm run build:web`：只构建前端产物。
 - `npm run test:e2e`：执行 Playwright 端到端测试。
@@ -45,8 +43,8 @@ npm run test:e2e
 
 - 配置文件：`playwright-auto.config.json`
 - `server.corsOrigins` 是配置文件中 `server` 对象下的字段，不是单独文件
-- `browser.openTimeoutMs` 用于平台自身打开业务 URL，包括手动登录初始打开和 AI 页面地图初始采集
-- `ai.timeoutMs` 只用于模型请求；`steps.timeouts` 只用于生成、运行和实测步骤等待，三者不要混用
+- `browser.openTimeoutMs` 用于平台自身打开业务 URL，包括手动登录初始打开
+- `steps.timeouts` 用于生成、运行和实测步骤等待，不用于平台自身打开业务 URL
 - 完整配置类型定义在 `shared/types.ts`，后端读取完整配置，`/api/app-config` 只返回前端需要的安全子集
 - 默认允许来源：`http://localhost:5177`、`http://127.0.0.1:5177`
 - 临时追加允许来源：`$env:PLAYWRIGHT_AUTO_CORS_ORIGINS='https://tool.example,http://localhost:5174'`
@@ -59,4 +57,3 @@ npm run test:e2e
 - 发现端口已占用时，不要换端口重复启动服务
 - 服务端代码变更后，如果没有使用 `npm run dev:server:watch`，提醒开发人员重启已有服务
 - 前端结构拆分后，至少运行 `npm run typecheck`、相关 `tests/web/*.test.ts` 和必要时的 `npm run build`
-- 改 AI 导入分组、页面地图缓存、降级生成或预览展示后，至少运行 AI 导入专项测试、`npm run typecheck` 和 `npm run test`

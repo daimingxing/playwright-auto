@@ -1,4 +1,4 @@
-import { formatEnumLabel, targetTypeLabels } from './types';
+import { formatEnumLabel } from './types';
 
 export type LocatorMode =
   | 'role'
@@ -65,18 +65,18 @@ const roleNames: Record<string, string> = {
   article: '文章',
   banner: '页眉区',
   blockquote: '引用块',
-  button: targetTypeLabels.button,
+  button: '按钮',
   caption: '标题说明',
   cell: '单元格',
   checkbox: '复选框',
   code: '代码',
   columnheader: '列头',
-  combobox: targetTypeLabels.select,
+  combobox: '下拉框',
   complementary: '补充区',
   contentinfo: '页脚信息',
   definition: '定义',
   deletion: '删除内容',
-  dialog: targetTypeLabels.dialog,
+  dialog: '弹窗',
   directory: '目录',
   document: '文档',
   emphasis: '强调',
@@ -90,7 +90,7 @@ const roleNames: Record<string, string> = {
   heading: '标题',
   img: '图片',
   insertion: '新增内容',
-  link: targetTypeLabels.link,
+  link: '链接',
   list: '列表',
   listbox: '列表框',
   listitem: '列表项',
@@ -98,7 +98,7 @@ const roleNames: Record<string, string> = {
   main: '主内容',
   marquee: '滚动字幕',
   math: '数学内容',
-  menu: targetTypeLabels.menu,
+  menu: '菜单',
   menubar: '菜单栏',
   menuitem: '菜单项',
   menuitemcheckbox: '复选菜单项',
@@ -112,7 +112,7 @@ const roleNames: Record<string, string> = {
   progressbar: '进度条',
   radio: '单选框',
   radiogroup: '单选组',
-  region: targetTypeLabels.region,
+  region: '区域',
   row: '行',
   rowgroup: '行组',
   rowheader: '行头',
@@ -127,19 +127,19 @@ const roleNames: Record<string, string> = {
   subscript: '下标',
   superscript: '上标',
   switch: '开关',
-  tab: targetTypeLabels.tab,
-  table: targetTypeLabels.table,
+  tab: '页签',
+  table: '表格',
   tablist: '标签页列表',
   tabpanel: '标签页面板',
   term: '术语',
-  textbox: targetTypeLabels.input,
+  textbox: '输入框',
   time: '时间',
   timer: '计时器',
   toolbar: '工具栏',
   tooltip: '提示',
   tree: '树',
   treegrid: '树形网格',
-  treeitem: targetTypeLabels.tree
+  treeitem: '树节点'
 };
 const commonRoleValues = [
   'button',

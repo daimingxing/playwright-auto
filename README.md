@@ -94,16 +94,6 @@ npm run dev
       "action": 2000,
       "wait": 1000
     }
-  },
-  "ai": {
-    "enabled": false,
-    "baseUrl": "",
-    "apiKey": "",
-    "model": "",
-    "temperature": 0.1,
-    "timeoutMs": 60000,
-    "maxRetries": 1,
-    "concurrency": 1
   }
 }
 ```
@@ -116,43 +106,11 @@ npm run dev
 - `runner.headlessWorkers`：无头运行默认并发数。
 - `runner.headedWorkers`：可视调试默认并发数。
 - `runner.maxWorkers`：运行中心允许选择的最大并发数。
-- `browser.openTimeoutMs`：平台打开业务 URL 的等待上限，当前用于手动登录初始打开 URL 和 AI 页面地图初始采集 URL。
+- `browser.openTimeoutMs`：平台打开业务 URL 的等待上限，当前用于手动登录初始打开 URL。
 - `steps.timeouts.navigation`：生成、运行和实测步骤中打开页面动作的默认等待毫秒数，不用于平台自身打开业务 URL。
 - `steps.timeouts.action`：手动新增点击、输入、选择等操作步骤，和录制导入操作步骤的默认等待毫秒数。
 - `steps.timeouts.wait`：手动新增等待步骤的默认等待毫秒数。
-- `ai.enabled`：是否启用 AI 导入。启用后仍需要配置模型地址和模型名称。
-- `ai.baseUrl`：OpenAI 兼容接口地址，例如 DeepSeek 使用 `https://api.deepseek.com`。
-- `ai.apiKey`：模型服务密钥。建议真实密钥用环境变量配置，不写入仓库文件。
-- `ai.model`：模型名称，例如 `deepseek-v4-flash`。
-- `ai.temperature`：模型采样温度。导入草稿建议保持较低值。
-- `ai.timeoutMs`：单次模型请求超时时间，不影响浏览器打开业务 URL 或步骤执行等待。
-- `ai.maxRetries`：单条导入项失败后的平台级自动重试次数。模型 SDK 内部重试固定关闭，避免实际调用次数被放大。
-- `ai.concurrency`：后台 AI 生成并发数。第一阶段建议保持 `1`，避免本地浏览器和模型服务压力过大。
-
-同名环境变量仍可临时覆盖或扩展配置文件：`PORT`、`DATA_ROOT`、`VITE_API_BASE`、`PLAYWRIGHT_AUTO_CORS_ORIGINS`、`PLAYWRIGHT_AUTO_HEADLESS_WORKERS`、`PLAYWRIGHT_AUTO_HEADED_WORKERS`、`PLAYWRIGHT_AUTO_MAX_WORKERS`、`PLAYWRIGHT_AUTO_AI_BASE_URL`、`PLAYWRIGHT_AUTO_AI_API_KEY`、`PLAYWRIGHT_AUTO_AI_MODEL`、`PLAYWRIGHT_AUTO_AI_TEMPERATURE`、`PLAYWRIGHT_AUTO_AI_TIMEOUT_MS`、`PLAYWRIGHT_AUTO_AI_CONCURRENCY`。`PLAYWRIGHT_AUTO_CORS_ORIGINS` 使用英文逗号分隔多个来源，例如 `https://tool.example,http://localhost:5174`。
-
-DeepSeek 接入示例：
-
-```json
-{
-  "ai": {
-    "enabled": true,
-    "baseUrl": "https://api.deepseek.com",
-    "apiKey": "",
-    "model": "deepseek-v4-flash",
-    "temperature": 0.1,
-    "timeoutMs": 60000,
-    "maxRetries": 1,
-    "concurrency": 1
-  }
-}
-```
-
-本地临时运行时可把密钥放到环境变量：
-
-```powershell
-$env:PLAYWRIGHT_AUTO_AI_API_KEY="你的模型密钥"
-```
+同名环境变量仍可临时覆盖或扩展配置文件：`PORT`、`DATA_ROOT`、`VITE_API_BASE`、`PLAYWRIGHT_AUTO_CORS_ORIGINS`、`PLAYWRIGHT_AUTO_HEADLESS_WORKERS`、`PLAYWRIGHT_AUTO_HEADED_WORKERS`、`PLAYWRIGHT_AUTO_MAX_WORKERS`。`PLAYWRIGHT_AUTO_CORS_ORIGINS` 使用英文逗号分隔多个来源，例如 `https://tool.example,http://localhost:5174`。
 
 ## 安全边界
 
@@ -169,13 +127,12 @@ $env:PLAYWRIGHT_AUTO_AI_API_KEY="你的模型密钥"
 - 用例状态：支持草稿、待启用、启用；运行中心只展示启用且基础检查通过的用例
 - 基础检查：自动检查用例完整性、必填字段、等待时间范围和定位质量，并在步骤表展示问题原因与建议
 - 定位器构建器：在用例编辑页通过角色、文本、标签、占位符、测试 ID、标题、图片文本、CSS（高级）等方式生成 selector，支持全量 role 搜索、正则、description、可见性过滤、包含/排除文本、包含/排除简单子定位器，同时保留手写定位模式；当前能力矩阵和 Playwright 已支持但尚未放入 UI 的候选能力见 `docs/locator-builder-development.md`
-- AI 用例导入：通过标准 Excel 模板批量导入自然语言测试用例，后端按当前项目环境和登录态异步采集目标页面上下文并生成可编辑草稿；入口在项目详情页的 `AI导入`，模板位于 `docs/ai-case-import/AI自然语言用例导入模板.xlsx`
 - 草稿保存：编辑页支持只保存 `case.json` 草稿，不生成测试文件；草稿保存也会执行基础检查，但不会因检查不通过而阻断；开始实测检查前会自动保存当前草稿
 - 测试文件生成：保存并生成测试文件、切换到待启用或启用时会执行基础检查，检查不通过会返回具体问题并阻断生成
 - 用例导出：导出单条用例目录，包含结构化数据和 Playwright spec
 - 步骤编辑：支持跳转、点击、右键、双击、悬停、输入、选择、等待和断言步骤；支持选中步骤后插入、单步上移下移、单步复制和批量删除、批量上移下移、批量复制、全选、取消批量
 - 录制导入：通过 Playwright codegen 录制操作，并把录制步骤插入到当前选中步骤后方；未选中步骤时追加到末尾
-- 登录态：在用例管理页或运行中心维护项目环境对应的 storageState，AI 导入和编辑页实测检查会复用；不需要登录的项目可以直接运行
+- 登录态：在用例管理页或运行中心维护项目环境对应的 storageState，编辑页实测检查和运行测试会复用；不需要登录的项目可以直接运行
 - 运行管理：按项目运行测试，查看运行状态、报告地址并导出报告
 
 ## 数据目录
@@ -191,13 +148,9 @@ data/
       trash/
       runs/
       auth/
-      imports/
-      page-maps/
 ```
 
-`cases/` 是可用测试用例，`trash/` 是回收站，`runs/` 保存运行记录和报告，`auth/` 保存登录态，`imports/` 保存 AI 导入任务、原始 Excel 和导入项草稿，`page-maps/` 保存 AI 导入使用的页面地图缓存。放弃导入记录只删除 `imports/` 下的过程数据，不删除已经保存到 `cases/` 的草稿用例；刷新页面地图只重新采集页面地图缓存，不覆盖已有草稿。
-
-AI 导入会按项目、环境、目标 URL、登录态和视口复用同一份页面地图缓存；同组用例共享页面地图多状态 snapshot 生成草稿，不会因为分组降级而重复采集页面。页面地图探索只会执行模板中可安全探索的动作，保存、删除、提交等高风险动作会跳过并写入页面地图提示。
+`cases/` 是可用测试用例，`trash/` 是回收站，`runs/` 保存运行记录和报告，`auth/` 保存登录态。
 
 每条测试用例保存为独立目录：
 
@@ -250,21 +203,3 @@ npm run test:e2e
 - `tests`：单元测试、接口测试和冒烟测试
 - `docs/agent-code-map.md`：AI 按需使用的代码定位地图
 - `data`：项目数据目录
-
-## AI 导入代码地图
-
-- `server/src/services/ai/ai-client.ts`：模型服务适配层。当前使用 Vercel AI SDK 的 OpenAI 兼容 provider，并把模型返回文本解析为 JSON；解析失败时会保留模型原始输出。
-- `server/src/services/ai/ai-case-draft.ts`：构造系统提示词和用户输入，定义 AI 草稿输出 schema，并把输出归一化为平台草稿步骤；支持单条生成和同页面地图下的分组生成，这是大模型对话循环的核心入口。
-- `server/src/services/ai/page-context.ts`：用 Playwright 打开目标页面，采集压缩后的页面上下文摘要，不把完整 HTML 交给模型。
-- `server/src/services/ai/page-map.ts`：根据项目、环境、目标页面、登录态和视口创建或刷新页面地图缓存。
-- `server/src/services/import/import-excel.ts`：解析新版两表 Excel 模板，并兼容旧三表模板输入。
-- `server/src/services/import/import-worker.ts`：本地后台队列，负责页面地图分组、分组草稿生成、拆小批降级、单条降级、失败重试和服务启动后的任务恢复。
-- `server/src/lib/import-store.ts`：AI 导入任务和导入项的文件持久化。
-- `server/src/lib/page-map-store.ts`：页面地图摘要和页面状态 snapshot 的文件持久化。
-- `server/src/routes/imports.ts`：AI 导入 HTTP API，包括上传、列表、预览项、重试、跳过、保存草稿和放弃导入记录。
-- `server/src/routes/page-maps.ts`：页面地图 HTTP API，包括列表、查看、刷新和删除。
-- `web/src/pages/ai-import/AiImportList.vue`：导入记录、上传页面、导入环境选择和页面地图管理入口。
-- `web/src/pages/ai-import/AiImportPreview.vue`：导入预览、筛选、详情、重试、跳过、批量保存、分组状态、降级提示和页面地图摘要；点开单条导入项详情，可以在“AI 调试信息”中查看系统提示词、用户输入、模型原始输出、解析后的 JSON 和结构错误。
-- `web/src/api/imports.ts`：前端 AI 导入 API 封装。
-- `web/src/api/page-maps.ts`：前端页面地图 API 封装。
-- `docs/ai-case-import/`：测试人员使用的 Excel 模板和填写说明。

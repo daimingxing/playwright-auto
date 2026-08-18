@@ -5,8 +5,6 @@ import { projectsRouter } from './routes/projects';
 import { runsRouter } from './routes/runs';
 import { authRouter } from './routes/auth';
 import { recordRouter } from './routes/record';
-import { importsRouter } from './routes/imports';
-import { pageMapsRouter } from './routes/page-maps';
 import { RunError } from './services/run/runner';
 import { getAppConfig } from './lib/app-config';
 import { ZodError, type ZodIssue } from 'zod';
@@ -41,18 +39,7 @@ export function createApp() {
 
     res.json({
       browser: config.browser,
-      steps: config.steps,
-      ai: {
-        enabled: config.ai.enabled,
-        baseUrl: config.ai.baseUrl,
-        model: config.ai.model,
-        temperature: config.ai.temperature,
-        timeoutMs: config.ai.timeoutMs,
-        maxRetries: config.ai.maxRetries,
-        concurrency: config.ai.concurrency,
-        pageMap: config.ai.pageMap,
-        configured: Boolean(config.ai.baseUrl && config.ai.model)
-      }
+      steps: config.steps
     });
   });
 
@@ -62,8 +49,6 @@ export function createApp() {
   app.use('/api/projects/:projectKey/trash', trashRouter);
   app.use('/api/projects/:projectKey/runs', runsRouter);
   app.use('/api/projects/:projectKey/auth', authRouter);
-  app.use('/api/projects/:projectKey/imports', importsRouter);
-  app.use('/api/projects/:projectKey/page-maps', pageMapsRouter);
 
   app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     const message = error instanceof Error ? error.message : '未知错误';

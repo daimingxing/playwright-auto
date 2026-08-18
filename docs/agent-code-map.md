@@ -32,7 +32,6 @@
 - 定位器构建器：`shared/locator-builder.ts`、`web/src/pages/locator-builder/`
 - Playwright spec 生成：`server/src/services/case/case-generator.ts`、`server/src/services/case/case-step-render.ts`
 - Playwright codegen 录制：`server/src/routes/record.ts`、`server/src/services/record/`
-- AI 用例导入和页面地图：`server/src/services/import/`、`server/src/services/import/import-page-map-resolver.ts`、`server/src/services/ai/page-map.ts`
 - 用例运行和报告：`web/src/pages/run-center/`、`server/src/routes/runs.ts`、`server/src/services/run/`
 - 项目登录态：`web/src/composables/project-auth.ts`、`server/src/routes/auth.ts`、`server/src/services/auth-session.ts`
 - 本地应用配置和 CORS：`playwright-auto.config.json.example`、`server/src/lib/app-config.ts`
@@ -46,12 +45,8 @@
 - 后端路由由 `server/src/app.ts` 挂载；路由层处理 HTTP 入参和响应，业务逻辑放在 `server/src/services/` 或 `server/src/lib/`。
 - `data/projects/<projectKey>/` 保存项目数据；`case.json` 是用例源数据，`case.spec.ts` 由它生成。
 - 只有 `active` 且基础检查通过的用例能进入运行中心。
-- `browser.openTimeoutMs` 控制平台打开业务 URL；`ai.timeoutMs` 只控制模型请求；`steps.timeouts` 只控制生成、运行和实测等待。
-- AI 导入按项目、环境、目标 URL、登录态、视口和控件库复用页面地图缓存；分组降级复用同一页面地图 snapshot，不重新采集页面。
-- 页面地图探索跳过保存、删除、提交等高风险动作；提示写入 warning，预览展示提示但不将其视为生成失败。
-- 页面地图旧缓存缺少 snapshot 时，详情仍可返回，并在 warning 中说明字段语义未展开。
+- `browser.openTimeoutMs` 控制平台打开业务 URL；`steps.timeouts` 控制生成、运行和实测等待。
 
 ## 相关文档
 
 - 基础检查和定位质量规则：`docs/case-review-rules.md`
-- AI 用例导入约束：`docs/ai-case-import/`

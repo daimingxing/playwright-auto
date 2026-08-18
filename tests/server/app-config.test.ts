@@ -50,22 +50,6 @@ describe('应用配置', () => {
           action: 2000,
           wait: 1000
         }
-      },
-      ai: {
-        enabled: false,
-        baseUrl: '',
-        apiKey: '',
-        model: '',
-        temperature: 0.1,
-        timeoutMs: 60000,
-        maxRetries: 1,
-        concurrency: 1,
-        pageMap: {
-          staleDays: 30,
-          maxActions: 20,
-          maxDepth: 2,
-          autoCreate: true
-        }
       }
     });
   });
@@ -123,22 +107,6 @@ describe('应用配置', () => {
           action: 3000,
           wait: 1500
         }
-      },
-      ai: {
-        enabled: false,
-        baseUrl: '',
-        apiKey: '',
-        model: '',
-        temperature: 0.1,
-        timeoutMs: 60000,
-        maxRetries: 1,
-        concurrency: 1,
-        pageMap: {
-          staleDays: 30,
-          maxActions: 20,
-          maxDepth: 2,
-          autoCreate: true
-        }
       }
     });
   });
@@ -194,22 +162,6 @@ describe('应用配置', () => {
           navigation: 30000,
           action: 3000,
           wait: 1500
-        }
-      },
-      ai: {
-        enabled: false,
-        baseUrl: '',
-        apiKey: '',
-        model: '',
-        temperature: 0.1,
-        timeoutMs: 60000,
-        maxRetries: 1,
-        concurrency: 1,
-        pageMap: {
-          staleDays: 30,
-          maxActions: 20,
-          maxDepth: 2,
-          autoCreate: true
         }
       }
     });

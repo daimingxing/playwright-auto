@@ -25,15 +25,5 @@
       "action": 2000,
       "wait": 1000
     }
-  },
-  "ai": {
-    "enabled": true,
-    "baseUrl": "https://api.deepseek.com",
-    "apiKey": "",
-    "model": "deepseek-v4-flash",
-    "temperature": 0.1,
-    "timeoutMs": 60000,
-    "maxRetries": 1,
-    "concurrency": 1
   }
 }

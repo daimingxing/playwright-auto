@@ -68,7 +68,7 @@ const auth = useProjectAuth({
   envs,
   activeEnv,
   selectedEnv,
-  savedMessage: "登录态已保存，AI 导入、实测检查和运行测试会自动复用",
+  savedMessage: "登录态已保存，实测检查和运行测试会自动复用",
 });
 const {
   hasAuth,
@@ -315,11 +315,6 @@ onMounted(async () => {
       <div class="actions btn-shadow-md">
         <el-button type="primary" size="large" @click="dialogOpen = true"
           >新建用例</el-button
-        >
-        <el-button
-          size="large"
-          @click="router.push(`/projects/${projectKey}/imports`)"
-          >AI导入</el-button
         >
         <el-button
           type="success"
