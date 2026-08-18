@@ -1,5 +1,4 @@
 import type { CaseStep } from '../../../../shared/types';
-import { quoteText } from './code-literal';
 
 /**
  * 判断 selector 是否明显指向非原生下拉控件。
@@ -26,7 +25,7 @@ export function isNativeSelect(value: string) {
  * 生成自定义下拉选项定位器。
  */
 export function renderOptionLocator(value: string, pageName = 'page') {
-  return `${pageName}.getByRole('option', { name: ${quote(value)} }).or(${pageName}.getByText(${quote(value)}, { exact: true })).first()`;
+  return `${pageName}.getByRole('option', { name: ${JSON.stringify(value)} }).or(${pageName}.getByText(${JSON.stringify(value)}, { exact: true })).first()`;
 }
 
 /**
@@ -38,11 +37,4 @@ export function normalizeSelector(value: string) {
   }
 
   return value;
-}
-
-/**
- * 生成安全字符串字面量。
- */
-function quote(value: string) {
-  return quoteText(value);
 }

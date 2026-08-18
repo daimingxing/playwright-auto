@@ -1,4 +1,4 @@
-import { hasStepSelector, hasStepTimeout, hasStepValue, readStepTimeout, type CaseMeta, type CaseReviewItem, type CaseStatus, type CaseStep, type CheckStatus, type EnvMeta, type PracticalReviewSummary, type StepTimeoutConfig, type StepType } from '../../../../shared/types';
+import { hasStepSelector, hasStepTimeout, hasStepValue, readStepTimeout, type CaseMeta, type CaseStatus, type CaseStep, type CheckStatus, type EnvMeta, type PracticalReviewSummary, type StepTimeoutConfig, type StepType } from '../../../../shared/types';
 import { buildStartUrl } from '../../../../shared/url';
 import { formatDateTime } from '../../utils/time';
 
@@ -59,13 +59,6 @@ const checkStatusMap: Record<CheckStatus, { label: string; type: 'info' | 'warni
   'practical-failed': { label: '实测失败', type: 'danger' },
   'practical-passed': { label: '实测通过', type: 'success' }
 };
-
-export type StepReviewPreview = CaseReviewItem[] | 'pending';
-
-export interface StepReviewState {
-  status: 'pending' | 'passed' | 'failed';
-  reviews: CaseReviewItem[];
-}
 
 export const editorPanels = [
   { key: 'meta', defaultOpen: false },
@@ -165,55 +158,6 @@ export function getCaseCheckStatus(item: CaseMeta): CheckStatus {
   }
 
   return 'pending-practical';
-}
-
-/**
- * 显示静态定位检查通过文案。
- */
-export function formatLocatorCheckPass() {
-  return '定位通过';
-}
-
-/**
- * 合并已保存基础检查和编辑中预览检查。
- */
-export function mergeStepReviewState(
-  stepId: string,
-  savedReviews: CaseReviewItem[],
-  previewMap: Map<string, StepReviewPreview>
-): StepReviewState {
-  if (previewMap.get(stepId) === 'pending') {
-    return { status: 'pending', reviews: [] };
-  }
-
-  const preview = previewMap.get(stepId);
-
-  if (Array.isArray(preview)) {
-    return {
-      status: preview.length > 0 ? 'failed' : 'passed',
-      reviews: preview
-    };
-  }
-
-  return {
-    status: savedReviews.length > 0 ? 'failed' : 'passed',
-    reviews: savedReviews
-  };
-}
-
-/**
- * 显示步骤基础检查状态。
- */
-export function formatStepReviewState(state: StepReviewState) {
-  if (state.status === 'pending') {
-    return { label: '待检查', type: 'info' as const };
-  }
-
-  if (state.status === 'failed') {
-    return { label: '审查不通过', type: 'danger' as const };
-  }
-
-  return { label: formatLocatorCheckPass(), type: 'success' as const };
 }
 
 /**

@@ -7,7 +7,7 @@ import {
   parseLocatorSelector,
   renderLocatorExpression,
   roleOptions
-} from '../../web/src/pages/locator-builder/locator-builder';
+} from '../../shared/locator-builder';
 
 describe('定位器构建器', () => {
   it('会生成常用定位方式 selector', () => {

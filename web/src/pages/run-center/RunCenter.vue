@@ -8,7 +8,7 @@ import { listCases } from '../../api/cases';
 import { getProject } from '../../api/projects';
 import { getRunConfig } from '../../api/runs';
 import { getProjectEnv } from '../../state/project-env';
-import { useProjectUiStore } from '../../state/project-ui';
+import { projectUi } from '../../state/project-ui';
 import { useRunAuth, useRunReports, useRunStart } from './run-center-composables';
 import {
   canStartRun,
@@ -26,7 +26,6 @@ import {
 const route = useRoute();
 const router = useRouter();
 const projectKey = String(route.params.projectKey);
-const projectUi = useProjectUiStore();
 const envs = ref<EnvMeta[]>([]);
 const activeEnv = ref<EnvMeta | null>(null);
 const selectedEnv = ref('default');

@@ -16,12 +16,6 @@ interface CreateCaseInput {
   startPath: string;
 }
 
-export interface CreateCaseDraftInput {
-  name: string;
-  startPath: string;
-  steps: CaseStep[];
-}
-
 /**
  * 创建用例目录和结构化用例文件。
  */
@@ -43,21 +37,6 @@ export async function createCase(projectKey: string, input: CreateCaseInput) {
   await writeJson(join(getCasePath(projectKey, caseKey), 'case.json'), item);
 
   return item;
-}
-
-/**
- * 直接创建带步骤的草稿用例。
- */
-export async function createCaseDraft(projectKey: string, input: CreateCaseDraftInput) {
-  const created = await createCase(projectKey, {
-    name: input.name,
-    startPath: input.startPath
-  });
-
-  return updateCaseDraft(projectKey, created.key, {
-    ...created,
-    steps: input.steps
-  });
 }
 
 /**

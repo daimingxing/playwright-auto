@@ -7,8 +7,7 @@ import { getProjectPath } from '../lib/path';
 import { getProject } from '../lib/project-store';
 import { badRequest, notFound } from '../lib/http-error';
 import { getAppConfig } from '../lib/app-config';
-import { getBrowserPath } from './playwright/browser-path';
-import { assertVendorBrowser } from './playwright/vendor-browser';
+import { assertVendorBrowser, getChromePath } from './playwright/vendor-browser';
 
 interface StorageState {
   cookies: unknown[];
@@ -104,7 +103,7 @@ export async function startLoginSession(projectKey: string, input: ManualLoginIn
 
   const browser = await chromium.launch({
     headless: false,
-    executablePath: getBrowserPath()
+    executablePath: getChromePath()
   });
   const context = await browser.newContext();
   const page = await context.newPage();

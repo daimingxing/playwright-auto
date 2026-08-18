@@ -1,35 +1,9 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type { FullAppConfig, StepTimeoutConfig } from '../../../shared/types';
+import { z } from 'zod';
+import type { FullAppConfig } from '../../../shared/types';
 
-interface FileConfig {
-  server?: {
-    port?: unknown;
-    dataRoot?: unknown;
-    corsOrigins?: unknown;
-  };
-  web?: {
-    origin?: unknown;
-    apiBase?: unknown;
-  };
-  runner?: {
-    headlessWorkers?: unknown;
-    headedWorkers?: unknown;
-    maxWorkers?: unknown;
-  };
-  browser?: {
-    openTimeoutMs?: unknown;
-  };
-  steps?: {
-    timeouts?: {
-      navigation?: unknown;
-      action?: unknown;
-      wait?: unknown;
-    };
-  };
-}
-
-const DEFAULT_CONFIG = {
+const DEFAULT_CONFIG: FullAppConfig = {
   server: {
     port: 3001,
     dataRoot: 'data',
@@ -57,109 +31,111 @@ const DEFAULT_CONFIG = {
 };
 
 /**
- * 获取当前应用配置。
+ * 获取当前应用配置，环境变量优先于配置文件。
  */
 export function getAppConfig(): FullAppConfig {
-  const fileConfig = readFileConfig();
-  const web = {
-    origin: readText(undefined, fileConfig.web?.origin, DEFAULT_CONFIG.web.origin),
-    apiBase: readText(process.env.VITE_API_BASE, fileConfig.web?.apiBase, DEFAULT_CONFIG.web.apiBase)
-  };
-  const maxWorkers = readInt(process.env.PLAYWRIGHT_AUTO_MAX_WORKERS, fileConfig.runner?.maxWorkers, DEFAULT_CONFIG.runner.maxWorkers, 1, 64);
-  const headlessWorkers = readInt(
-    process.env.PLAYWRIGHT_AUTO_HEADLESS_WORKERS,
-    fileConfig.runner?.headlessWorkers,
-    DEFAULT_CONFIG.runner.headlessWorkers,
-    1,
-    maxWorkers
+  const file = readConfigFile();
+  const maxWorkers = intField(DEFAULT_CONFIG.runner.maxWorkers, 1, 64).parse(
+    envOrFile('PLAYWRIGHT_AUTO_MAX_WORKERS', getValue(file, 'runner', 'maxWorkers'))
   );
-  const headedWorkers = readInt(
-    process.env.PLAYWRIGHT_AUTO_HEADED_WORKERS,
-    fileConfig.runner?.headedWorkers,
-    DEFAULT_CONFIG.runner.headedWorkers,
-    1,
-    maxWorkers
-  );
-  const timeouts = readStepTimeouts(fileConfig);
-
-  return {
+  const schema = createConfigSchema(maxWorkers);
+  const config = schema.parse({
     server: {
-      port: readInt(process.env.PORT, fileConfig.server?.port, DEFAULT_CONFIG.server.port, 1, 65535),
-      dataRoot: readText(process.env.DATA_ROOT, fileConfig.server?.dataRoot, DEFAULT_CONFIG.server.dataRoot),
-      corsOrigins: readList(
-        process.env.PLAYWRIGHT_AUTO_CORS_ORIGINS,
-        fileConfig.server?.corsOrigins,
-        [...DEFAULT_CONFIG.server.corsOrigins, web.origin]
-      )
+      port: envOrFile('PORT', getValue(file, 'server', 'port')),
+      dataRoot: envOrFile('DATA_ROOT', getValue(file, 'server', 'dataRoot')),
+      corsOrigins: envOrFile('PLAYWRIGHT_AUTO_CORS_ORIGINS', getValue(file, 'server', 'corsOrigins'))
     },
-    web,
+    web: {
+      origin: getValue(file, 'web', 'origin'),
+      apiBase: envOrFile('VITE_API_BASE', getValue(file, 'web', 'apiBase'))
+    },
     runner: {
-      headlessWorkers,
-      headedWorkers,
+      headlessWorkers: envOrFile('PLAYWRIGHT_AUTO_HEADLESS_WORKERS', getValue(file, 'runner', 'headlessWorkers')),
+      headedWorkers: envOrFile('PLAYWRIGHT_AUTO_HEADED_WORKERS', getValue(file, 'runner', 'headedWorkers')),
       maxWorkers
     },
-    browser: readBrowserConfig(fileConfig),
+    browser: {
+      openTimeoutMs: getValue(file, 'browser', 'openTimeoutMs')
+    },
     steps: {
-      timeouts
+      timeouts: {
+        navigation: getValue(file, 'steps', 'timeouts', 'navigation'),
+        action: getValue(file, 'steps', 'timeouts', 'action'),
+        wait: getValue(file, 'steps', 'timeouts', 'wait')
+      }
     }
-  };
+  });
+
+  config.server.corsOrigins = Array.from(new Set([
+    ...DEFAULT_CONFIG.server.corsOrigins,
+    config.web.origin,
+    ...config.server.corsOrigins
+  ]));
+
+  return config;
 }
 
 /**
- * 读取浏览器打开业务 URL 的统一等待配置。
+ * 创建包含当前 worker 上限的配置校验规则。
  */
-function readBrowserConfig(fileConfig: FileConfig) {
-  return {
-    // 业务页面可能位于慢内网，统一限制初始打开 URL 的等待上限。
-    openTimeoutMs: readInt(undefined, fileConfig.browser?.openTimeoutMs, DEFAULT_CONFIG.browser.openTimeoutMs, 1000, 300000)
-  };
+function createConfigSchema(maxWorkers: number) {
+  return z.object({
+    server: z.object({
+      port: intField(DEFAULT_CONFIG.server.port, 1, 65535),
+      dataRoot: textField(DEFAULT_CONFIG.server.dataRoot),
+      corsOrigins: listField
+    }),
+    web: z.object({
+      origin: textField(DEFAULT_CONFIG.web.origin),
+      apiBase: textField(DEFAULT_CONFIG.web.apiBase, true)
+    }),
+    runner: z.object({
+      headlessWorkers: intField(DEFAULT_CONFIG.runner.headlessWorkers, 1, maxWorkers),
+      headedWorkers: intField(DEFAULT_CONFIG.runner.headedWorkers, 1, maxWorkers),
+      maxWorkers: z.literal(maxWorkers)
+    }),
+    browser: z.object({
+      openTimeoutMs: intField(DEFAULT_CONFIG.browser.openTimeoutMs, 1000, 300000)
+    }),
+    steps: z.object({
+      timeouts: z.object({
+        navigation: intField(DEFAULT_CONFIG.steps.timeouts.navigation, 0, 600000),
+        action: intField(DEFAULT_CONFIG.steps.timeouts.action, 0, 600000),
+        wait: intField(DEFAULT_CONFIG.steps.timeouts.wait, 0, 600000)
+      })
+    })
+  });
 }
 
 /**
- * 读取逗号分隔或数组形式的字符串列表。
+ * 创建整数配置规则，非法值回退到默认值。
  */
-function readList(envValue: unknown, fileValue: unknown, defaultValue: string[]) {
-  const envList = parseListValue(envValue);
-
-  if (envList.length > 0) {
-    return uniqueList([...defaultValue, ...envList]);
-  }
-
-  const fileList = parseListValue(fileValue);
-
-  if (fileList.length > 0) {
-    return uniqueList([...defaultValue, ...fileList]);
-  }
-
-  return uniqueList(defaultValue);
+function intField(fallback: number, min: number, max: number) {
+  return z.preprocess(
+    (value) => typeof value === 'string' && value.trim() ? Number(value) : value,
+    z.number().int().min(min).max(max)
+  ).catch(fallback);
 }
 
 /**
- * 解析字符串列表配置值。
+ * 创建文本配置规则，空文本按字段需要回退默认值或保留为空。
  */
-function parseListValue(value: unknown) {
-  if (Array.isArray(value)) {
-    return value.filter((item): item is string => typeof item === 'string' && Boolean(item.trim()));
-  }
-
-  if (typeof value === 'string') {
-    return value.split(',').map((item) => item.trim()).filter(Boolean);
-  }
-
-  return [];
+function textField(fallback: string, allowEmpty = false) {
+  return z.preprocess(
+    (value) => typeof value === 'string' && (allowEmpty || value.trim()) ? value : fallback,
+    z.string()
+  );
 }
 
-/**
- * 按首次出现顺序去重字符串列表。
- */
-function uniqueList(values: string[]) {
-  return Array.from(new Set(values));
-}
+const listField = z.preprocess(
+  (value) => typeof value === 'string' ? value.split(',') : Array.isArray(value) ? value : [],
+  z.array(z.string()).transform((items) => items.map((item) => item.trim()).filter(Boolean))
+);
 
 /**
- * 读取项目根目录中的配置文件。
+ * 读取配置文件并保留统一的路径错误信息。
  */
-function readFileConfig(): FileConfig {
+function readConfigFile(): unknown {
   const configPath = resolve(process.env.PLAYWRIGHT_AUTO_CONFIG ?? 'playwright-auto.config.json');
 
   if (!existsSync(configPath)) {
@@ -167,72 +143,46 @@ function readFileConfig(): FileConfig {
   }
 
   try {
-    const parsed = JSON.parse(readFileSync(configPath, 'utf8'));
+    const value: unknown = JSON.parse(readFileSync(configPath, 'utf8'));
 
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    if (!isRecord(value)) {
       throw new Error('配置文件必须是对象');
     }
 
-    return parsed as FileConfig;
+    return value;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-
     throw new Error(`配置文件解析失败：${configPath}（${message}）`);
   }
 }
 
 /**
- * 按环境变量、配置文件、默认值顺序读取整数。
+ * 沿对象路径读取未知配置值。
  */
-function readInt(envValue: unknown, fileValue: unknown, defaultValue: number, min: number, max: number) {
-  const envNumber = parseIntValue(envValue);
+function getValue(source: unknown, ...path: string[]): unknown {
+  let value = source;
 
-  if (envNumber !== undefined && envNumber >= min && envNumber <= max) {
-    return envNumber;
+  for (const key of path) {
+    if (!isRecord(value)) {
+      return undefined;
+    }
+
+    value = value[key];
   }
 
-  const fileNumber = parseIntValue(fileValue);
-
-  if (fileNumber !== undefined && fileNumber >= min && fileNumber <= max) {
-    return fileNumber;
-  }
-
-  return defaultValue;
+  return value;
 }
 
 /**
- * 读取字符串配置。
+ * 读取环境变量；空值继续使用配置文件值。
  */
-function readText(envValue: unknown, fileValue: unknown, defaultValue: string) {
-  if (typeof envValue === 'string' && envValue.trim()) {
-    return envValue;
-  }
-
-  if (typeof fileValue === 'string' && fileValue.trim()) {
-    return fileValue;
-  }
-
-  return defaultValue;
+function envOrFile(name: string, fileValue: unknown) {
+  return process.env[name] || fileValue;
 }
 
 /**
- * 读取步骤默认等待时间配置。
+ * 判断未知值是否为普通对象。
  */
-function readStepTimeouts(fileConfig: FileConfig): StepTimeoutConfig {
-  const fileTimeouts = fileConfig.steps?.timeouts;
-
-  return {
-    navigation: readInt(undefined, fileTimeouts?.navigation, DEFAULT_CONFIG.steps.timeouts.navigation, 0, 600000),
-    action: readInt(undefined, fileTimeouts?.action, DEFAULT_CONFIG.steps.timeouts.action, 0, 600000),
-    wait: readInt(undefined, fileTimeouts?.wait, DEFAULT_CONFIG.steps.timeouts.wait, 0, 600000)
-  };
-}
-
-/**
- * 解析整数配置值。
- */
-function parseIntValue(value: unknown) {
-  const numberValue = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
-
-  return Number.isInteger(numberValue) ? numberValue : undefined;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

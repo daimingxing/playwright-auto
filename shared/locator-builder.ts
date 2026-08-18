@@ -1,4 +1,3 @@
-import { formatEnumLabel } from './types';
 
 export type LocatorMode =
   | 'role'
@@ -294,7 +293,7 @@ interface LocatorParseResult {
 function makeRoleOption(role: string): LocatorOptionItem {
   const name = roleNames[role] ?? role;
 
-  return { label: formatEnumLabel(name, role), value: role };
+  return { label: `${name}(${role})`, value: role };
 }
 
 /**

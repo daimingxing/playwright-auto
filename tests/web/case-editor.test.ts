@@ -8,8 +8,6 @@ import {
   formatCaseStatus,
   formatCaseCreatedTime,
   formatCheckStatus,
-  formatLocatorCheckPass,
-  formatStepReviewState,
   formatPracticalReviewStatus,
   formatStepType,
   getFailedPracticalStep,
@@ -17,7 +15,6 @@ import {
   getPracticalReviewTagType,
   getStepIndexLabel,
   getStartPreview,
-  mergeStepReviewState,
   hasSelector,
   hasTimeout,
   hasValue,
@@ -112,50 +109,6 @@ describe('用例编辑器步骤工具', () => {
   it('会把步骤下标显示为从 1 开始的序号', () => {
     expect(getStepIndexLabel(0)).toBe(1);
     expect(getStepIndexLabel(4)).toBe(5);
-  });
-
-  it('静态定位检查通过文案会避免和实测检查混淆', () => {
-    expect(formatLocatorCheckPass()).toBe('定位通过');
-  });
-
-  it('编辑中的步骤会用预览基础检查状态覆盖已保存结果', () => {
-    const saved = makeReview('pass').items;
-
-    expect(formatStepReviewState(mergeStepReviewState('s1', saved, new Map([['s1', 'pending']])))).toEqual({
-      label: '待检查',
-      type: 'info'
-    });
-
-    expect(formatStepReviewState(mergeStepReviewState('s1', saved, new Map([['s1', []]])))).toEqual({
-      label: '定位通过',
-      type: 'success'
-    });
-
-    expect(
-      mergeStepReviewState(
-        's1',
-        saved,
-        new Map([
-          [
-            's1',
-            [
-              {
-                id: 's1-missing-selector',
-                stepId: 's1',
-                stepIndex: 0,
-                stepType: 'click',
-                selector: '',
-                level: 'error',
-                group: 'integrity',
-                ruleCode: 'missing-selector',
-                message: '步骤缺少元素选择器。',
-                suggestion: '请补充可稳定定位目标元素的 selector。'
-              }
-            ]
-          ]
-        ])
-      ).reviews
-    ).toHaveLength(1);
   });
 
   it('根据项目环境和起始路径计算实际打开地址', () => {

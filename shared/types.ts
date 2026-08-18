@@ -36,24 +36,11 @@ export const stepTypeLabels: Record<StepType, string> = {
 
 export type MatchType = 'contains' | 'equals' | 'regex';
 
-export const matchTypeLabels: Record<MatchType, string> = {
-  contains: '包含',
-  equals: '等于',
-  regex: '正则'
-};
-
 /**
  * 格式化动作类型中文名。
  */
 export function formatStepType(type: StepType) {
   return stepTypeLabels[type];
-}
-
-/**
- * 组合中文展示名和英文枚举值。
- */
-export function formatEnumLabel(label: string, value: string) {
-  return `${label}(${value})`;
 }
 
 export type CaseStatus = 'draft' | 'ready' | 'active';
@@ -310,14 +297,7 @@ export interface PublicAppConfig {
   steps: StepConfig;
 }
 
-export type AppConfig = PublicAppConfig;
-
 export interface AuthState {
   path: string;
   createdAt: string;
-}
-
-export interface AuthStatus {
-  exists: boolean;
-  path: string;
 }

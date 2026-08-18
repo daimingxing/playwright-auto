@@ -1,6 +1,5 @@
 import type { CaseMeta, CaseStep } from '../../../../shared/types';
 import { renderLocatorExpression } from '../../../../shared/locator-builder';
-import { quoteText } from './code-literal';
 import { isCustomSelect, normalizeSelector, renderOptionLocator } from './case-step-render';
 
 /**
@@ -10,8 +9,8 @@ export function generateSpec(item: CaseMeta) {
   const lines = [
     "import { test, expect } from '@playwright/test';",
     '',
-    `test(${quote(item.name)}, async ({ page }) => {`,
-    `  await page.goto(${quote(item.startPath)});`
+    `test(${JSON.stringify(item.name)}, async ({ page }) => {`,
+    `  await page.goto(${JSON.stringify(item.startPath)});`
   ];
 
   for (const step of item.steps) {
@@ -52,7 +51,7 @@ function renderStepAction(step: CaseStep) {
 
   switch (step.type) {
     case 'goto':
-      return `  await ${pageName}.goto(${quote(step.value ?? '/')}${renderTimeoutOption(step)});`;
+      return `  await ${pageName}.goto(${JSON.stringify(step.value ?? '/')}${renderTimeoutOption(step)});`;
     case 'click':
       return `  await ${renderStepLocator(step, '点击选择器', pageName)}.click(${renderTimeoutArg(step)});`;
     case 'rightClick':
@@ -62,7 +61,7 @@ function renderStepAction(step: CaseStep) {
     case 'hover':
       return `  await ${renderStepLocator(step, '悬停选择器', pageName)}.hover(${renderTimeoutArg(step)});`;
     case 'fill':
-      return `  await ${renderStepLocator(step, '输入选择器', pageName)}.fill(${quote(step.value ?? '')}${renderTimeoutOption(step)});`;
+      return `  await ${renderStepLocator(step, '输入选择器', pageName)}.fill(${JSON.stringify(step.value ?? '')}${renderTimeoutOption(step)});`;
     case 'select':
       return renderSelectAction(step, pageName);
     case 'wait':
@@ -73,11 +72,11 @@ function renderStepAction(step: CaseStep) {
     case 'assertVisible':
       return `  await expect(${renderStepLocator(step, '可见断言选择器', pageName)}).toBeVisible();`;
     case 'assertValue':
-      return `  await expect(${renderStepLocator(step, '输入值断言选择器', pageName)}).toHaveValue(${quote(step.value ?? '')});`;
+      return `  await expect(${renderStepLocator(step, '输入值断言选择器', pageName)}).toHaveValue(${JSON.stringify(step.value ?? '')});`;
     case 'assertUrl':
-      return `  await expect(${pageName}).toHaveURL(${quote(step.value ?? '')});`;
+      return `  await expect(${pageName}).toHaveURL(${JSON.stringify(step.value ?? '')});`;
     case 'assertTitle':
-      return `  await expect(${pageName}).toHaveTitle(${quote(step.value ?? '')});`;
+      return `  await expect(${pageName}).toHaveTitle(${JSON.stringify(step.value ?? '')});`;
     default:
       throw new Error(`暂不支持的步骤类型：${String(step.type)}`);
   }
@@ -90,7 +89,7 @@ function renderSelectAction(step: CaseStep, pageName: string) {
   const target = renderStepLocator(step, '下拉选择器', pageName);
 
   if (!isCustomSelect(step)) {
-    return `  await ${target}.selectOption(${quote(step.value ?? '')}${renderTimeoutOption(step)});`;
+    return `  await ${target}.selectOption(${JSON.stringify(step.value ?? '')}${renderTimeoutOption(step)});`;
   }
 
   return [
@@ -140,14 +139,14 @@ function renderTextAssert(step: CaseStep, pageName: string) {
   const value = step.value ?? '';
 
   if (step.match === 'equals') {
-    return `  await expect(${target}).toHaveText(${quote(value)});`;
+    return `  await expect(${target}).toHaveText(${JSON.stringify(value)});`;
   }
 
   if (step.match === 'regex') {
-    return `  await expect(${target}).toContainText(new RegExp(${quote(value)}));`;
+    return `  await expect(${target}).toContainText(new RegExp(${JSON.stringify(value)}));`;
   }
 
-  return `  await expect(${target}).toContainText(${quote(value)});`;
+  return `  await expect(${target}).toContainText(${JSON.stringify(value)});`;
 }
 
 /**
@@ -160,7 +159,7 @@ function renderLocator(selector: string | undefined, name: string, pageName = 'p
     return `${pageName}.${value}`;
   }
 
-  return `${pageName}.locator(${quote(value)})`;
+  return `${pageName}.locator(${JSON.stringify(value)})`;
 }
 
 /**
@@ -172,13 +171,6 @@ function renderStepLocator(step: CaseStep, name: string, pageName = 'page') {
   }
 
   return renderLocator(step.selector, name, pageName);
-}
-
-/**
- * 生成安全字符串字面量。
- */
-function quote(value: string) {
-  return quoteText(value);
 }
 
 /**

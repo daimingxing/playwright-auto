@@ -35,13 +35,11 @@ import { getAppStepConfig, getProject } from "../../api/projects";
 import { getProjectEnv, setProjectEnv } from "../../state/project-env";
 import { getErrorIssues, getErrorMessage } from "../../utils/error";
 import { formatDateTime } from "../../utils/time";
-import { reviewCaseStep } from "../../../../shared/case-review";
 import {
   copyStep,
   formatCaseStatus,
   formatCheckStatus,
   formatStepType,
-  formatStepReviewState,
   formatPracticalReviewStatus,
   getFailedPracticalStep,
   getInsertIndex,
@@ -54,15 +52,13 @@ import {
   insertStep,
   moveStep,
   removeStep,
-  mergeStepReviewState,
-  type StepReviewPreview,
   stepGroups,
   editorPanels,
   stepLabels,
   stepTimeouts,
 } from "./case-editor";
 import { useCasePractical, useCaseRecord, useStepBatch } from "./case-editor-composables";
-import { formatLocatorSummary, type LocatorBuilderState } from "../locator-builder/locator-builder";
+import { formatLocatorSummary, type LocatorBuilderState } from "../../../../shared/locator-builder";
 
 const route = useRoute();
 const router = useRouter();
@@ -79,14 +75,11 @@ const selectedId = ref("");
 const highlightId = ref("");
 const locatorDrawerOpen = ref(false);
 const locatorStepId = ref("");
-const stepReviewPreview = ref(new Map<string, StepReviewPreview>());
 const openPanels = ref<string[]>(editorPanels.filter((panel) => panel.defaultOpen).map((panel) => panel.key));
 const isMetaOpen = computed(() => openPanels.value.includes("meta"));
 const stepFlashMs = 180;
-const reviewDebounceMs = 400;
 // 浏览器环境下 `window.setTimeout` 返回数值型定时器句柄，避免与 Node 的 `Timeout` 类型混淆。
 let highlightTimer: number | undefined;
-const reviewTimers = new Map<string, number>();
 const reviewLabels = {
   error: "错误",
   danger: "高危",
@@ -137,8 +130,6 @@ const {
   stepTable,
   selectedId,
   setActiveSteps,
-  markStepReviewPending,
-  clearStepReview,
   showError,
 });
 const {
@@ -172,7 +163,6 @@ const {
   item,
   activeEnv,
   selectedId,
-  runStepReviewPreview,
   showError,
 });
 
@@ -206,7 +196,6 @@ async function loadCase() {
     getProject(projectKey),
   ]);
   item.value = caseInfo;
-  clearStepReviewPreview();
   stepConfig.value = config.steps.timeouts;
   envs.value = project.envs;
   activeEnv.value = getProjectEnv(project) ?? null;
@@ -239,7 +228,6 @@ function addStep(type: StepType) {
     stepConfig.value,
   );
   setActiveStep(row);
-  markStepReviewPending(row);
 }
 
 /**
@@ -252,8 +240,6 @@ function deleteStep(index: number) {
 
   const row = item.value.steps[index];
   removeStep(item.value.steps, index);
-  clearStepReview(row?.id);
-
   if (row?.id === selectedId.value) {
     selectedId.value = "";
   }
@@ -273,7 +259,6 @@ function duplicateStep(index: number) {
   }
 
   setActiveStep(row);
-  markStepReviewPending(row);
 }
 
 /**
@@ -359,7 +344,6 @@ function applyLocatorSelector(payload: { selector: string; draft: LocatorBuilder
 
   step.selector = payload.selector;
   step.selectorDraft = payload.draft;
-  markStepReviewPending(step);
 }
 
 /**
@@ -387,110 +371,6 @@ function getStepReviews(step: CaseStep) {
 }
 
 /**
- * 获取步骤合并后的基础检查状态。
- */
-function getStepReviewState(step: CaseStep) {
-  return mergeStepReviewState(step.id, getStepReviews(step), stepReviewPreview.value);
-}
-
-/**
- * 获取步骤当前展示的基础检查问题。
- */
-function getVisibleStepReviews(step: CaseStep) {
-  return getStepReviewState(step).reviews;
-}
-
-/**
- * 标记步骤基础检查预览等待重新计算。
- */
-function markStepReviewPending(step: CaseStep) {
-  stepReviewPreview.value.set(step.id, "pending");
-  stepReviewPreview.value = new Map(stepReviewPreview.value);
-  scheduleStepReview(step);
-}
-
-/**
- * 停止编辑 400ms 后执行当前步骤基础检查预览。
- */
-function scheduleStepReview(step: CaseStep) {
-  const previousTimer = reviewTimers.get(step.id);
-
-  if (previousTimer) {
-    window.clearTimeout(previousTimer);
-  }
-
-  const timer = window.setTimeout(() => {
-    runStepReviewPreview(step);
-  }, reviewDebounceMs);
-
-  reviewTimers.set(step.id, timer);
-}
-
-/**
- * 输入框失焦时立即执行还在等待的基础检查预览。
- */
-function flushStepReview(step: CaseStep) {
-  if (!reviewTimers.has(step.id)) {
-    return;
-  }
-
-  runStepReviewPreview(step);
-}
-
-/**
- * 运行单步骤基础检查预览。
- */
-function runStepReviewPreview(step: CaseStep) {
-  const timer = reviewTimers.get(step.id);
-
-  if (timer) {
-    window.clearTimeout(timer);
-    reviewTimers.delete(step.id);
-  }
-
-  const stepIndex = item.value?.steps.findIndex((row) => row.id === step.id) ?? -1;
-
-  if (stepIndex < 0) {
-    clearStepReview(step.id);
-    return;
-  }
-
-  stepReviewPreview.value.set(step.id, reviewCaseStep(step, stepIndex));
-  stepReviewPreview.value = new Map(stepReviewPreview.value);
-}
-
-/**
- * 清理指定步骤的基础检查预览状态。
- */
-function clearStepReview(stepId?: string) {
-  if (!stepId) {
-    return;
-  }
-
-  const timer = reviewTimers.get(stepId);
-
-  if (timer) {
-    window.clearTimeout(timer);
-    reviewTimers.delete(stepId);
-  }
-
-  stepReviewPreview.value.delete(stepId);
-  stepReviewPreview.value = new Map(stepReviewPreview.value);
-}
-
-/**
- * 清理全部基础检查预览状态。
- */
-function clearStepReviewPreview() {
-  for (const timer of reviewTimers.values()) {
-    window.clearTimeout(timer);
-  }
-
-  reviewTimers.clear();
-  stepReviewPreview.value = new Map();
-}
-
-/**
  * 保存用例并重新生成测试文件。
  */
 async function saveCase() {
@@ -500,7 +380,6 @@ async function saveCase() {
 
   try {
     item.value = await updateCase(projectKey, caseKey, item.value);
-    clearStepReviewPreview();
     await router.push(`/projects/${projectKey}`);
   } catch (error) {
     showError(error);
@@ -517,7 +396,6 @@ async function saveDraft(showMessage = true) {
 
   try {
     item.value = await saveCaseDraft(projectKey, caseKey, item.value);
-    clearStepReviewPreview();
     if (showMessage) {
       ElMessage.success("草稿已保存");
     }
@@ -758,9 +636,9 @@ onMounted(loadCase);
           <el-table-column label="基础检查" width="170">
             <template #default="{ row }">
               <div class="review-tags">
-                <template v-if="getVisibleStepReviews(row).length > 0">
+                <template v-if="getStepReviews(row).length > 0">
                   <el-popover
-                    v-for="review in getVisibleStepReviews(row)"
+                    v-for="review in getStepReviews(row)"
                     :key="review.id"
                     placement="top"
                     width="320"
@@ -787,24 +665,14 @@ onMounted(loadCase);
                   >
                   实测失败
                 </el-tag>
-                <el-tag
-                  v-if="
-                    getStepReviewState(row).status === 'pending' &&
-                    !getFailedPracticalStep(item.practicalReview, row)
-                  "
-                  :type="formatStepReviewState(getStepReviewState(row)).type"
-                  effect="light"
-                >
-                  {{ formatStepReviewState(getStepReviewState(row)).label }}
-                </el-tag>
                 <span
                   v-if="
-                    getStepReviewState(row).status === 'passed' &&
+                    getStepReviews(row).length === 0 &&
                     !getFailedPracticalStep(item.practicalReview, row)
                   "
                   class="review-pass"
                 >
-                  {{ formatStepReviewState(getStepReviewState(row)).label }}
+                  定位通过
                 </span>
               </div>
             </template>
@@ -827,8 +695,6 @@ onMounted(loadCase);
                 v-if="hasValue(row.type)"
                 v-model="row.value"
                 placeholder="输入值或断言内容"
-                @input="markStepReviewPending(row)"
-                @blur="flushStepReview(row)"
               />
               <span v-else class="field-empty">-</span>
             </template>
@@ -840,8 +706,6 @@ onMounted(loadCase);
                 v-model="row.timeout"
                 :min="0"
                 :step="500"
-                @change="markStepReviewPending(row)"
-                @blur="flushStepReview(row)"
               />
               <span v-else class="field-empty">-</span>
             </template>

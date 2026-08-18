@@ -26,7 +26,7 @@ import {
 import { getProject } from "../../api/projects";
 import { useProjectAuth } from "../../composables/project-auth";
 import { getProjectEnv } from "../../state/project-env";
-import { useProjectUiStore, type CaseStatusFilter } from "../../state/project-ui";
+import { projectUi, type CaseStatusFilter } from "../../state/project-ui";
 import { getErrorIssues, getErrorMessage } from "../../utils/error";
 import {
   formatCaseCreatedTime,
@@ -38,7 +38,6 @@ import { formatPracticalReviewTime } from "../run-center/run-center";
 const route = useRoute();
 const router = useRouter();
 const projectKey = String(route.params.projectKey);
-const projectUi = useProjectUiStore();
 const dialogOpen = ref(false);
 const cases = ref<CaseMeta[]>([]);
 const trash = ref<CaseMeta[]>([]);

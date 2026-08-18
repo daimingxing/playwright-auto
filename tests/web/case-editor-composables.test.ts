@@ -56,7 +56,6 @@ describe('用例编辑器录制组合函数', () => {
       item,
       activeEnv,
       selectedId: ref(''),
-      runStepReviewPreview: vi.fn(),
       showError: vi.fn()
     });
     mocks.confirm.mockResolvedValue(true);
@@ -76,14 +75,12 @@ describe('用例编辑器录制组合函数', () => {
 
   it('停止录制后把录制步骤插入到选中步骤后方', async () => {
     const item = ref(makeCase([makeStep('old-a'), makeStep('old-b')]));
-    const runStepReviewPreview = vi.fn();
     const record = useCaseRecord({
       projectKey: 'crm',
       caseKey: 'case-a',
       item,
       activeEnv: ref(makeEnv('default')),
       selectedId: ref('old-a'),
-      runStepReviewPreview,
       showError: vi.fn()
     });
     record.recordId.value = 'record-1';
@@ -95,7 +92,6 @@ describe('用例编辑器录制组合函数', () => {
 
     expect(mocks.stopRecord).toHaveBeenCalledWith('crm', 'case-a', 'record-1');
     expect(item.value?.steps.map((step) => step.id)).toEqual(['old-a', 'new-a', 'new-b', 'old-b']);
-    expect(runStepReviewPreview).toHaveBeenCalledTimes(2);
     expect(record.recordId.value).toBe('');
     expect(record.isRecording.value).toBe(false);
   });
@@ -108,7 +104,6 @@ describe('用例编辑器录制组合函数', () => {
       item,
       activeEnv: ref(makeEnv('default')),
       selectedId: ref(''),
-      runStepReviewPreview: vi.fn(),
       showError: vi.fn()
     });
     record.recordId.value = 'record-1';
@@ -125,14 +120,11 @@ describe('用例编辑器步骤批量组合函数', () => {
     const item = ref(makeCase([makeStep('a'), makeStep('b'), makeStep('c')]));
     const clearSelection = vi.fn();
     const setActiveSteps = vi.fn();
-    const markStepReviewPending = vi.fn();
     const stepBatch = useStepBatch({
       item,
       stepTable: ref({ clearSelection } as never),
       selectedId: ref(''),
       setActiveSteps,
-      markStepReviewPending,
-      clearStepReview: vi.fn(),
       showError: vi.fn()
     });
     stepBatch.updateBatch([item.value!.steps[1]]);
@@ -141,7 +133,6 @@ describe('用例编辑器步骤批量组合函数', () => {
 
     expect(item.value?.steps).toHaveLength(4);
     expect(setActiveSteps).toHaveBeenCalledWith([item.value!.steps[2]]);
-    expect(markStepReviewPending).toHaveBeenCalledWith(item.value!.steps[2]);
     expect(clearSelection).toHaveBeenCalledTimes(1);
     expect(stepBatch.batchIds.value).toEqual([]);
   });

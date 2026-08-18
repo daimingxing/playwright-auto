@@ -29,14 +29,14 @@
 - 用例管理、回收站和导出：`web/src/api/cases.ts`、`server/src/routes/cases.ts`、`server/src/services/export.ts`
 - 用例状态和基础检查：`shared/types.ts`、`shared/case-review.ts`、`server/src/services/case-review/`
 - 步骤编辑和批量操作：`web/src/pages/case-editor/`
-- 定位器构建器：`shared/locator-builder.ts`、`web/src/pages/locator-builder/`
+- 定位器构建器：`shared/locator-builder.ts`、`web/src/components/LocatorBuilderDrawer.vue`
 - Playwright spec 生成：`server/src/services/case/case-generator.ts`、`server/src/services/case/case-step-render.ts`
 - Playwright codegen 录制：`server/src/routes/record.ts`、`server/src/services/record/`
 - 用例运行和报告：`web/src/pages/run-center/`、`server/src/routes/runs.ts`、`server/src/services/run/`
 - 项目登录态：`web/src/composables/project-auth.ts`、`server/src/routes/auth.ts`、`server/src/services/auth-session.ts`
 - 本地应用配置和 CORS：`playwright-auto.config.json.example`、`server/src/lib/app-config.ts`
 - 浏览器依赖：`server/src/services/playwright/`、`scripts/install-browsers.mjs`
-- 开发启动健康检查：`package.json`、`scripts/wait-for-server.ts`
+- 开发启动入口：`package.json`
 - 路径参数和 HTTP 错误：`server/src/lib/guard.ts`、`server/src/lib/http-error.ts`
 
 ## 稳定约束

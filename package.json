@@ -4,9 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "concurrently -k \"npm:dev:server\" \"npm:dev:web:wait\"",
+    "dev": "concurrently -k \"npm:dev:server\" \"npm:dev:web\"",
     "dev:web": "vite --config web/vite.config.ts",
-    "dev:web:wait": "tsx scripts/wait-for-server.ts && npm run dev:web",
     "dev:server": "tsx server/src/index.ts",
     "dev:server:watch": "tsx watch server/src/index.ts",
     "build:web": "vite build --config web/vite.config.ts",
@@ -22,7 +21,6 @@
     "cors": "^2.8.5",
     "element-plus": "^2.8.8",
     "express": "^4.19.2",
-    "pinia": "^2.3.0",
     "vue": "^3.5.13",
     "vue-router": "^4.5.0",
     "zod": "^3.24.1"

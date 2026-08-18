@@ -37,7 +37,7 @@ export default defineConfig({
             return 'element-vendor';
           }
 
-          if (name.includes('node_modules/vue') || name.includes('node_modules/vue-router') || name.includes('node_modules/pinia')) {
+          if (name.includes('node_modules/vue') || name.includes('node_modules/vue-router')) {
             return 'vue-vendor';
           }
 

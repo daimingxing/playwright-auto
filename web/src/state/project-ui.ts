@@ -1,4 +1,3 @@
-import { defineStore } from 'pinia';
 import type { CaseStatus } from '../../../shared/types';
 
 export type CaseStatusFilter = 'all' | CaseStatus;
@@ -40,7 +39,13 @@ export function createProjectUiState(storage: UiStorage = localStorage) {
   };
 }
 
-export const useProjectUiStore = defineStore('project-ui', () => createProjectUiState());
+/**
+ * 延迟访问浏览器存储，避免模块加载阶段依赖 DOM 环境。
+ */
+export const projectUi = createProjectUiState({
+  getItem: (key) => localStorage.getItem(key),
+  setItem: (key, value) => localStorage.setItem(key, value)
+});
 
 /**
  * 生成项目级 UI 状态本地存储键。

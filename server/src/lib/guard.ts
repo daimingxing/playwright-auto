@@ -2,7 +2,6 @@ import { badRequest } from './http-error';
 
 const projectKeyPattern = /^[a-z][a-z0-9-]{1,40}$/;
 const caseKeyPattern = /^[a-z][a-z0-9-]{1,80}$/;
-const envKeyPattern = projectKeyPattern;
 const runIdPattern = /^(\d{14}|\d{17})$/;
 const reviewIdPattern = /^[a-z0-9-]{1,80}$/;
 const workIdPattern = /^[a-f0-9-]{36}$/;
@@ -19,13 +18,6 @@ export function assertProjectKey(value: string) {
  */
 export function assertCaseKey(value: string) {
   assertText(value, caseKeyPattern, '用例标识不合法');
-}
-
-/**
- * 校验环境标识。
- */
-export function assertEnvKey(value: string) {
-  assertText(value, envKeyPattern, '环境标识不合法');
 }
 
 /**

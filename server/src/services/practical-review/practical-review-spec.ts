@@ -1,6 +1,5 @@
 import type { CaseStep } from '../../../../shared/types';
 import { renderLocatorExpression } from '../../../../shared/locator-builder';
-import { quoteText } from '../case/code-literal';
 import { isCustomSelect, renderOptionLocator } from '../case/case-step-render';
 import { renderPracticalLocator } from './practical-review-locator';
 
@@ -22,7 +21,7 @@ export function generatePracticalReviewSpec(input: GenerateInput) {
     'const results = [];',
     '',
     'async function writeReviewResult() {',
-    `  await writeFile(${quote(input.resultPath)}, JSON.stringify({ steps: results }, null, 2), 'utf8');`,
+    `  await writeFile(${JSON.stringify(input.resultPath)}, JSON.stringify({ steps: results }, null, 2), 'utf8');`,
     '}',
     '',
     'async function recordStep(step, action) {',
@@ -34,8 +33,8 @@ export function generatePracticalReviewSpec(input: GenerateInput) {
     '  } catch (error) {',
     '    const finishedAt = new Date().toISOString();',
     '    const message = error instanceof Error ? error.message : String(error);',
-    `    await mkdir(${quote(input.screenshotDir)}, { recursive: true });`,
-    `    const screenshotPath = ${quote(input.screenshotDir)} + '/' + step.stepId + '.png';`,
+    `    await mkdir(${JSON.stringify(input.screenshotDir)}, { recursive: true });`,
+    `    const screenshotPath = ${JSON.stringify(input.screenshotDir)} + '/' + step.stepId + '.png';`,
     '    await step.page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => undefined);',
     '    results.push({',
     '      ...step,',
@@ -63,7 +62,7 @@ export function generatePracticalReviewSpec(input: GenerateInput) {
     '}',
     '',
     "test('实测检查', async ({ page }) => {",
-    `  await page.goto(${quote(input.startUrl)});`
+    `  await page.goto(${JSON.stringify(input.startUrl)});`
   ];
 
   for (const [index, step] of input.steps.entries()) {
@@ -76,7 +75,7 @@ export function generatePracticalReviewSpec(input: GenerateInput) {
 }
 
 function renderStep(step: CaseStep, index: number) {
-  const meta = `{ stepId: ${quote(step.id)}, stepIndex: ${index}, stepType: ${quote(step.type)}, selector: ${quote(step.selector ?? '')}, page }`;
+  const meta = `{ stepId: ${JSON.stringify(step.id)}, stepIndex: ${index}, stepType: ${JSON.stringify(step.type)}, selector: ${JSON.stringify(step.selector ?? '')}, page }`;
 
   switch (step.type) {
     case 'click':
@@ -88,23 +87,23 @@ function renderStep(step: CaseStep, index: number) {
     case 'hover':
       return [`  await recordStep(${meta}, async () => ${renderStepLocator(step)}.hover(${renderTimeoutArg(step)}));`];
     case 'fill':
-      return [`  await recordStep(${meta}, async () => ${renderStepLocator(step)}.fill(${quote(step.value ?? '')}${renderTimeoutOption(step)}));`];
+      return [`  await recordStep(${meta}, async () => ${renderStepLocator(step)}.fill(${JSON.stringify(step.value ?? '')}${renderTimeoutOption(step)}));`];
     case 'select':
       return renderSelectStep(step, meta);
     case 'assertVisible':
       return [`  await recordStep(${meta}, async () => expect(${renderStepLocator(step)}).toBeVisible());`];
     case 'assertText':
-      return [`  await recordStep(${meta}, async () => expect(${renderStepLocator(step)}).toContainText(${quote(step.value ?? '')}));`];
+      return [`  await recordStep(${meta}, async () => expect(${renderStepLocator(step)}).toContainText(${JSON.stringify(step.value ?? '')}));`];
     case 'assertValue':
-      return [`  await recordStep(${meta}, async () => expect(${renderStepLocator(step)}).toHaveValue(${quote(step.value ?? '')}));`];
+      return [`  await recordStep(${meta}, async () => expect(${renderStepLocator(step)}).toHaveValue(${JSON.stringify(step.value ?? '')}));`];
     case 'goto':
-      return [`  await recordStep(${meta}, async () => page.goto(${quote(step.value ?? '/')}${renderTimeoutOption(step)}));`];
+      return [`  await recordStep(${meta}, async () => page.goto(${JSON.stringify(step.value ?? '/')}${renderTimeoutOption(step)}));`];
     case 'wait':
       return [`  await recordStep(${meta}, async () => page.waitForTimeout(${step.timeout ?? 1000}));`];
     case 'assertUrl':
-      return [`  await recordStep(${meta}, async () => expect(page).toHaveURL(${quote(step.value ?? '')}));`];
+      return [`  await recordStep(${meta}, async () => expect(page).toHaveURL(${JSON.stringify(step.value ?? '')}));`];
     case 'assertTitle':
-      return [`  await recordStep(${meta}, async () => expect(page).toHaveTitle(${quote(step.value ?? '')}));`];
+      return [`  await recordStep(${meta}, async () => expect(page).toHaveTitle(${JSON.stringify(step.value ?? '')}));`];
     default:
       return [`  await recordStep(${meta}, async () => undefined);`];
   }
@@ -117,7 +116,7 @@ function renderSelectStep(step: CaseStep, meta: string) {
   const target = renderStepLocator(step);
 
   if (!isCustomSelect(step)) {
-    return [`  await recordStep(${meta}, async () => ${target}.selectOption(${quote(step.value ?? '')}${renderTimeoutOption(step)}));`];
+    return [`  await recordStep(${meta}, async () => ${target}.selectOption(${JSON.stringify(step.value ?? '')}${renderTimeoutOption(step)}));`];
   }
 
   return [
@@ -149,8 +148,4 @@ function renderRightClickArg(step: CaseStep) {
 
 function renderTimeoutOption(step: CaseStep) {
   return step.timeout === undefined ? '' : `, { timeout: ${step.timeout} }`;
-}
-
-function quote(value: string) {
-  return quoteText(value);
 }

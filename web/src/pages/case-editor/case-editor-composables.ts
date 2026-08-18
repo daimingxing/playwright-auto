@@ -19,8 +19,6 @@ interface StepBatchOptions {
   stepTable: Ref<TableInstance | undefined>;
   selectedId: Ref<string>;
   setActiveSteps: (steps: CaseStep[]) => void;
-  markStepReviewPending: (step: CaseStep) => void;
-  clearStepReview: (stepId?: string) => void;
   showError: (error: unknown) => void;
 }
 
@@ -95,9 +93,6 @@ export function useStepBatch(options: StepBatchOptions) {
         type: 'warning'
       });
       const removed = removeSteps(options.item.value.steps, batchIds.value);
-      for (const row of removed) {
-        options.clearStepReview(row.id);
-      }
       clearBatch();
 
       if (removed.some((row) => row.id === options.selectedId.value)) {
@@ -120,9 +115,6 @@ export function useStepBatch(options: StepBatchOptions) {
 
     const rows = copySteps(options.item.value.steps, batchIds.value);
     options.setActiveSteps(rows);
-    for (const row of rows) {
-      options.markStepReviewPending(row);
-    }
     clearBatch();
   }
 
@@ -301,7 +293,6 @@ interface CaseRecordOptions {
   item: Ref<CaseMeta | null>;
   activeEnv: Ref<EnvMeta | null>;
   selectedId: Ref<string>;
-  runStepReviewPreview: (step: CaseStep) => void;
   showError: (error: unknown) => void;
 }
 
@@ -355,7 +346,6 @@ export function useCaseRecord(options: CaseRecordOptions) {
         // 未选中步骤时插入位置回退到列表末尾，避免录制结果覆盖已有步骤。
         const index = getInsertIndex(options.item.value.steps, options.selectedId.value);
         options.item.value.steps.splice(index, 0, ...result.steps);
-        result.steps.forEach((step) => options.runStepReviewPreview(step));
       }
       recordId.value = '';
       isRecording.value = false;

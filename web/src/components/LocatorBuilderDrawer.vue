@@ -10,7 +10,7 @@ import {
   type LocatorTextKind,
   type LocatorTextValue,
   type SimpleLocatorState,
-} from "../pages/locator-builder/locator-builder";
+} from "../../../shared/locator-builder";
 
 type TextField = "value" | "description" | "hasText" | "hasNotText";
 type SimpleField = "has" | "hasNot";

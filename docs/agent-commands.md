@@ -37,7 +37,7 @@ npm run test:e2e
 - 前端页面：http://localhost:5177
 - 本地服务：http://localhost:3001
 - 健康检查：http://localhost:3001/health
-- `npm run dev` 会先启动后端，再通过 `scripts/wait-for-server.ts` 等待健康检查通过后启动前端
+- `npm run dev` 会并行启动后端和前端；后端短暂未就绪时由 Vite proxy 返回连接错误，刷新页面即可
 
 ## 本地配置
 
