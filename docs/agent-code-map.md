@@ -34,6 +34,7 @@
 - Playwright codegen 录制：`server/src/routes/record.ts`、`server/src/services/record/`
 - 用例运行和报告：`web/src/pages/run-center/`、`server/src/routes/runs.ts`、`server/src/services/run/`
 - 项目登录态：`web/src/composables/project-auth.ts`、`server/src/routes/auth.ts`、`server/src/services/auth-session.ts`
+- AI 导入任务与 Excel 解析：`web/src/api/imports.ts`、`web/src/pages/ai-import/`、`server/src/routes/imports.ts`、`server/src/services/import/`、`server/src/lib/import-store.ts`
 - 本地应用配置和 CORS：`playwright-auto.config.json.example`、`server/src/lib/app-config.ts`
 - 浏览器依赖：`server/src/services/playwright/`、`scripts/install-browsers.mjs`
 - 开发启动入口：`package.json`
@@ -44,6 +45,7 @@
 - 前端通过 `web/src/api/` 调用 `/api/`，Vite 在 `web/vite.config.ts` 将 `/api` 转发到本地服务。
 - 后端路由由 `server/src/app.ts` 挂载；路由层处理 HTTP 入参和响应，业务逻辑放在 `server/src/services/` 或 `server/src/lib/`。
 - `data/projects/<projectKey>/` 保存项目数据；`case.json` 是用例源数据，`case.spec.ts` 由它生成。
+- AI 导入任务保存在 `data/projects/<projectKey>/imports/<taskId>/`，解析结果属于任务临时数据，不写入正式 `case.json`。
 - 只有 `active` 且基础检查通过的用例能进入运行中心。
 - `browser.openTimeoutMs` 控制平台打开业务 URL；`steps.timeouts` 控制生成、运行和实测等待。
 

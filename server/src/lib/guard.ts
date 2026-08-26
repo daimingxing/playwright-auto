@@ -5,6 +5,8 @@ const caseKeyPattern = /^[a-z][a-z0-9-]{1,80}$/;
 const runIdPattern = /^(\d{14}|\d{17})$/;
 const reviewIdPattern = /^[a-z0-9-]{1,80}$/;
 const workIdPattern = /^[a-f0-9-]{36}$/;
+const importTaskIdPattern = /^imp-\d{8}-\d{6}-[a-f0-9]{4}$/;
+const importCaseIdPattern = /^item-\d{8}-\d{6}-[a-f0-9]{4}$/;
 
 /**
  * 校验项目标识。
@@ -39,6 +41,20 @@ export function assertReviewId(value: string) {
  */
 export function assertWorkId(value: string) {
   assertText(value, workIdPattern, '实测检查临时目录标识不合法');
+}
+
+/**
+ * 校验 AI 导入任务标识。
+ */
+export function assertImportTaskId(value: string) {
+  assertText(value, importTaskIdPattern, '导入任务标识不合法');
+}
+
+/**
+ * 校验 AI 导入任务内的用例条目标识。
+ */
+export function assertImportCaseId(value: string) {
+  assertText(value, importCaseIdPattern, '导入用例条目标识不合法');
 }
 
 /**

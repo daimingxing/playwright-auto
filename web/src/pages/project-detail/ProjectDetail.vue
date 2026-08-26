@@ -7,6 +7,7 @@ import {
   Download,
   EditPen,
   InfoFilled,
+  Upload,
 } from "@element-plus/icons-vue";
 import { computed, onMounted, reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
@@ -314,6 +315,9 @@ onMounted(async () => {
       <div class="actions btn-shadow-md">
         <el-button type="primary" size="large" @click="dialogOpen = true"
           >新建用例</el-button
+        >
+        <el-button size="large" :icon="Upload" @click="router.push(`/projects/${projectKey}/imports`)"
+          >AI 导入</el-button
         >
         <el-button
           type="success"

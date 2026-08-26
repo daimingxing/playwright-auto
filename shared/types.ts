@@ -301,3 +301,78 @@ export interface AuthState {
   path: string;
   createdAt: string;
 }
+
+export const importActionTypes = ['打开页面', '填写', '选择', '点击', '检查可见', '检查文本'] as const;
+
+export type ImportActionType = (typeof importActionTypes)[number];
+
+export type ImportCaseStatus = 'parsed' | 'parse-failed';
+
+/**
+ * Excel 来源行引用。工作表名、行号和用例编号用于定位，数组下标和 Excel 行号都不是对象标识。
+ */
+export interface ImportSourceRow {
+  sheet: string;
+  row: number;
+  caseNumber: string;
+  cells: Record<string, string>;
+}
+
+/**
+ * Excel 解析错误，定位到工作表和行号。
+ */
+export interface ImportParseError {
+  sheet: string;
+  row: number;
+  caseNumber?: string;
+  reason: string;
+  cells?: Record<string, string>;
+}
+
+/**
+ * 从「步骤」表解析出的业务步骤，动作为业务级封闭选项。
+ */
+export interface ImportExcelStep {
+  order: number;
+  action: ImportActionType;
+  target: string;
+  data: string;
+  note: string;
+  source: ImportSourceRow;
+}
+
+/**
+ * 导入任务中的单条用例及其初始解析状态。
+ */
+export interface ImportTaskCase {
+  id: string;
+  caseNumber: string;
+  name: string;
+  startPath: string;
+  preconditions: string;
+  expected: string;
+  remark: string;
+  status: ImportCaseStatus;
+  source: ImportSourceRow;
+  steps: ImportExcelStep[];
+  errors: ImportParseError[];
+}
+
+export type ImportParsedCase = Omit<ImportTaskCase, 'id'>;
+
+/**
+ * AI 导入任务摘要。状态只存在于用例级，任务本身不表示探索或发布。
+ */
+export interface ImportTask {
+  id: string;
+  projectKey: string;
+  fileName: string;
+  fileHash: string;
+  createdAt: string;
+  parsedCount: number;
+  failedCount: number;
+}
+
+export interface ImportTaskDetail extends ImportTask {
+  cases: ImportTaskCase[];
+}

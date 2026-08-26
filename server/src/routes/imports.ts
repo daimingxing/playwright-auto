@@ -1,0 +1,93 @@
+import { Router, type Request } from 'express';
+import multer from 'multer';
+import { createImportTask, getImportTask, listImportTasks } from '../lib/import-store';
+import { badRequest } from '../lib/http-error';
+
+interface ProjectParams {
+  projectKey: string;
+}
+
+interface ImportTaskParams extends ProjectParams {
+  taskId: string;
+}
+
+const MAX_IMPORT_FILE_BYTES = 10 * 1024 * 1024;
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: MAX_IMPORT_FILE_BYTES,
+    files: 1
+  }
+});
+
+export const importsRouter = Router({ mergeParams: true });
+
+importsRouter.get<ProjectParams>('/', async (req, res, next) => {
+  try {
+    res.json(await listImportTasks(req.params.projectKey));
+  } catch (error) {
+    next(error);
+  }
+});
+
+importsRouter.post('/', (req: Request, res, next) => {
+  upload.single('file')(req, res, (error) => {
+    if (error) {
+      next(toUploadError(error));
+      return;
+    }
+
+    createImportFromUpload(req)
+      .then((task) => {
+        res.status(201).json(task);
+      })
+      .catch(next);
+  });
+});
+
+importsRouter.get<ImportTaskParams>('/:taskId', async (req, res, next) => {
+  try {
+    res.json(await getImportTask(req.params.projectKey, req.params.taskId));
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * 从 multipart 上传创建导入任务，缺少文件时直接返回参数错误。
+ */
+async function createImportFromUpload(req: Request) {
+  const file = req.file;
+
+  if (!file?.buffer) {
+    throw badRequest('请上传 Excel 文件');
+  }
+
+  return createImportTask(String(req.params.projectKey), {
+    fileName: file.originalname,
+    buffer: file.buffer
+  });
+}
+
+/**
+ * 把 multer 上传错误转换成可展示的参数错误。
+ */
+function toUploadError(error: unknown) {
+  if (isMulterError(error) && error.code === 'LIMIT_FILE_SIZE') {
+    return badRequest('文件过大，最大 10MB');
+  }
+
+  if (error instanceof Error) {
+    return badRequest(error.message || '上传文件失败');
+  }
+
+  return badRequest('上传文件失败');
+}
+
+/**
+ * 判断是否为 multer 限制类错误。
+ */
+function isMulterError(error: unknown): error is { code: string } {
+  return typeof error === 'object' && error !== null && 'code' in error;
+}
