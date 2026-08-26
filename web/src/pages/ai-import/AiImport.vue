@@ -80,7 +80,7 @@ onMounted(async () => {
       <section class="upload-card">
         <h3>上传 Excel</h3>
         <p class="hint">
-          请上传包含「用例」和「步骤」两张工作表的 .xlsx 文件。结构错误会阻断整批导入；单个用例内容错误不影响其他有效用例。创建任务后不会开始探索。
+          请上传包含「用例」和「步骤」两张工作表的 .xlsx 文件。结构错误会阻断整批导入；单个用例内容错误不影响其他有效用例。打开任务详情后可以审阅测试意图；确认不会发布正式用例。
         </p>
         <div class="upload-row">
           <el-upload
@@ -119,7 +119,7 @@ onMounted(async () => {
             <el-table-column label="操作" width="140">
               <template #default="{ row }">
                 <el-button size="small" @click="router.push(`/projects/${projectKey}/imports/${row.id}`)">
-                  查看解析结果
+                  查看详情
                 </el-button>
               </template>
             </el-table-column>

@@ -306,7 +306,70 @@ export const importActionTypes = ['打开页面', '填写', '选择', '点击', 
 
 export type ImportActionType = (typeof importActionTypes)[number];
 
-export type ImportCaseStatus = 'parsed' | 'parse-failed';
+/**
+ * 导入用例阶段。`parsed` / `parse-failed` 来自 Excel 解析；其后为 Agent 审阅阶段。
+ * `pending-review`：已有可审阅 TestIntent，等待确认。
+ * `publishable`：已确认，仍未写入正式用例。
+ */
+export type ImportCaseStatus =
+  | 'parsed'
+  | 'parse-failed'
+  | 'exploring'
+  | 'generating'
+  | 'pending-review'
+  | 'publishable'
+  | 'failed';
+
+/**
+ * Agent 失败原因。成功和歧义不是失败，歧义进入待确认。
+ */
+export type ImportAgentFailureKind = 'login-blocked' | 'explore-failed' | 'locator-failed';
+
+/**
+ * 单条用例的 Agent 失败信息。
+ */
+export interface ImportCaseFailure {
+  kind: ImportAgentFailureKind;
+  message: string;
+}
+
+/**
+ * 意图步骤：业务动作或断言，可引用一个或多个自然语言来源行。
+ * 动作类型与 Excel 业务选项一致，不是 Playwright `stepTypes`。
+ */
+export interface IntentStep {
+  id: string;
+  action: ImportActionType;
+  target: string;
+  data: string;
+  note: string;
+  sourceRefs: ImportSourceRow[];
+}
+
+/**
+ * 待确认项。歧义或缺失关键条件时标出，不由 Agent 擅自补全。
+ */
+export interface IntentPendingItem {
+  id: string;
+  stepId?: string;
+  message: string;
+}
+
+/**
+ * 一条测试用例的业务规格。不描述页面组件、定位器或具体浏览器操作。
+ */
+export interface TestIntent {
+  id: string;
+  caseNumber: string;
+  name: string;
+  startPath: string;
+  preconditions: string;
+  expected: string;
+  remark: string;
+  source: ImportSourceRow;
+  steps: IntentStep[];
+  pendingItems: IntentPendingItem[];
+}
 
 /**
  * 导入任务恢复机状态。只覆盖检查点落盘是否完成，不表示探索、审阅或发布。
@@ -394,7 +457,7 @@ export interface ImportExcelStep {
 }
 
 /**
- * 导入任务中的单条用例及其初始解析状态。
+ * 导入任务中的单条用例。解析后可附带 TestIntent 与 Agent 失败信息。
  */
 export interface ImportTaskCase {
   id: string;
@@ -408,6 +471,8 @@ export interface ImportTaskCase {
   source: ImportSourceRow;
   steps: ImportExcelStep[];
   errors: ImportParseError[];
+  intent?: TestIntent;
+  failure?: ImportCaseFailure;
 }
 
 export type ImportParsedCase = Omit<ImportTaskCase, 'id'>;

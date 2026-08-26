@@ -2,6 +2,9 @@ import { Router, type Request } from 'express';
 import multer from 'multer';
 import { cleanupImportTask, createImportTask, getImportTask, listImportTasks, resumeImportTask } from '../lib/import-store';
 import { badRequest } from '../lib/http-error';
+import type { AgentRunner } from '../services/import/agent-runner';
+import { createFakeAgentRunner } from '../services/import/agent-runner';
+import { confirmImportCase, retryImportCase, reviewImportTask } from '../services/import/import-review';
 
 interface ProjectParams {
   projectKey: string;
@@ -9,6 +12,10 @@ interface ProjectParams {
 
 interface ImportTaskParams extends ProjectParams {
   taskId: string;
+}
+
+interface ImportCaseParams extends ImportTaskParams {
+  caseId: string;
 }
 
 const MAX_IMPORT_FILE_BYTES = 10 * 1024 * 1024;
@@ -70,6 +77,30 @@ importsRouter.post<ImportTaskParams>('/:taskId/cleanup', async (req, res, next) 
   }
 });
 
+importsRouter.post<ImportTaskParams>('/:taskId/review', async (req, res, next) => {
+  try {
+    res.json(await reviewImportTask(req.params.projectKey, req.params.taskId, getAgentRunner(req)));
+  } catch (error) {
+    next(error);
+  }
+});
+
+importsRouter.post<ImportCaseParams>('/:taskId/cases/:caseId/confirm', async (req, res, next) => {
+  try {
+    res.json(await confirmImportCase(req.params.projectKey, req.params.taskId, req.params.caseId));
+  } catch (error) {
+    next(error);
+  }
+});
+
+importsRouter.post<ImportCaseParams>('/:taskId/cases/:caseId/retry', async (req, res, next) => {
+  try {
+    res.json(await retryImportCase(req.params.projectKey, req.params.taskId, req.params.caseId, getAgentRunner(req)));
+  } catch (error) {
+    next(error);
+  }
+});
+
 /**
  * 从 multipart 上传创建导入任务，缺少文件时直接返回参数错误。
  */
@@ -99,6 +130,14 @@ function toUploadError(error: unknown) {
   }
 
   return badRequest('上传文件失败');
+}
+
+/**
+ * 读取请求级 AgentRunner；未注入时回退到 Fake。
+ */
+function getAgentRunner(req: Pick<Request, 'app'>): AgentRunner {
+  const runner = req.app.locals.agentRunner as AgentRunner | undefined;
+  return runner ?? createFakeAgentRunner();
 }
 
 /**

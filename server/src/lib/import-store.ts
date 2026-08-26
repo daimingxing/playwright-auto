@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { readdir, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import type {
+  ImportCaseFailure,
   ImportCaseStatus,
   ImportCheckpoint,
   ImportCheckpointItem,
@@ -10,7 +11,8 @@ import type {
   ImportTask,
   ImportTaskCase,
   ImportTaskDetail,
-  TestAssetRef
+  TestAssetRef,
+  TestIntent
 } from '../../../shared/types';
 import { parseImportExcel } from '../services/import/import-excel';
 import { hashBuffer, putProjectAsset } from './asset-store';
@@ -18,6 +20,7 @@ import { ensureDir, readJson, writeFileAtomic, writeJson } from './fs';
 import { badRequest, notFound } from './http-error';
 import {
   getImportCasePath,
+  getImportCaseOutputPath,
   getImportDiagnosticsPath,
   getImportInputPath,
   getImportOutputPath,
@@ -52,6 +55,7 @@ interface ImportCaseStatusFile {
   status: ImportCaseStatus;
   errors: ImportTaskCase['errors'];
   checkpointedAt: string;
+  failure?: ImportCaseFailure;
 }
 
 const IMPORT_TEMP_DIRS = ['work', 'output', 'diagnostics'] as const;
@@ -192,7 +196,8 @@ export async function resumeImportTask(projectKey: string, taskId: string): Prom
 
     if (existsSync(statusPath)) {
       skippedItemIds.push(item.id);
-      upsertCheckpointItem(items, { id: item.id, status: item.status });
+      const current = await readJson<ImportCaseStatusFile>(statusPath);
+      upsertCheckpointItem(items, { id: item.id, status: current.status });
       continue;
     }
 
@@ -339,14 +344,20 @@ async function writeImportCheckpoint(
 /**
  * 写入单条用例的 status.json 检查点。
  */
-async function writeCaseCheckpoint(projectKey: string, taskId: string, item: ImportTaskCase) {
+async function writeCaseCheckpoint(
+  projectKey: string,
+  taskId: string,
+  item: ImportTaskCase,
+  failure?: ImportCaseFailure
+) {
   const status: ImportCaseStatusFile = {
     id: item.id,
     caseNumber: item.caseNumber,
     name: item.name,
     status: item.status,
     errors: item.errors,
-    checkpointedAt: new Date().toISOString()
+    checkpointedAt: new Date().toISOString(),
+    ...(failure ? { failure } : {})
   };
   await writeJson(join(getImportCasePath(projectKey, taskId, item.id), 'status.json'), status);
 }
@@ -362,11 +373,74 @@ async function mergeCaseStatus(projectKey: string, taskId: string, item: ImportT
   }
 
   const status = await readJson<ImportCaseStatusFile>(statusPath);
+  const intent = await readImportCaseIntent(projectKey, taskId, item.id);
   return {
     ...item,
     status: status.status,
-    errors: status.errors
+    errors: status.errors,
+    ...(status.failure ? { failure: status.failure } : {}),
+    ...(intent ? { intent } : {})
   };
+}
+
+/**
+ * 读取解析快照。缺失时返回空，恢复和审阅都不得改去解析 Excel。
+ */
+export async function getImportParseSnapshot(projectKey: string, taskId: string) {
+  return readParseSnapshot(getImportTaskPath(projectKey, taskId));
+}
+
+/**
+ * 更新单条用例审阅状态，并同步原子检查点中的对应项。
+ */
+export async function updateImportCaseStatus(
+  projectKey: string,
+  taskId: string,
+  item: ImportTaskCase,
+  status: ImportCaseStatus,
+  extra?: { failure?: ImportCaseFailure }
+) {
+  const next: ImportTaskCase = {
+    ...item,
+    status,
+    failure: extra?.failure
+  };
+  await writeCaseCheckpoint(projectKey, taskId, next, extra?.failure);
+  const checkpoint = await readImportCheckpoint(projectKey, taskId);
+  const items = [...checkpoint.items];
+  upsertCheckpointItem(items, { id: item.id, status });
+  await writeImportCheckpoint(projectKey, taskId, {
+    stage: checkpoint.stage,
+    items,
+    error: checkpoint.error
+  });
+}
+
+/**
+ * 把候选 TestIntent 写入任务 output 目录，不写入正式用例。
+ */
+export async function writeImportCaseIntent(
+  projectKey: string,
+  taskId: string,
+  caseId: string,
+  intent: TestIntent
+) {
+  await writeJson(join(getImportCaseOutputPath(projectKey, taskId, caseId), 'intent.json'), intent);
+}
+
+/**
+ * 读取单条用例的候选 TestIntent；缺失时返回空。
+ */
+export async function readImportCaseIntent(projectKey: string, taskId: string, caseId: string) {
+  try {
+    return await readJson<TestIntent>(join(getImportCaseOutputPath(projectKey, taskId, caseId), 'intent.json'));
+  } catch (error) {
+    if (isMissingFile(error)) {
+      return null;
+    }
+
+    throw error;
+  }
 }
 
 /**

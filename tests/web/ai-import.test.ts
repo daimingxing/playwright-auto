@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  canConfirmImportCase,
+  canRetryImportCase,
   formatImportCaseStatus,
   formatImportSummary,
   formatParseError,
-  getImportErrors
+  formatSourceRef,
+  getImportErrors,
+  hasParsedCases
 } from '../../web/src/pages/ai-import/ai-import';
 
 describe('AI 导入展示文案', () => {
@@ -28,6 +32,23 @@ describe('AI 导入展示文案', () => {
         reason: '动作类型必须是：打开页面、填写、选择、点击、检查可见、检查文本'
       })
     ).toBe('「步骤」第 5 行：动作类型必须是：打开页面、填写、选择、点击、检查可见、检查文本');
+  });
+
+  it('展示审阅阶段，并区分确认与重试', () => {
+    expect(formatImportCaseStatus('exploring')).toEqual({ label: '探索中', type: 'warning' });
+    expect(formatImportCaseStatus('generating')).toEqual({ label: '生成中', type: 'warning' });
+    expect(formatImportCaseStatus('pending-review')).toEqual({ label: '待确认', type: 'warning' });
+    expect(formatImportCaseStatus('publishable')).toEqual({ label: '可发布', type: 'success' });
+    expect(formatImportCaseStatus('failed')).toEqual({ label: '失败', type: 'danger' });
+    expect(canConfirmImportCase('pending-review')).toBe(true);
+    expect(canConfirmImportCase('publishable')).toBe(false);
+    expect(canRetryImportCase('failed')).toBe(true);
+    expect(canRetryImportCase('publishable')).toBe(false);
+    expect(canRetryImportCase('parse-failed')).toBe(false);
+    expect(formatSourceRef({ sheet: '步骤', row: 3, caseNumber: 'TC-001', cells: {} })).toBe(
+      '「步骤」第 3 行 · TC-001'
+    );
+    expect(hasParsedCases([{ status: 'parsed' } as never])).toBe(true);
   });
 
   it('汇总任务解析条数', () => {

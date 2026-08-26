@@ -145,3 +145,27 @@ export function getImportOutputPath(projectKey: string, taskId: string) {
 export function getImportDiagnosticsPath(projectKey: string, taskId: string) {
   return resolve(getImportTaskPath(projectKey, taskId), 'diagnostics');
 }
+
+/**
+ * 获取单条用例的 Agent 工作目录。
+ */
+export function getImportCaseWorkPath(projectKey: string, taskId: string, caseId: string) {
+  assertImportCaseId(caseId);
+  return resolve(getImportWorkPath(projectKey, taskId), caseId);
+}
+
+/**
+ * 获取单条用例的候选输出目录。
+ */
+export function getImportCaseOutputPath(projectKey: string, taskId: string, caseId: string) {
+  assertImportCaseId(caseId);
+  return resolve(getImportOutputPath(projectKey, taskId), caseId);
+}
+
+/**
+ * 获取单条用例的诊断目录。
+ */
+export function getImportCaseDiagnosticsPath(projectKey: string, taskId: string, caseId: string) {
+  assertImportCaseId(caseId);
+  return resolve(getImportDiagnosticsPath(projectKey, taskId), caseId);
+}

@@ -36,3 +36,32 @@ export function resumeImportTask(projectKey: string, taskId: string) {
     method: 'POST'
   });
 }
+
+/**
+ * 对已解析用例运行 Agent，生成可审阅的 TestIntent。
+ */
+export function reviewImportTask(projectKey: string, taskId: string) {
+  return requestJson<ImportTaskDetail>(`/api/projects/${projectKey}/imports/${taskId}/review`, {
+    method: 'POST'
+  });
+}
+
+/**
+ * 确认一条待确认用例。确认后变为可发布，不会写入正式用例。
+ */
+export function confirmImportCase(projectKey: string, taskId: string, caseId: string) {
+  return requestJson<ImportTaskDetail>(
+    `/api/projects/${projectKey}/imports/${taskId}/cases/${caseId}/confirm`,
+    { method: 'POST' }
+  );
+}
+
+/**
+ * 只重试目标用例，不影响已确认条目。
+ */
+export function retryImportCase(projectKey: string, taskId: string, caseId: string) {
+  return requestJson<ImportTaskDetail>(
+    `/api/projects/${projectKey}/imports/${taskId}/cases/${caseId}/retry`,
+    { method: 'POST' }
+  );
+}

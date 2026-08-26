@@ -1,34 +1,60 @@
 <script setup lang="ts">
 import { Back } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
-import { computed, onMounted, ref } from "vue";
+import { onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import type { ImportTaskCase, ImportTaskDetail } from "../../../../shared/types";
-import { getImportTask } from "../../api/imports";
+import type { ImportTaskCase } from "../../../../shared/types";
 import { getErrorMessage } from "../../utils/error";
 import { formatDateTime } from "../../utils/time";
-import { formatImportCaseStatus, formatImportSummary, formatParseError } from "./ai-import";
+import { useImportTaskReview } from "./ai-import-composables";
+import {
+  canConfirmImportCase,
+  canRetryImportCase,
+  formatImportCaseStatus,
+  formatImportSummary,
+  formatParseError,
+  formatSourceCells,
+  formatSourceRef
+} from "./ai-import";
 
 const route = useRoute();
 const router = useRouter();
 const projectKey = String(route.params.projectKey);
 const taskId = String(route.params.taskId);
-const task = ref<ImportTaskDetail | null>(null);
-
-const cases = computed(() => task.value?.cases ?? []);
-
-/**
- * 加载导入任务解析结果。
- */
-async function loadTask() {
-  task.value = await getImportTask(projectKey, taskId);
-}
+const { task, cases, reviewing, actingId, loadTask, confirmCase, retryCase } = useImportTaskReview(
+  projectKey,
+  taskId
+);
 
 /**
  * 读取单条用例的状态标签。
  */
 function caseStatus(item: ImportTaskCase) {
   return formatImportCaseStatus(item.status);
+}
+
+/**
+ * 确认当前用例并提示结果。
+ */
+async function submitConfirm(item: ImportTaskCase) {
+  try {
+    await confirmCase(item);
+    ElMessage.success("已确认，尚未发布正式用例");
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error));
+  }
+}
+
+/**
+ * 重试当前用例并提示结果。
+ */
+async function submitRetry(item: ImportTaskCase) {
+  try {
+    await retryCase(item);
+    ElMessage.success("已重新生成该用例");
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error));
+  }
 }
 
 onMounted(async () => {
@@ -47,7 +73,7 @@ onMounted(async () => {
         <el-button text :icon="Back" class="back-btn" @click="router.push(`/projects/${projectKey}/imports`)">
           返回 AI 导入
         </el-button>
-        <h2>解析结果</h2>
+        <h2>任务详情</h2>
       </div>
     </div>
 
@@ -56,12 +82,13 @@ onMounted(async () => {
         <div>
           <strong>{{ task.fileName }}</strong>
           <span>{{ formatImportSummary(task) }}</span>
+          <span v-if="reviewing">正在生成可审阅的测试意图</span>
         </div>
         <span class="time">创建于 {{ formatDateTime(task.createdAt) }}</span>
       </section>
 
       <section class="list-block">
-        <h3>用例解析</h3>
+        <h3>用例审阅</h3>
         <div class="table-wrap">
           <el-table :data="cases" border stripe height="100%" row-key="id" empty-text="没有解析到用例">
             <el-table-column type="expand">
@@ -70,23 +97,74 @@ onMounted(async () => {
                   <p><strong>起始路径：</strong>{{ row.startPath || "—" }}</p>
                   <p><strong>前置条件：</strong>{{ row.preconditions || "—" }}</p>
                   <p><strong>预期结果：</strong>{{ row.expected || "—" }}</p>
+                  <p>
+                    <strong>来源：</strong>
+                    {{ formatSourceRef(row.source) }}
+                    <span v-if="formatSourceCells(row.source)">；{{ formatSourceCells(row.source) }}</span>
+                  </p>
+                  <p v-if="row.failure"><strong>失败原因：</strong>{{ row.failure.message }}</p>
                   <p v-if="row.errors.length"><strong>错误：</strong></p>
                   <ul v-if="row.errors.length" class="error-list">
                     <li v-for="(error, index) in row.errors" :key="`${error.sheet}-${error.row}-${index}`">
                       {{ formatParseError(error) }}
                     </li>
                   </ul>
-                  <el-table v-if="row.steps.length" :data="row.steps" border size="small" class="step-table">
+                  <template v-if="row.intent">
+                    <p><strong>测试意图</strong></p>
+                    <ul v-if="row.intent.pendingItems.length" class="pending-list">
+                      <li v-for="item in row.intent.pendingItems" :key="item.id">{{ item.message }}</li>
+                    </ul>
+                    <el-table :data="row.intent.steps" border size="small" class="step-table">
+                      <el-table-column type="index" label="序号" width="70" />
+                      <el-table-column prop="action" label="动作类型" width="120" />
+                      <el-table-column prop="target" label="目标" min-width="160" />
+                      <el-table-column prop="data" label="数据" min-width="140" />
+                      <el-table-column label="来源" min-width="220">
+                        <template #default="{ row: step }">
+                          <div v-for="(source, index) in step.sourceRefs" :key="`${source.sheet}-${source.row}-${index}`">
+                            {{ formatSourceRef(source) }}
+                          </div>
+                        </template>
+                      </el-table-column>
+                      <el-table-column label="原始单元格" min-width="240">
+                        <template #default="{ row: step }">
+                          <div v-for="(source, index) in step.sourceRefs" :key="`${source.sheet}-${source.row}-cells-${index}`">
+                            {{ formatSourceCells(source) || "—" }}
+                          </div>
+                        </template>
+                      </el-table-column>
+                    </el-table>
+                  </template>
+                  <el-table v-else-if="row.steps.length" :data="row.steps" border size="small" class="step-table">
                     <el-table-column prop="order" label="序号" width="80" />
                     <el-table-column prop="action" label="动作类型" width="120" />
                     <el-table-column prop="target" label="目标" min-width="160" />
                     <el-table-column prop="data" label="数据" min-width="140" />
-                    <el-table-column label="来源行" width="120">
+                    <el-table-column label="来源行" width="180">
                       <template #default="{ row: step }">
-                        「{{ step.source.sheet }}」第 {{ step.source.row }} 行
+                        {{ formatSourceRef(step.source) }}
                       </template>
                     </el-table-column>
                   </el-table>
+                  <div class="actions">
+                    <el-button
+                      v-if="canConfirmImportCase(row.status)"
+                      type="primary"
+                      size="small"
+                      :loading="actingId === row.id"
+                      @click="submitConfirm(row)"
+                    >
+                      确认
+                    </el-button>
+                    <el-button
+                      v-if="canRetryImportCase(row.status)"
+                      size="small"
+                      :loading="actingId === row.id"
+                      @click="submitRetry(row)"
+                    >
+                      重试
+                    </el-button>
+                  </div>
                 </div>
               </template>
             </el-table-column>
@@ -99,15 +177,38 @@ onMounted(async () => {
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="来源" min-width="160">
+            <el-table-column label="来源" min-width="200">
               <template #default="{ row }">
-                「{{ row.source.sheet }}」第 {{ row.source.row }} 行
+                {{ formatSourceRef(row.source) }}
               </template>
             </el-table-column>
-            <el-table-column label="错误" min-width="260">
+            <el-table-column label="说明" min-width="240">
               <template #default="{ row }">
-                <span v-if="row.errors.length === 0">—</span>
-                <span v-else>{{ formatParseError(row.errors[0]) }}</span>
+                <span v-if="row.failure">{{ row.failure.message }}</span>
+                <span v-else-if="row.intent?.pendingItems.length">{{ row.intent.pendingItems[0]?.message }}</span>
+                <span v-else-if="row.errors.length">{{ formatParseError(row.errors[0]) }}</span>
+                <span v-else>—</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="160">
+              <template #default="{ row }">
+                <el-button
+                  v-if="canConfirmImportCase(row.status)"
+                  type="primary"
+                  size="small"
+                  :loading="actingId === row.id"
+                  @click="submitConfirm(row)"
+                >
+                  确认
+                </el-button>
+                <el-button
+                  v-if="canRetryImportCase(row.status)"
+                  size="small"
+                  :loading="actingId === row.id"
+                  @click="submitRetry(row)"
+                >
+                  重试
+                </el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -199,13 +300,19 @@ onMounted(async () => {
   margin: 0 0 8px;
 }
 
-.error-list {
+.error-list,
+.pending-list {
   color: #b91c1c;
   margin: 0 0 12px;
   padding-left: 18px;
 }
 
-.step-table {
+.pending-list {
+  color: #b45309;
+}
+
+.step-table,
+.actions {
   margin-top: 8px;
 }
 </style>
