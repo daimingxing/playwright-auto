@@ -1,6 +1,6 @@
 import { Router, type Request } from 'express';
 import multer from 'multer';
-import { createImportTask, getImportTask, listImportTasks } from '../lib/import-store';
+import { cleanupImportTask, createImportTask, getImportTask, listImportTasks, resumeImportTask } from '../lib/import-store';
 import { badRequest } from '../lib/http-error';
 
 interface ProjectParams {
@@ -49,6 +49,22 @@ importsRouter.post('/', (req: Request, res, next) => {
 importsRouter.get<ImportTaskParams>('/:taskId', async (req, res, next) => {
   try {
     res.json(await getImportTask(req.params.projectKey, req.params.taskId));
+  } catch (error) {
+    next(error);
+  }
+});
+
+importsRouter.post<ImportTaskParams>('/:taskId/resume', async (req, res, next) => {
+  try {
+    res.json(await resumeImportTask(req.params.projectKey, req.params.taskId));
+  } catch (error) {
+    next(error);
+  }
+});
+
+importsRouter.post<ImportTaskParams>('/:taskId/cleanup', async (req, res, next) => {
+  try {
+    res.json(await cleanupImportTask(req.params.projectKey, req.params.taskId));
   } catch (error) {
     next(error);
   }

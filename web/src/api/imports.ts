@@ -1,4 +1,4 @@
-import type { ImportTask, ImportTaskDetail } from '../../../shared/types';
+import type { ImportResumeResult, ImportTask, ImportTaskDetail } from '../../../shared/types';
 import { requestJson } from './http';
 
 /**
@@ -26,4 +26,13 @@ export function createImportTask(projectKey: string, file: File) {
  */
 export function getImportTask(projectKey: string, taskId: string) {
   return requestJson<ImportTaskDetail>(`/api/projects/${projectKey}/imports/${taskId}`);
+}
+
+/**
+ * 从检查点恢复导入任务，跳过已成功项并继续未完成项。
+ */
+export function resumeImportTask(projectKey: string, taskId: string) {
+  return requestJson<ImportResumeResult>(`/api/projects/${projectKey}/imports/${taskId}/resume`, {
+    method: 'POST'
+  });
 }

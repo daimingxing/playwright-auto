@@ -134,7 +134,7 @@ npm run dev
 - 录制导入：通过 Playwright codegen 录制操作，并把录制步骤插入到当前选中步骤后方；未选中步骤时追加到末尾
 - 登录态：在用例管理页或运行中心维护项目环境对应的 storageState，编辑页实测检查和运行测试会复用；不需要登录的项目可以直接运行
 - 运行管理：按项目运行测试，查看运行状态、报告地址并导出报告
-- AI 导入：在项目中上传「用例」「步骤」双表 Excel，校验后创建导入任务并查看解析结果；本版创建任务后不会开始探索或发布用例
+- AI 导入：在项目中上传「用例」「步骤」双表 Excel，校验后创建导入任务并查看解析结果；本版创建任务后不会开始探索或发布用例。服务中断后可通过恢复接口从检查点继续，已成功项不会重做。相同内容的上传文件在项目资产库中只保存一份。
 
 ## 数据目录
 
@@ -149,10 +149,11 @@ data/
       trash/
       runs/
       auth/
+      assets/
       imports/
 ```
 
-`cases/` 是可用测试用例，`trash/` 是回收站，`runs/` 保存运行记录和报告，`auth/` 保存登录态，`imports/` 保存 AI 导入任务。
+`cases/` 是可用测试用例，`trash/` 是回收站，`runs/` 保存运行记录和报告，`auth/` 保存登录态，`assets/` 是按内容去重的测试资产库，`imports/` 保存 AI 导入任务。
 
 每条测试用例保存为独立目录：
 
@@ -207,15 +208,30 @@ data/projects/<projectKey>/auth/default.storageState.json
 
 文件缺少工作表、缺少列或出现重复列时，整批导入会被阻断，并返回工作表、行号和原因。单个用例内容错误只影响该用例，其他有效用例仍会写入任务。成功后可在任务详情查看解析结果；当前版本创建任务后即停止，不会开始页面探索或发布正式用例。
 
+相同内容的 Excel 会登记到项目资产库并只存一份物理文件，但仍会创建新的导入任务，不会因为文件哈希相同而跳过上传。任务执行过程中逐项写入原子检查点；`POST /api/projects/<projectKey>/imports/<taskId>/resume` 会跳过已成功项、补写未完成项，且不会重新解析 Excel。`POST /api/projects/<projectKey>/imports/<taskId>/cleanup` 只删除该任务的工作、输出和诊断临时资料。
+
 导入任务保存在：
 
 ```text
 data/projects/<projectKey>/imports/<taskId>/
-  input.xlsx
-  input.json
   task.json
+  checkpoint.json
   parse.json
+  input/
+    input.xlsx
+    input.json
+  work/
+  output/
+  diagnostics/
   cases/<itemId>/status.json
+```
+
+测试资产保存在：
+
+```text
+data/projects/<projectKey>/assets/<sha256>/
+  content
+  meta.json
 ```
 
 ## 常用命令

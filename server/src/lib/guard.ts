@@ -7,6 +7,7 @@ const reviewIdPattern = /^[a-z0-9-]{1,80}$/;
 const workIdPattern = /^[a-f0-9-]{36}$/;
 const importTaskIdPattern = /^imp-\d{8}-\d{6}-[a-f0-9]{4}$/;
 const importCaseIdPattern = /^item-\d{8}-\d{6}-[a-f0-9]{4}$/;
+const assetIdPattern = /^[a-f0-9]{64}$/;
 
 /**
  * 校验项目标识。
@@ -55,6 +56,13 @@ export function assertImportTaskId(value: string) {
  */
 export function assertImportCaseId(value: string) {
   assertText(value, importCaseIdPattern, '导入用例条目标识不合法');
+}
+
+/**
+ * 校验项目测试资产标识（内容 SHA-256 十六进制）。
+ */
+export function assertAssetId(value: string) {
+  assertText(value, assetIdPattern, '测试资产标识不合法');
 }
 
 /**

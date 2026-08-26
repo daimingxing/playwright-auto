@@ -17,7 +17,7 @@ vi.mock('node:fs/promises', async () => {
   };
 });
 
-import { writeJson } from '../../server/src/lib/fs';
+import { writeFileAtomic, writeJson } from '../../server/src/lib/fs';
 
 describe('文件写入', () => {
   beforeEach(() => {
@@ -38,5 +38,14 @@ describe('文件写入', () => {
     expect(mocks.rename).toHaveBeenCalledTimes(1);
     expect(mocks.rename.mock.calls[0]?.[0]).toContain('project.json.tmp');
     expect(mocks.rename.mock.calls[0]?.[1]).toBe('data/project.json');
+  });
+
+  it('写入二进制文件时先写临时文件再替换目标文件', async () => {
+    await writeFileAtomic('data/blob.bin', Buffer.from('abc'));
+
+    expect(mocks.writeFile).toHaveBeenCalledTimes(1);
+    expect(mocks.writeFile.mock.calls[0]?.[0]).toContain('blob.bin.tmp');
+    expect(mocks.rename.mock.calls[0]?.[0]).toContain('blob.bin.tmp');
+    expect(mocks.rename.mock.calls[0]?.[1]).toBe('data/blob.bin');
   });
 });

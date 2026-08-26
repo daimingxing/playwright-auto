@@ -309,6 +309,58 @@ export type ImportActionType = (typeof importActionTypes)[number];
 export type ImportCaseStatus = 'parsed' | 'parse-failed';
 
 /**
+ * 导入任务恢复机状态。只覆盖检查点落盘是否完成，不表示探索、审阅或发布。
+ * `interrupted`：输入/解析/逐用例检查点尚未全部写完，可恢复。
+ * `completed`：本工单负责的检查点已全部落盘，恢复时跳过已成功项。
+ */
+export type ImportTaskStatus = 'interrupted' | 'completed';
+
+/**
+ * 导入任务已成功落盘的最高阶段。
+ * `input`：输入快照；`parse`：解析快照；`items`：部分逐用例状态；`completed`：全部检查点已写入。
+ */
+export type ImportCheckpointStage = 'input' | 'parse' | 'items' | 'completed';
+
+/**
+ * 项目级测试资产。内容按 SHA-256 寻址，逻辑文件名由引用方保存。
+ */
+export interface TestAsset {
+  id: string;
+  hash: string;
+  byteSize: number;
+  createdAt: string;
+}
+
+/**
+ * 任务或用例对测试资产的引用。恢复后仍指向同一资产标识。
+ */
+export interface TestAssetRef {
+  assetId: string;
+  fileName: string;
+}
+
+/**
+ * 检查点中已成功写入的逐用例记录。
+ */
+export interface ImportCheckpointItem {
+  id: string;
+  status: ImportCaseStatus;
+}
+
+/**
+ * 导入任务原子检查点。崩溃时只依赖完整 JSON，不依赖半截文件。
+ */
+export interface ImportCheckpoint {
+  stage: ImportCheckpointStage;
+  updatedAt: string;
+  items: ImportCheckpointItem[];
+  error?: {
+    message: string;
+    at: string;
+  };
+}
+
+/**
  * Excel 来源行引用。工作表名、行号和用例编号用于定位，数组下标和 Excel 行号都不是对象标识。
  */
 export interface ImportSourceRow {
@@ -361,18 +413,31 @@ export interface ImportTaskCase {
 export type ImportParsedCase = Omit<ImportTaskCase, 'id'>;
 
 /**
- * AI 导入任务摘要。状态只存在于用例级，任务本身不表示探索或发布。
+ * AI 导入任务摘要。`status` 只表示检查点是否写完，不表示探索或发布。
  */
 export interface ImportTask {
   id: string;
   projectKey: string;
   fileName: string;
   fileHash: string;
+  assetId: string;
+  status: ImportTaskStatus;
   createdAt: string;
+  updatedAt: string;
   parsedCount: number;
   failedCount: number;
 }
 
 export interface ImportTaskDetail extends ImportTask {
   cases: ImportTaskCase[];
+  checkpoint: ImportCheckpoint;
+  input: TestAssetRef;
+}
+
+/**
+ * 恢复导入任务的结果。`processedItemIds` 是本次补写的条目，已成功项在 `skippedItemIds`。
+ */
+export interface ImportResumeResult extends ImportTaskDetail {
+  skippedItemIds: string[];
+  processedItemIds: string[];
 }

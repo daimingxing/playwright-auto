@@ -9,21 +9,27 @@ export async function ensureDir(path: string) {
 }
 
 /**
- * 写入格式化 JSON 文件。
+ * 原子写入文件：先写临时文件再 rename，崩溃时不会留下半截目标文件。
  */
-export async function writeJson(path: string, value: unknown) {
+export async function writeFileAtomic(path: string, data: Buffer | string) {
   await ensureDir(dirname(path));
 
-  // 先写临时文件，再原地替换目标文件，避免直接覆盖留下半截 JSON。
   const tempPath = `${path}.tmp`;
 
   try {
-    await writeFile(tempPath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+    await writeFile(tempPath, data);
     await rename(tempPath, path);
   } catch (error) {
     await rm(tempPath, { force: true });
     throw error;
   }
+}
+
+/**
+ * 写入格式化 JSON 文件，经临时文件替换，避免留下半截 JSON。
+ */
+export async function writeJson(path: string, value: unknown) {
+  await writeFileAtomic(path, `${JSON.stringify(value, null, 2)}\n`);
 }
 
 /**
