@@ -3,7 +3,7 @@ import multer from 'multer';
 import { cleanupImportTask, createImportTask, getImportTask, listImportTasks, resumeImportTask } from '../lib/import-store';
 import { badRequest } from '../lib/http-error';
 import type { AgentRunner } from '../services/import/agent-runner';
-import { createFakeAgentRunner } from '../services/import/agent-runner';
+import { createDefaultAgentRunner } from '../services/import/opencode-runner';
 import { confirmImportCase, retryImportCase, reviewImportTask } from '../services/import/import-review';
 import { publishImportCase } from '../services/import/import-publish';
 
@@ -80,7 +80,11 @@ importsRouter.post<ImportTaskParams>('/:taskId/cleanup', async (req, res, next) 
 
 importsRouter.post<ImportTaskParams>('/:taskId/review', async (req, res, next) => {
   try {
-    res.json(await reviewImportTask(req.params.projectKey, req.params.taskId, getAgentRunner(req)));
+    res.json(
+      await reviewImportTask(req.params.projectKey, req.params.taskId, getAgentRunner(req), {
+        signal: createAbortSignal(req, res)
+      })
+    );
   } catch (error) {
     next(error);
   }
@@ -96,7 +100,11 @@ importsRouter.post<ImportCaseParams>('/:taskId/cases/:caseId/confirm', async (re
 
 importsRouter.post<ImportCaseParams>('/:taskId/cases/:caseId/retry', async (req, res, next) => {
   try {
-    res.json(await retryImportCase(req.params.projectKey, req.params.taskId, req.params.caseId, getAgentRunner(req)));
+    res.json(
+      await retryImportCase(req.params.projectKey, req.params.taskId, req.params.caseId, getAgentRunner(req), {
+        signal: createAbortSignal(req, res)
+      })
+    );
   } catch (error) {
     next(error);
   }
@@ -142,11 +150,26 @@ function toUploadError(error: unknown) {
 }
 
 /**
- * 读取请求级 AgentRunner；未注入时回退到 Fake。
+ * 读取请求级 AgentRunner；未注入时回退到默认 OpenCode runner。
  */
 function getAgentRunner(req: Pick<Request, 'app'>): AgentRunner {
   const runner = req.app.locals.agentRunner as AgentRunner | undefined;
-  return runner ?? createFakeAgentRunner();
+  return runner ?? createDefaultAgentRunner();
+}
+
+/**
+ * 请求断开时取消进行中的探索进程。
+ */
+function createAbortSignal(req: { on: (event: 'close', listener: () => void) => void }, res: { writableEnded?: boolean }) {
+  const controller = new AbortController();
+
+  req.on('close', () => {
+    if (!res.writableEnded) {
+      controller.abort();
+    }
+  });
+
+  return controller.signal;
 }
 
 /**

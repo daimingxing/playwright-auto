@@ -6,7 +6,8 @@ import { runsRouter } from './routes/runs';
 import { authRouter } from './routes/auth';
 import { recordRouter } from './routes/record';
 import { importsRouter } from './routes/imports';
-import { createFakeAgentRunner, type AgentRunner } from './services/import/agent-runner';
+import { createDefaultAgentRunner } from './services/import/opencode-runner';
+import { type AgentRunner } from './services/import/agent-runner';
 import { RunError } from './services/run/runner';
 import { getAppConfig } from './lib/app-config';
 import { ZodError, type ZodIssue } from 'zod';
@@ -17,11 +18,11 @@ export interface CreateAppOptions {
 }
 
 /**
- * 创建本地 API 服务。可注入 AgentRunner，默认使用 Fake。
+ * 创建本地 API 服务。可注入 AgentRunner，默认使用 OpenCode。
  */
 export function createApp(options: CreateAppOptions = {}) {
   const app = express();
-  app.locals.agentRunner = options.agentRunner ?? createFakeAgentRunner();
+  app.locals.agentRunner = options.agentRunner ?? createDefaultAgentRunner();
 
   app.use(
     cors({

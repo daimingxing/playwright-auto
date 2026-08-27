@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { readdir, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import type {
+  ExplorationResult,
   ImportCaseFailure,
   ImportCaseStatus,
   ImportCheckpoint,
@@ -380,13 +381,15 @@ async function mergeCaseStatus(projectKey: string, taskId: string, item: ImportT
 
   const status = await readJson<ImportCaseStatusFile>(statusPath);
   const intent = await readImportCaseIntent(projectKey, taskId, item.id);
+  const exploration = await readImportCaseExploration(projectKey, taskId, item.id);
   return {
     ...item,
     status: status.status,
     errors: status.errors,
     ...(status.failure ? { failure: status.failure } : {}),
     ...(status.publishedCaseKey ? { publishedCaseKey: status.publishedCaseKey } : {}),
-    ...(intent ? { intent } : {})
+    ...(intent ? { intent } : {}),
+    ...(exploration ? { exploration } : {})
   };
 }
 
@@ -449,6 +452,30 @@ export async function persistImportCaseIntent(
 }
 
 /**
+ * 把候选探索定位器写入任务 output 目录。
+ */
+export async function writeImportCaseExploration(
+  projectKey: string,
+  taskId: string,
+  caseId: string,
+  exploration: ExplorationResult
+) {
+  await writeJson(join(getImportCaseOutputPath(projectKey, taskId, caseId), 'exploration.json'), exploration);
+}
+
+/**
+ * 把已确认探索定位器写到任务 cases 目录，cleanup 不会删除该位置。
+ */
+export async function persistImportCaseExploration(
+  projectKey: string,
+  taskId: string,
+  caseId: string,
+  exploration: ExplorationResult
+) {
+  await writeJson(join(getImportCasePath(projectKey, taskId, caseId), 'exploration.json'), exploration);
+}
+
+/**
  * 读取单条用例的 TestIntent。优先已确认落盘，其次候选 output。
  */
 export async function readImportCaseIntent(projectKey: string, taskId: string, caseId: string) {
@@ -460,6 +487,28 @@ export async function readImportCaseIntent(projectKey: string, taskId: string, c
   for (const path of paths) {
     try {
       return await readJson<TestIntent>(path);
+    } catch (error) {
+      if (!isMissingFile(error)) {
+        throw error;
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * 读取单条用例的探索定位器。优先已确认落盘，其次候选 output。
+ */
+export async function readImportCaseExploration(projectKey: string, taskId: string, caseId: string) {
+  const paths = [
+    join(getImportCasePath(projectKey, taskId, caseId), 'exploration.json'),
+    join(getImportCaseOutputPath(projectKey, taskId, caseId), 'exploration.json')
+  ];
+
+  for (const path of paths) {
+    try {
+      return await readJson<ExplorationResult>(path);
     } catch (error) {
       if (!isMissingFile(error)) {
         throw error;

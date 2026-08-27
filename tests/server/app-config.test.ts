@@ -19,6 +19,10 @@ afterEach(async () => {
   delete process.env.PLAYWRIGHT_AUTO_MAX_WORKERS;
   delete process.env.PLAYWRIGHT_AUTO_CORS_ORIGINS;
   delete process.env.VITE_API_BASE;
+  delete process.env.PLAYWRIGHT_AUTO_AGENT_PROTOCOL;
+  delete process.env.AI_BASE_URL;
+  delete process.env.OPENCODE_BIN;
+  delete process.env.PLAYWRIGHT_MCP_CLI;
   await rm(root, { recursive: true, force: true });
 });
 
@@ -50,6 +54,15 @@ describe('应用配置', () => {
           action: 2000,
           wait: 1000
         }
+      },
+      agent: {
+        protocol: 'chat-completions',
+        provider: 'corp',
+        model: 'test-agent',
+        baseUrl: '',
+        opencodePath: '',
+        playwrightMcpPath: '',
+        timeoutMs: 180000
       }
     });
   });
@@ -107,6 +120,15 @@ describe('应用配置', () => {
           action: 3000,
           wait: 1500
         }
+      },
+      agent: {
+        protocol: 'chat-completions',
+        provider: 'corp',
+        model: 'test-agent',
+        baseUrl: '',
+        opencodePath: '',
+        playwrightMcpPath: '',
+        timeoutMs: 180000
       }
     });
   });
@@ -137,6 +159,8 @@ describe('应用配置', () => {
     process.env.PLAYWRIGHT_AUTO_MAX_WORKERS = '24';
     process.env.PLAYWRIGHT_AUTO_CORS_ORIGINS = 'https://env.example';
     process.env.VITE_API_BASE = 'https://env-api.example';
+    process.env.PLAYWRIGHT_AUTO_AGENT_PROTOCOL = 'responses';
+    process.env.AI_BASE_URL = 'https://llm.example/v1';
     const { getAppConfig } = await importFreshConfig();
 
     expect(getAppConfig()).toEqual({
@@ -163,6 +187,15 @@ describe('应用配置', () => {
           action: 3000,
           wait: 1500
         }
+      },
+      agent: {
+        protocol: 'responses',
+        provider: 'corp',
+        model: 'test-agent',
+        baseUrl: 'https://llm.example/v1',
+        opencodePath: '',
+        playwrightMcpPath: '',
+        timeoutMs: 180000
       }
     });
   });

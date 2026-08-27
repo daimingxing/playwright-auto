@@ -27,6 +27,15 @@ const DEFAULT_CONFIG: FullAppConfig = {
       action: 2000,
       wait: 1000
     }
+  },
+  agent: {
+    protocol: 'chat-completions',
+    provider: 'corp',
+    model: 'test-agent',
+    baseUrl: '',
+    opencodePath: '',
+    playwrightMcpPath: '',
+    timeoutMs: 180000
   }
 };
 
@@ -63,6 +72,15 @@ export function getAppConfig(): FullAppConfig {
         action: getValue(file, 'steps', 'timeouts', 'action'),
         wait: getValue(file, 'steps', 'timeouts', 'wait')
       }
+    },
+    agent: {
+      protocol: envOrFile('PLAYWRIGHT_AUTO_AGENT_PROTOCOL', getValue(file, 'agent', 'protocol')),
+      provider: envOrFile('PLAYWRIGHT_AUTO_AGENT_PROVIDER', getValue(file, 'agent', 'provider')),
+      model: envOrFile('PLAYWRIGHT_AUTO_AGENT_MODEL', getValue(file, 'agent', 'model')),
+      baseUrl: envOrFile('AI_BASE_URL', getValue(file, 'agent', 'baseUrl')),
+      opencodePath: envOrFile('OPENCODE_BIN', getValue(file, 'agent', 'opencodePath')),
+      playwrightMcpPath: envOrFile('PLAYWRIGHT_MCP_CLI', getValue(file, 'agent', 'playwrightMcpPath')),
+      timeoutMs: envOrFile('PLAYWRIGHT_AUTO_AGENT_TIMEOUT_MS', getValue(file, 'agent', 'timeoutMs'))
     }
   });
 
@@ -103,6 +121,15 @@ function createConfigSchema(maxWorkers: number) {
         action: intField(DEFAULT_CONFIG.steps.timeouts.action, 0, 600000),
         wait: intField(DEFAULT_CONFIG.steps.timeouts.wait, 0, 600000)
       })
+    }),
+    agent: z.object({
+      protocol: protocolField,
+      provider: textField(DEFAULT_CONFIG.agent.provider),
+      model: textField(DEFAULT_CONFIG.agent.model),
+      baseUrl: textField(DEFAULT_CONFIG.agent.baseUrl, true),
+      opencodePath: textField(DEFAULT_CONFIG.agent.opencodePath, true),
+      playwrightMcpPath: textField(DEFAULT_CONFIG.agent.playwrightMcpPath, true),
+      timeoutMs: intField(DEFAULT_CONFIG.agent.timeoutMs, 1000, 3600000)
     })
   });
 }
@@ -126,6 +153,11 @@ function textField(fallback: string, allowEmpty = false) {
     z.string()
   );
 }
+
+const protocolField = z.preprocess(
+  (value) => typeof value === 'string' ? value.trim().toLowerCase() : value,
+  z.enum(['chat-completions', 'responses'])
+).catch(DEFAULT_CONFIG.agent.protocol);
 
 const listField = z.preprocess(
   (value) => typeof value === 'string' ? value.split(',') : Array.isArray(value) ? value : [],

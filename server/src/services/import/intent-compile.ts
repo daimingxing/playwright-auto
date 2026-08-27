@@ -1,26 +1,17 @@
-import type { LocatorBuilderState } from '../../../../shared/locator-builder';
-import { renderLocatorExpression } from '../../../../shared/locator-builder';
 import {
   hasStepSelector,
   type CaseMeta,
   type CaseStep,
   type IntentStep,
-  type TestIntent
+  type TestIntent,
+  type VerifiedLocator
 } from '../../../../shared/types';
 import { generateSpec } from '../case/case-generator';
 import { isReviewPassed, reviewCase } from '../case-review';
 import { isIntentActionType } from './agent-runner';
+import { isVerifiedLocator } from './verified-locator';
 
 const MAIN_PAGE_ALIAS = 'page';
-const SEMANTIC_LOCATOR_MODES = new Set<LocatorBuilderState['mode']>([
-  'role',
-  'text',
-  'label',
-  'placeholder',
-  'testId',
-  'title',
-  'altText'
-]);
 
 export interface ActionGroup {
   intentStepId: string;
@@ -49,9 +40,12 @@ export type ActionCompileResult =
 
 /**
  * 把线性 TestIntent 转成 Action Group / Action IR，并执行发布前校验。
- * 未解决歧义、非法结构、未验证定位器或无法生成代码时返回 issues。
+ * 交互步骤的定位器必须来自页面探索结果，不再对目标文本做启发式猜测。
  */
-export function compileIntentToActions(intent: TestIntent): ActionCompileResult {
+export function compileIntentToActions(
+  intent: TestIntent,
+  locators: Record<string, VerifiedLocator> = {}
+): ActionCompileResult {
   if (intent.pendingItems.length > 0) {
     return {
       ok: false,
@@ -75,7 +69,7 @@ export function compileIntentToActions(intent: TestIntent): ActionCompileResult 
   const knownPages = new Set([MAIN_PAGE_ALIAS]);
 
   for (const step of intent.steps) {
-    const compiled = compileIntentStep(intent, step, usedIds);
+    const compiled = compileIntentStep(intent, step, locators[step.id], usedIds);
     issues.push(...compiled.issues);
 
     if (!compiled.action) {
@@ -118,6 +112,7 @@ export function compileIntentToActions(intent: TestIntent): ActionCompileResult 
 function compileIntentStep(
   intent: TestIntent,
   step: IntentStep,
+  locator: VerifiedLocator | undefined,
   usedIds: Set<string>
 ): { action?: CaseStep; issues: ActionCompileIssue[] } {
   const issues: ActionCompileIssue[] = [];
@@ -147,7 +142,7 @@ function compileIntentStep(
     return { issues };
   }
 
-  const action = toActionIr(intent, step);
+  const action = toActionIr(intent, step, locator);
 
   if ('issue' in action) {
     issues.push(action.issue);
@@ -160,7 +155,11 @@ function compileIntentStep(
 /**
  * 按业务动作类型生成封闭 Playwright 原语。断言值只取自意图中的用户输入。
  */
-function toActionIr(intent: TestIntent, step: IntentStep): { step: CaseStep } | { issue: ActionCompileIssue } {
+function toActionIr(
+  intent: TestIntent,
+  step: IntentStep,
+  locator: VerifiedLocator | undefined
+): { step: CaseStep } | { issue: ActionCompileIssue } {
   switch (step.action) {
     case '打开页面': {
       const value = readGotoPath(step, intent);
@@ -172,12 +171,11 @@ function toActionIr(intent: TestIntent, step: IntentStep): { step: CaseStep } | 
       return { step: { id: step.id, type: 'goto', value } };
     }
     case '填写': {
-      const locator = createSemanticLocator('label', step.target);
-      const value = step.data.trim();
-
-      if (!locator) {
+      if (!isVerifiedLocator(locator)) {
         return unverifiedLocator(step);
       }
+
+      const value = step.data.trim();
 
       if (!value) {
         return missingParam(step, '填写步骤缺少输入值');
@@ -186,12 +184,11 @@ function toActionIr(intent: TestIntent, step: IntentStep): { step: CaseStep } | 
       return { step: { id: step.id, type: 'fill', ...locator, value } };
     }
     case '选择': {
-      const locator = createSemanticLocator('role', step.target, 'combobox');
-      const value = step.data.trim();
-
-      if (!locator) {
+      if (!isVerifiedLocator(locator)) {
         return unverifiedLocator(step);
       }
+
+      const value = step.data.trim();
 
       if (!value) {
         return missingParam(step, '选择步骤缺少选项值');
@@ -200,30 +197,25 @@ function toActionIr(intent: TestIntent, step: IntentStep): { step: CaseStep } | 
       return { step: { id: step.id, type: 'select', ...locator, value } };
     }
     case '点击': {
-      const locator = createSemanticLocator('role', step.target, 'button');
-
-      if (!locator) {
+      if (!isVerifiedLocator(locator)) {
         return unverifiedLocator(step);
       }
 
       return { step: { id: step.id, type: 'click', ...locator } };
     }
     case '检查可见': {
-      const locator = createSemanticLocator('text', step.target);
-
-      if (!locator) {
+      if (!isVerifiedLocator(locator)) {
         return unverifiedLocator(step);
       }
 
       return { step: { id: step.id, type: 'assertVisible', ...locator } };
     }
     case '检查文本': {
-      const locator = createSemanticLocator('text', step.target);
-      const value = step.data.trim();
-
-      if (!locator) {
+      if (!isVerifiedLocator(locator)) {
         return unverifiedLocator(step);
       }
+
+      const value = step.data.trim();
 
       if (!value) {
         return missingParam(step, '检查文本缺少期望文本');
@@ -290,47 +282,6 @@ function validateCompiledActions(intent: TestIntent, steps: CaseStep[]): ActionC
 }
 
 /**
- * 从用户提供的目标文本构造结构化语义定位器，不猜测 CSS。
- */
-function createSemanticLocator(
-  mode: Extract<LocatorBuilderState['mode'], 'role' | 'text' | 'label'>,
-  target: string,
-  role?: string
-): Pick<CaseStep, 'selector' | 'selectorDraft'> | null {
-  const text = target.trim();
-
-  if (!text) {
-    return null;
-  }
-
-  const selectorDraft: LocatorBuilderState = {
-    mode,
-    value: { kind: 'text', text },
-    exact: true,
-    ...(role ? { role } : {})
-  };
-
-  return {
-    selectorDraft,
-    selector: toSelector(selectorDraft)
-  };
-}
-
-/**
- * 判断步骤是否带有可发布的语义定位器，而不是未验证的 CSS 猜测。
- */
-function isVerifiedLocator(step: CaseStep) {
-  const draft = step.selectorDraft;
-
-  if (!draft || !SEMANTIC_LOCATOR_MODES.has(draft.mode)) {
-    return false;
-  }
-
-  const text = typeof draft.value === 'string' ? draft.value : draft.value?.text;
-  return Boolean(text?.trim()) && Boolean(step.selector?.trim());
-}
-
-/**
  * 读取打开页面路径：优先步骤中的相对路径，否则使用用例起始路径。
  */
 function readGotoPath(step: IntentStep, intent: TestIntent) {
@@ -353,16 +304,6 @@ function readGotoPath(step: IntentStep, intent: TestIntent) {
  */
 function isRelativePath(value: string) {
   return value.startsWith('/');
-}
-
-/**
- * 把构建器状态渲染为不含页面前缀的 selector 字符串。
- */
-function toSelector(draft: LocatorBuilderState) {
-  const expression = renderLocatorExpression(draft, MAIN_PAGE_ALIAS);
-  return expression.startsWith(`${MAIN_PAGE_ALIAS}.`)
-    ? expression.slice(MAIN_PAGE_ALIAS.length + 1)
-    : expression;
 }
 
 /**

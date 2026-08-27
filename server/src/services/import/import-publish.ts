@@ -1,6 +1,6 @@
 import type { ImportTaskDetail } from '../../../../shared/types';
 import { createOfficialCase } from '../../lib/case-store';
-import { persistImportCaseIntent, getImportTask, updateImportCaseStatus } from '../../lib/import-store';
+import { persistImportCaseIntent, getImportTask, readImportCaseExploration, updateImportCaseStatus } from '../../lib/import-store';
 import { badRequest, notFound } from '../../lib/http-error';
 import { compileIntentToActions } from './intent-compile';
 
@@ -32,7 +32,8 @@ export async function publishImportCase(
     throw badRequest('缺少可发布的测试意图');
   }
 
-  const compiled = compileIntentToActions(item.intent);
+  const exploration = item.exploration ?? (await readImportCaseExploration(projectKey, taskId, item.id));
+  const compiled = compileIntentToActions(item.intent, exploration?.locators ?? {});
 
   if (!compiled.ok) {
     throw badRequest('Action IR 校验未通过，不能发布', { issues: compiled.issues });

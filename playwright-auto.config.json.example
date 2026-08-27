@@ -25,5 +25,14 @@
       "action": 2000,
       "wait": 1000
     }
+  },
+  "agent": {
+    "protocol": "chat-completions",
+    "provider": "corp",
+    "model": "test-agent",
+    "baseUrl": "",
+    "opencodePath": "",
+    "playwrightMcpPath": "",
+    "timeoutMs": 180000
   }
 }

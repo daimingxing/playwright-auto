@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 import {
   importActionTypes,
+  type ExplorationResult,
   type ImportActionType,
   type ImportAgentFailureKind,
   type ImportTaskCase,
@@ -10,6 +11,7 @@ import {
   type TestIntent
 } from '../../../../shared/types';
 import { writeJson } from '../../lib/fs';
+import { createFakeExplorationLocators } from './verified-locator';
 
 export type AgentOutcomeKind = 'success' | 'ambiguity' | ImportAgentFailureKind;
 
@@ -20,14 +22,19 @@ export interface AgentRunInput {
   workDir: string;
   outputDir: string;
   diagnosticsDir: string;
+  signal?: AbortSignal;
+  timeoutMs?: number;
+  baseUrl?: string;
+  storageStatePath?: string;
+  executablePath?: string;
 }
 
 export type AgentRunResult =
-  | { kind: 'success' | 'ambiguity'; intent: TestIntent }
+  | { kind: 'success' | 'ambiguity'; intent: TestIntent; exploration?: ExplorationResult }
   | { kind: ImportAgentFailureKind; message: string };
 
 /**
- * 可替换的 Agent 执行接缝。本工单默认 Fake，后续可换成 OpenCode 实现。
+ * 可替换的 Agent 执行接缝。生产默认 OpenCode，测试可注入 Fake。
  */
 export interface AgentRunner {
   run(input: AgentRunInput): Promise<AgentRunResult>;
@@ -35,12 +42,17 @@ export interface AgentRunner {
 
 export interface FakeAgentOptions {
   outcomeFor?(item: ImportTaskCase): AgentOutcomeKind;
+  delayMs?: number;
 }
 
 const FAILURE_MESSAGES: Record<ImportAgentFailureKind, string> = {
   'login-blocked': '探索被登录态阻塞，请更新项目登录态后重试',
   'explore-failed': '页面探索失败，无法生成测试意图',
-  'locator-failed': '未能定位到所需页面目标'
+  'locator-failed': '未能定位到所需页面目标',
+  cancelled: '页面探索已取消',
+  timeout: '页面探索超时',
+  'process-failed': 'OpenCode 进程失败，无法完成页面探索',
+  'model-failed': '模型调用失败，无法完成页面探索'
 };
 
 /**
@@ -60,22 +72,37 @@ export class FakeAgentRunner implements AgentRunner {
    * 根据解析用例生成候选测试意图，或返回固定失败类型。
    */
   async run(input: AgentRunInput): Promise<AgentRunResult> {
-    const kind = this.options.outcomeFor?.(input.item) ?? inferFakeOutcome(input.item);
     await writeJson(join(input.workDir, 'input.json'), {
       caseId: input.item.id,
       caseNumber: input.item.caseNumber,
-      kind
+      baseUrl: input.baseUrl ?? '',
+      hasStorageState: Boolean(input.storageStatePath)
     });
 
-    if (kind === 'login-blocked' || kind === 'explore-failed' || kind === 'locator-failed') {
+    const aborted = await waitUnlessAborted(input, this.options.delayMs ?? 0);
+
+    if (aborted) {
+      const result = { kind: aborted, message: FAILURE_MESSAGES[aborted] };
+      await writeJson(join(input.diagnosticsDir, 'agent.json'), result);
+      return result;
+    }
+
+    const kind = this.options.outcomeFor?.(input.item) ?? inferFakeOutcome(input.item);
+
+    if (kind !== 'success' && kind !== 'ambiguity') {
       const result = { kind, message: FAILURE_MESSAGES[kind] };
       await writeJson(join(input.diagnosticsDir, 'agent.json'), result);
       return result;
     }
 
     const intent = toTestIntent(input.item, kind === 'ambiguity');
+    const exploration: ExplorationResult = {
+      locators: createFakeExplorationLocators(intent.steps),
+      ...(input.baseUrl ? { pageUrl: joinFakeUrl(input.baseUrl, input.item.startPath) } : {})
+    };
     await writeJson(join(input.workDir, 'intent-draft.json'), intent);
-    return { kind, intent };
+    await writeJson(join(input.outputDir, 'exploration.json'), exploration);
+    return { kind, intent, exploration };
   }
 }
 
@@ -139,7 +166,61 @@ export function inferFakeOutcome(item: ImportTaskCase): AgentOutcomeKind {
     return 'locator-failed';
   }
 
+  if (includesAny(text, ['取消', 'cancel'])) {
+    return 'cancelled';
+  }
+
+  if (includesAny(text, ['超时', 'timeout'])) {
+    return 'timeout';
+  }
+
+  if (includesAny(text, ['进程失败', 'process-fail', 'process failed'])) {
+    return 'process-failed';
+  }
+
+  if (includesAny(text, ['模型失败', 'model-fail', 'model failed'])) {
+    return 'model-failed';
+  }
+
   return 'success';
+}
+
+/**
+ * 等待 Fake 延迟，取消或超时立即结束。
+ */
+async function waitUnlessAborted(
+  input: AgentRunInput,
+  delayMs: number
+): Promise<Extract<AgentOutcomeKind, 'cancelled' | 'timeout'> | null> {
+  if (input.signal?.aborted) {
+    return 'cancelled';
+  }
+
+  const timeoutMs = input.timeoutMs;
+
+  if (delayMs <= 0 && timeoutMs === undefined) {
+    return null;
+  }
+
+  if (timeoutMs !== undefined && timeoutMs <= 0) {
+    return 'timeout';
+  }
+
+  return new Promise((resolve) => {
+    const finish = (kind: Extract<AgentOutcomeKind, 'cancelled' | 'timeout'> | null) => {
+      clearTimeout(delayTimer);
+      if (timeoutTimer) {
+        clearTimeout(timeoutTimer);
+      }
+      input.signal?.removeEventListener('abort', onAbort);
+      resolve(kind);
+    };
+    const onAbort = () => finish('cancelled');
+    const delayTimer = setTimeout(() => finish(null), Math.max(delayMs, 0));
+    const timeoutTimer =
+      timeoutMs === undefined ? undefined : setTimeout(() => finish('timeout'), timeoutMs);
+    input.signal?.addEventListener('abort', onAbort, { once: true });
+  });
 }
 
 /**
@@ -189,6 +270,17 @@ function formatTimePart(date: Date) {
  */
 function padNumber(value: number) {
   return String(value).padStart(2, '0');
+}
+
+/**
+ * 拼接 Fake 探索用的页面地址，仅写入过程资料。
+ */
+function joinFakeUrl(baseUrl: string, startPath: string) {
+  try {
+    return new URL(startPath || '/', baseUrl).toString();
+  } catch {
+    return `${baseUrl}${startPath}`;
+  }
 }
 
 /**

@@ -249,6 +249,24 @@ export interface StepConfig {
 }
 
 /**
+ * Agent 模型协议。本地只配置一种，由 OpenCode Provider 切换实现。
+ */
+export type AgentProtocol = 'chat-completions' | 'responses';
+
+/**
+ * AI 导入 Agent 本地设置。凭据不入库，只通过进程环境变量注入。
+ */
+export interface AgentConfig {
+  protocol: AgentProtocol;
+  provider: string;
+  model: string;
+  baseUrl: string;
+  opencodePath: string;
+  playwrightMcpPath: string;
+  timeoutMs: number;
+}
+
+/**
  * 判断当前步骤是否需要选择器。
  */
 export function hasStepSelector(type: StepType) {
@@ -294,6 +312,7 @@ export interface FullAppConfig {
   runner: RunConfig;
   browser: BrowserConfig;
   steps: StepConfig;
+  agent: AgentConfig;
 }
 
 export interface PublicAppConfig {
@@ -329,7 +348,14 @@ export type ImportCaseStatus =
 /**
  * Agent 失败原因。成功和歧义不是失败，歧义进入待确认。
  */
-export type ImportAgentFailureKind = 'login-blocked' | 'explore-failed' | 'locator-failed';
+export type ImportAgentFailureKind =
+  | 'login-blocked'
+  | 'explore-failed'
+  | 'locator-failed'
+  | 'cancelled'
+  | 'timeout'
+  | 'process-failed'
+  | 'model-failed';
 
 /**
  * 单条用例的 Agent 失败信息。
@@ -359,6 +385,22 @@ export interface IntentPendingItem {
   id: string;
   stepId?: string;
   message: string;
+}
+
+/**
+ * 页面探索得到的已验证结构化定位器。不属于 TestIntent，随探索结果单独保存。
+ */
+export interface VerifiedLocator {
+  selector: string;
+  selectorDraft: LocatorBuilderState;
+}
+
+/**
+ * 单次页面探索产出。供发布编译使用，不写入正式 case.json，直到显式发布。
+ */
+export interface ExplorationResult {
+  locators: Record<string, VerifiedLocator>;
+  pageUrl?: string;
 }
 
 /**
@@ -478,6 +520,7 @@ export interface ImportTaskCase {
   steps: ImportExcelStep[];
   errors: ImportParseError[];
   intent?: TestIntent;
+  exploration?: ExplorationResult;
   failure?: ImportCaseFailure;
   publishedCaseKey?: string;
 }

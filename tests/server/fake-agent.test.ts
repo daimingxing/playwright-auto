@@ -3,7 +3,8 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { FakeAgentRunner, inferFakeOutcome, toTestIntent } from '../../server/src/services/import/agent-runner';
-import type { ImportTaskCase } from '../../shared/types';
+import { readJson } from '../../server/src/lib/fs';
+import type { ExplorationResult, ImportTaskCase } from '../../shared/types';
 
 let root = '';
 
@@ -25,7 +26,8 @@ describe('Fake AgentRunner', () => {
       item,
       workDir: join(root, 'work'),
       outputDir: join(root, 'output'),
-      diagnosticsDir: join(root, 'diagnostics')
+      diagnosticsDir: join(root, 'diagnostics'),
+      baseUrl: 'https://crm.test.local'
     });
 
     expect(result.kind).toBe('success');
@@ -42,12 +44,34 @@ describe('Fake AgentRunner', () => {
     });
     expect(result.intent.source.sheet).toBe('用例');
     expect(result.intent.pendingItems).toEqual([]);
+    expect(result.exploration?.locators[result.intent.steps[1]?.id ?? '']).toMatchObject({
+      selector: expect.stringContaining('getByRole')
+    });
+    const saved = await readJson<ExplorationResult>(join(root, 'output', 'exploration.json'));
+    expect(saved.pageUrl).toBe('https://crm.test.local/orders/create');
   });
 
   it('按备注返回歧义和登录阻塞', () => {
     expect(inferFakeOutcome(makeParsedCase({ remark: '存在歧义' }))).toBe('ambiguity');
     expect(inferFakeOutcome(makeParsedCase({ remark: 'login required' }))).toBe('login-blocked');
     expect(toTestIntent(makeParsedCase(), true).pendingItems[0]?.message).toContain('歧义');
+  });
+
+  it('覆盖取消、超时、进程失败和模型失败', async () => {
+    expect(inferFakeOutcome(makeParsedCase({ remark: '取消' }))).toBe('cancelled');
+    expect(inferFakeOutcome(makeParsedCase({ remark: 'timeout' }))).toBe('timeout');
+    expect(inferFakeOutcome(makeParsedCase({ remark: '进程失败' }))).toBe('process-failed');
+    expect(inferFakeOutcome(makeParsedCase({ remark: '模型失败' }))).toBe('model-failed');
+
+    const controller = new AbortController();
+    controller.abort();
+    const cancelled = await new FakeAgentRunner().run(makeRunInput(makeParsedCase(), { signal: controller.signal }));
+    expect(cancelled.kind).toBe('cancelled');
+
+    const timedOut = await new FakeAgentRunner({ delayMs: 50 }).run(
+      makeRunInput(makeParsedCase(), { timeoutMs: 10 })
+    );
+    expect(timedOut.kind).toBe('timeout');
   });
 });
 
@@ -102,3 +126,22 @@ function makeParsedCase(patch: Partial<ImportTaskCase> = {}): ImportTaskCase {
     ...patch
   };
 }
+
+/**
+ * 构造 Fake runner 输入。
+ */
+function makeRunInput(
+  item: ImportTaskCase,
+  extra: { signal?: AbortSignal; timeoutMs?: number } = {}
+) {
+  return {
+    projectKey: 'crm',
+    taskId: 'imp-20990101-000000-abcd',
+    item,
+    workDir: join(root, 'work'),
+    outputDir: join(root, 'output'),
+    diagnosticsDir: join(root, 'diagnostics'),
+    ...extra
+  };
+}
+

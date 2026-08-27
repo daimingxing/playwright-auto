@@ -1,12 +1,17 @@
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import type { ImportCaseStatus, ImportTaskCase, ImportTaskDetail, TestIntent } from '../../../../shared/types';
+import type { ExplorationResult, ImportCaseStatus, ImportTaskCase, ImportTaskDetail, TestIntent } from '../../../../shared/types';
+import { getAppConfig } from '../../lib/app-config';
 import { ensureDir, writeJson } from '../../lib/fs';
 import { badRequest, notFound } from '../../lib/http-error';
 import {
   getImportParseSnapshot,
   getImportTask,
+  persistImportCaseExploration,
   persistImportCaseIntent,
+  readImportCaseExploration,
   updateImportCaseStatus,
+  writeImportCaseExploration,
   writeImportCaseIntent
 } from '../../lib/import-store';
 import {
@@ -14,6 +19,8 @@ import {
   getImportCaseOutputPath,
   getImportCaseWorkPath
 } from '../../lib/path';
+import { getProject } from '../../lib/project-store';
+import { getProjectAuthPath } from '../auth-session';
 import type { AgentRunner, AgentRunResult } from './agent-runner';
 import { isIntentActionType } from './agent-runner';
 
@@ -26,7 +33,8 @@ const RETRY_BLOCKED: ImportCaseStatus[] = ['publishable', 'published', 'parse-fa
 export async function reviewImportTask(
   projectKey: string,
   taskId: string,
-  runner: AgentRunner
+  runner: AgentRunner,
+  options: { signal?: AbortSignal } = {}
 ): Promise<ImportTaskDetail> {
   const task = await getImportTask(projectKey, taskId);
   const parseSnapshot = await getImportParseSnapshot(projectKey, taskId);
@@ -42,7 +50,7 @@ export async function reviewImportTask(
       continue;
     }
 
-    await processImportCase(projectKey, taskId, { ...parsed, id: current.id }, runner);
+    await processImportCase(projectKey, taskId, { ...parsed, id: current.id }, runner, options.signal);
   }
 
   return getImportTask(projectKey, taskId);
@@ -71,6 +79,12 @@ export async function confirmImportCase(
   }
 
   await persistImportCaseIntent(projectKey, taskId, item.id, item.intent);
+  const exploration = item.exploration ?? (await readImportCaseExploration(projectKey, taskId, item.id));
+
+  if (exploration) {
+    await persistImportCaseExploration(projectKey, taskId, item.id, exploration);
+  }
+
   await updateImportCaseStatus(projectKey, taskId, item, 'publishable');
   return getImportTask(projectKey, taskId);
 }
@@ -82,7 +96,8 @@ export async function retryImportCase(
   projectKey: string,
   taskId: string,
   caseId: string,
-  runner: AgentRunner
+  runner: AgentRunner,
+  options: { signal?: AbortSignal } = {}
 ): Promise<ImportTaskDetail> {
   const { item, parsed } = await getImportCaseContext(projectKey, taskId, caseId);
 
@@ -90,7 +105,7 @@ export async function retryImportCase(
     throw badRequest(retryBlockedMessage(item.status));
   }
 
-  await processImportCase(projectKey, taskId, parsed, runner);
+  await processImportCase(projectKey, taskId, parsed, runner, options.signal);
   return getImportTask(projectKey, taskId);
 }
 
@@ -127,12 +142,14 @@ async function processImportCase(
   projectKey: string,
   taskId: string,
   item: ImportTaskCase,
-  runner: AgentRunner
+  runner: AgentRunner,
+  signal?: AbortSignal
 ) {
   const workDir = getImportCaseWorkPath(projectKey, taskId, item.id);
   const outputDir = getImportCaseOutputPath(projectKey, taskId, item.id);
   const diagnosticsDir = getImportCaseDiagnosticsPath(projectKey, taskId, item.id);
   const stages: ImportCaseStatus[] = [];
+  const explore = await readExploreContext(projectKey);
 
   await ensureDir(workDir);
   await ensureDir(outputDir);
@@ -146,7 +163,11 @@ async function processImportCase(
     item,
     workDir,
     outputDir,
-    diagnosticsDir
+    diagnosticsDir,
+    signal,
+    timeoutMs: getAppConfig().agent.timeoutMs,
+    baseUrl: explore.baseUrl,
+    storageStatePath: explore.storageStatePath
   });
 
   // 失败结果带 message；成功/歧义带 intent。用 in 收窄，避免联合 kind 无法互斥。
@@ -158,6 +179,7 @@ async function processImportCase(
   } else {
     const intent = assertReviewIntent(result.intent);
     await writeImportCaseIntent(projectKey, taskId, item.id, intent);
+    await writeExplorationIfPresent(projectKey, taskId, item.id, result.exploration);
     await recordCaseStage(projectKey, taskId, item, 'pending-review', stages);
   }
 
@@ -209,6 +231,36 @@ function assertReviewIntent(intent: TestIntent): TestIntent {
  */
 function getResultMessage(result: AgentRunResult) {
   return 'message' in result ? result.message : result.kind;
+}
+
+/**
+ * 读取项目默认环境地址和已保存登录态路径，供 Agent 注入；不把 storageState 复制进任务目录。
+ */
+async function readExploreContext(projectKey: string) {
+  const project = await getProject(projectKey);
+  const env = project.envs.find((item) => item.key === project.defaultEnv) ?? project.envs[0];
+  const storageStatePath = env ? getProjectAuthPath(projectKey, env.key) : '';
+
+  return {
+    baseUrl: env?.baseUrl,
+    storageStatePath: storageStatePath && existsSync(storageStatePath) ? storageStatePath : undefined
+  };
+}
+
+/**
+ * 把单次探索定位器写入任务 output，确认前不进入正式用例。
+ */
+async function writeExplorationIfPresent(
+  projectKey: string,
+  taskId: string,
+  caseId: string,
+  exploration: ExplorationResult | undefined
+) {
+  if (!exploration) {
+    return;
+  }
+
+  await writeImportCaseExploration(projectKey, taskId, caseId, exploration);
 }
 
 /**

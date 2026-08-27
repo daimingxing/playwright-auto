@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../../server/src/app';
 import { readJson } from '../../server/src/lib/fs';
 import type { AgentRunInput, AgentRunResult, AgentRunner } from '../../server/src/services/import/agent-runner';
-import { toTestIntent } from '../../server/src/services/import/agent-runner';
+import { createFakeAgentRunner, toTestIntent } from '../../server/src/services/import/agent-runner';
 import { getProjectRunFiles } from '../../server/src/services/run/runner';
 import type { CaseMeta, ImportTaskCase, ImportTaskDetail, TestIntent } from '../../shared/types';
 
@@ -228,7 +228,7 @@ async function listPublishedCaseFiles(dataRoot: string) {
  * 创建带默认项目的应用，可注入 AgentRunner。
  */
 async function createProjectApp(agentRunner?: AgentRunner) {
-  const app = createApp(agentRunner ? { agentRunner } : undefined);
+  const app = createApp({ agentRunner: agentRunner ?? createFakeAgentRunner() });
   await request(app).post('/api/projects').send({
     name: 'CRM 系统',
     key: 'crm',

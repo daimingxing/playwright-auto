@@ -94,6 +94,15 @@ npm run dev
       "action": 2000,
       "wait": 1000
     }
+  },
+  "agent": {
+    "protocol": "chat-completions",
+    "provider": "corp",
+    "model": "test-agent",
+    "baseUrl": "",
+    "opencodePath": "",
+    "playwrightMcpPath": "",
+    "timeoutMs": 180000
   }
 }
 ```
@@ -110,7 +119,12 @@ npm run dev
 - `steps.timeouts.navigation`：生成、运行和实测步骤中打开页面动作的默认等待毫秒数，不用于平台自身打开业务 URL。
 - `steps.timeouts.action`：手动新增点击、输入、选择等操作步骤，和录制导入操作步骤的默认等待毫秒数。
 - `steps.timeouts.wait`：手动新增等待步骤的默认等待毫秒数。
-同名环境变量仍可临时覆盖或扩展配置文件：`PORT`、`DATA_ROOT`、`VITE_API_BASE`、`PLAYWRIGHT_AUTO_CORS_ORIGINS`、`PLAYWRIGHT_AUTO_HEADLESS_WORKERS`、`PLAYWRIGHT_AUTO_HEADED_WORKERS`、`PLAYWRIGHT_AUTO_MAX_WORKERS`。`PLAYWRIGHT_AUTO_CORS_ORIGINS` 使用英文逗号分隔多个来源，例如 `https://tool.example,http://localhost:5174`。
+- `agent.protocol`：模型协议，`chat-completions` 或 `responses`。
+- `agent.provider` / `agent.model`：OpenCode Provider 与模型名。
+- `agent.baseUrl`：模型服务地址，也可用 `AI_BASE_URL`；`AI_API_KEY` 只走环境变量。
+- `agent.opencodePath` / `agent.playwrightMcpPath`：OpenCode 与官方 Playwright MCP 的本机路径。
+- `agent.timeoutMs`：单次页面探索的总超时。
+同名环境变量仍可临时覆盖或扩展配置文件：`PORT`、`DATA_ROOT`、`VITE_API_BASE`、`PLAYWRIGHT_AUTO_CORS_ORIGINS`、`PLAYWRIGHT_AUTO_HEADLESS_WORKERS`、`PLAYWRIGHT_AUTO_HEADED_WORKERS`、`PLAYWRIGHT_AUTO_MAX_WORKERS`、`PLAYWRIGHT_AUTO_AGENT_PROTOCOL`、`OPENCODE_BIN`、`PLAYWRIGHT_MCP_CLI`。`PLAYWRIGHT_AUTO_CORS_ORIGINS` 使用英文逗号分隔多个来源，例如 `https://tool.example,http://localhost:5174`。
 
 ## 安全边界
 
@@ -134,7 +148,7 @@ npm run dev
 - 录制导入：通过 Playwright codegen 录制操作，并把录制步骤插入到当前选中步骤后方；未选中步骤时追加到末尾
 - 登录态：在用例管理页或运行中心维护项目环境对应的 storageState，编辑页实测检查和运行测试会复用；不需要登录的项目可以直接运行
 - 运行管理：按项目运行测试，查看运行状态、报告地址并导出报告
-- AI 导入：在项目中上传「用例」「步骤」双表 Excel，校验后创建导入任务；打开任务详情后由 Fake Agent 生成可审阅的 TestIntent。用户可以确认或单条重试；确认不会发布正式用例。只有显式发布才会把意图转为 Action IR，写入 `case.json` 并生成 `case.spec.ts`，发布后的用例进入运行中心。服务中断后可通过恢复接口从检查点继续，已成功项不会重做。相同内容的上传文件在项目资产库中只保存一份。
+- AI 导入：在项目中上传「用例」「步骤」双表 Excel，校验后创建导入任务；打开任务详情后由 OpenCode 结合官方 Playwright MCP 做单次页面探索，生成可审阅的 TestIntent。测试可注入 Fake AgentRunner。用户可以确认或单条重试；确认不会发布正式用例。只有显式发布才会把意图转为 Action IR，写入 `case.json` 并生成 `case.spec.ts`，发布后的用例进入运行中心。服务中断后可通过恢复接口从检查点继续，已成功项不会重做。相同内容的上传文件在项目资产库中只保存一份。
 
 ## 数据目录
 
@@ -208,7 +222,7 @@ data/projects/<projectKey>/auth/default.storageState.json
 
 文件缺少工作表、缺少列或出现重复列时，整批导入会被阻断，并返回工作表、行号和原因。单个用例内容错误只影响该用例，其他有效用例仍会写入任务。成功后可在任务详情查看解析结果，并对已解析用例生成可审阅的测试意图；确认只把该条标为可发布，不会写入正式 `case.json` 或 `case.spec.ts`。发布会校验 Action IR，拒绝未解决歧义和未验证定位器，通过后写入正式用例并生成测试代码。
 
-相同内容的 Excel 会登记到项目资产库并只存一份物理文件，但仍会创建新的导入任务，不会因为文件哈希相同而跳过上传。任务执行过程中逐项写入原子检查点；`POST /api/projects/<projectKey>/imports/<taskId>/resume` 会跳过已成功项、补写未完成项，且不会重新解析 Excel。`POST /api/projects/<projectKey>/imports/<taskId>/review` 对已解析用例生成 TestIntent。`POST /api/projects/<projectKey>/imports/<taskId>/cases/<caseId>/confirm` 确认单条意图；`POST /api/projects/<projectKey>/imports/<taskId>/cases/<caseId>/retry` 只重试目标条；`POST /api/projects/<projectKey>/imports/<taskId>/cases/<caseId>/publish` 显式发布正式用例。`POST /api/projects/<projectKey>/imports/<taskId>/cleanup` 只删除该任务的工作、输出和诊断临时资料，已确认意图保留在 `cases/<itemId>/intent.json`。
+相同内容的 Excel 会登记到项目资产库并只存一份物理文件，但仍会创建新的导入任务，不会因为文件哈希相同而跳过上传。任务执行过程中逐项写入原子检查点；`POST /api/projects/<projectKey>/imports/<taskId>/resume` 会跳过已成功项、补写未完成项，且不会重新解析 Excel。`POST /api/projects/<projectKey>/imports/<taskId>/review` 对已解析用例生成 TestIntent。`POST /api/projects/<projectKey>/imports/<taskId>/cases/<caseId>/confirm` 确认单条意图；`POST /api/projects/<projectKey>/imports/<taskId>/cases/<caseId>/retry` 只重试目标条；`POST /api/projects/<projectKey>/imports/<taskId>/cases/<caseId>/publish` 显式发布正式用例。`POST /api/projects/<projectKey>/imports/<taskId>/cleanup` 只删除该任务的工作、输出和诊断临时资料，已确认意图和探索定位器保留在 `cases/<itemId>/intent.json` 与 `exploration.json`。
 
 导入任务保存在：
 
@@ -224,10 +238,12 @@ data/projects/<projectKey>/imports/<taskId>/
     <itemId>/
   output/
     <itemId>/intent.json
+    <itemId>/exploration.json
   diagnostics/
     <itemId>/result.json
   cases/<itemId>/status.json
   cases/<itemId>/intent.json
+  cases/<itemId>/exploration.json
 ```
 
 测试资产保存在：

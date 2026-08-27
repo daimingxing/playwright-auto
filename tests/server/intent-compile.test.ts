@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { compileIntentToActions } from '../../server/src/services/import/intent-compile';
+import { createFakeExplorationLocators } from '../../server/src/services/import/verified-locator';
 import type { ImportSourceRow, IntentStep, TestIntent } from '../../shared/types';
 
 describe('Intent 到 Action IR', () => {
@@ -16,7 +17,7 @@ describe('Intent 到 Action IR', () => {
       ]
     });
 
-    const result = compileIntentToActions(intent);
+    const result = compileIntentToActions(intent, createFakeExplorationLocators(intent.steps));
 
     expect(result.ok).toBe(true);
     if (!result.ok) {
@@ -87,19 +88,19 @@ describe('Intent 到 Action IR', () => {
 
     expect(compileIntentToActions(duplicate)).toMatchObject({
       ok: false,
-      issues: [expect.objectContaining({ code: 'unstable-id' })]
+      issues: expect.arrayContaining([expect.objectContaining({ code: 'unstable-id' })])
     });
     expect(compileIntentToActions(missingSource)).toMatchObject({
       ok: false,
-      issues: [expect.objectContaining({ code: 'missing-source-ref' })]
+      issues: expect.arrayContaining([expect.objectContaining({ code: 'missing-source-ref' })])
     });
     expect(compileIntentToActions(unverified)).toMatchObject({
       ok: false,
-      issues: [expect.objectContaining({ code: 'unverified-locator' })]
+      issues: expect.arrayContaining([expect.objectContaining({ code: 'unverified-locator' })])
     });
-    expect(compileIntentToActions(missingValue)).toMatchObject({
+    expect(compileIntentToActions(missingValue, createFakeExplorationLocators(missingValue.steps))).toMatchObject({
       ok: false,
-      issues: [expect.objectContaining({ code: 'missing-param' })]
+      issues: expect.arrayContaining([expect.objectContaining({ code: 'missing-param' })])
     });
   });
 
@@ -112,6 +113,21 @@ describe('Intent 到 Action IR', () => {
     }
 
     expect(result.issues[0]?.code).toBe('empty-steps');
+  });
+
+  it('有目标文本但没有探索定位器时不能用启发式发布', () => {
+    const intent = createIntent({
+      steps: [createStep('stp-1', '点击', '提交')]
+    });
+
+    const result = compileIntentToActions(intent);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+
+    expect(result.issues[0]?.code).toBe('unverified-locator');
   });
 });
 
