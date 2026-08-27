@@ -5,6 +5,7 @@ import { badRequest } from '../lib/http-error';
 import type { AgentRunner } from '../services/import/agent-runner';
 import { createFakeAgentRunner } from '../services/import/agent-runner';
 import { confirmImportCase, retryImportCase, reviewImportTask } from '../services/import/import-review';
+import { publishImportCase } from '../services/import/import-publish';
 
 interface ProjectParams {
   projectKey: string;
@@ -96,6 +97,14 @@ importsRouter.post<ImportCaseParams>('/:taskId/cases/:caseId/confirm', async (re
 importsRouter.post<ImportCaseParams>('/:taskId/cases/:caseId/retry', async (req, res, next) => {
   try {
     res.json(await retryImportCase(req.params.projectKey, req.params.taskId, req.params.caseId, getAgentRunner(req)));
+  } catch (error) {
+    next(error);
+  }
+});
+
+importsRouter.post<ImportCaseParams>('/:taskId/cases/:caseId/publish', async (req, res, next) => {
+  try {
+    res.json(await publishImportCase(req.params.projectKey, req.params.taskId, req.params.caseId));
   } catch (error) {
     next(error);
   }

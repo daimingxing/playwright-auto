@@ -56,6 +56,7 @@ interface ImportCaseStatusFile {
   errors: ImportTaskCase['errors'];
   checkpointedAt: string;
   failure?: ImportCaseFailure;
+  publishedCaseKey?: string;
 }
 
 const IMPORT_TEMP_DIRS = ['work', 'output', 'diagnostics'] as const;
@@ -348,8 +349,12 @@ async function writeCaseCheckpoint(
   projectKey: string,
   taskId: string,
   item: ImportTaskCase,
-  failure?: ImportCaseFailure
+  extra?: { failure?: ImportCaseFailure; publishedCaseKey?: string }
 ) {
+  const statusPath = join(getImportCasePath(projectKey, taskId, item.id), 'status.json');
+  const previous = existsSync(statusPath) ? await readJson<ImportCaseStatusFile>(statusPath) : undefined;
+  const failure = extra?.failure ?? previous?.failure;
+  const publishedCaseKey = extra?.publishedCaseKey ?? item.publishedCaseKey ?? previous?.publishedCaseKey;
   const status: ImportCaseStatusFile = {
     id: item.id,
     caseNumber: item.caseNumber,
@@ -357,9 +362,10 @@ async function writeCaseCheckpoint(
     status: item.status,
     errors: item.errors,
     checkpointedAt: new Date().toISOString(),
-    ...(failure ? { failure } : {})
+    ...(failure ? { failure } : {}),
+    ...(publishedCaseKey ? { publishedCaseKey } : {})
   };
-  await writeJson(join(getImportCasePath(projectKey, taskId, item.id), 'status.json'), status);
+  await writeJson(statusPath, status);
 }
 
 /**
@@ -379,6 +385,7 @@ async function mergeCaseStatus(projectKey: string, taskId: string, item: ImportT
     status: status.status,
     errors: status.errors,
     ...(status.failure ? { failure: status.failure } : {}),
+    ...(status.publishedCaseKey ? { publishedCaseKey: status.publishedCaseKey } : {}),
     ...(intent ? { intent } : {})
   };
 }
@@ -398,14 +405,15 @@ export async function updateImportCaseStatus(
   taskId: string,
   item: ImportTaskCase,
   status: ImportCaseStatus,
-  extra?: { failure?: ImportCaseFailure }
+  extra?: { failure?: ImportCaseFailure; publishedCaseKey?: string }
 ) {
   const next: ImportTaskCase = {
     ...item,
     status,
-    failure: extra?.failure
+    failure: extra?.failure,
+    publishedCaseKey: extra?.publishedCaseKey ?? item.publishedCaseKey
   };
-  await writeCaseCheckpoint(projectKey, taskId, next, extra?.failure);
+  await writeCaseCheckpoint(projectKey, taskId, next, extra);
   const checkpoint = await readImportCheckpoint(projectKey, taskId);
   const items = [...checkpoint.items];
   upsertCheckpointItem(items, { id: item.id, status });
@@ -429,18 +437,37 @@ export async function writeImportCaseIntent(
 }
 
 /**
- * 读取单条用例的候选 TestIntent；缺失时返回空。
+ * 把已确认意图写到任务 cases 目录，cleanup 不会删除该位置。
+ */
+export async function persistImportCaseIntent(
+  projectKey: string,
+  taskId: string,
+  caseId: string,
+  intent: TestIntent
+) {
+  await writeJson(join(getImportCasePath(projectKey, taskId, caseId), 'intent.json'), intent);
+}
+
+/**
+ * 读取单条用例的 TestIntent。优先已确认落盘，其次候选 output。
  */
 export async function readImportCaseIntent(projectKey: string, taskId: string, caseId: string) {
-  try {
-    return await readJson<TestIntent>(join(getImportCaseOutputPath(projectKey, taskId, caseId), 'intent.json'));
-  } catch (error) {
-    if (isMissingFile(error)) {
-      return null;
-    }
+  const paths = [
+    join(getImportCasePath(projectKey, taskId, caseId), 'intent.json'),
+    join(getImportCaseOutputPath(projectKey, taskId, caseId), 'intent.json')
+  ];
 
-    throw error;
+  for (const path of paths) {
+    try {
+      return await readJson<TestIntent>(path);
+    } catch (error) {
+      if (!isMissingFile(error)) {
+        throw error;
+      }
+    }
   }
+
+  return null;
 }
 
 /**

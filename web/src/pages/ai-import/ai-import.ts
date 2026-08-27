@@ -13,6 +13,7 @@ const caseStatusMap: Record<ImportCaseStatus, { label: string; type: 'success' |
   generating: { label: '生成中', type: 'warning' },
   'pending-review': { label: '待确认', type: 'warning' },
   publishable: { label: '可发布', type: 'success' },
+  published: { label: '已发布', type: 'success' },
   failed: { label: '失败', type: 'danger' }
 };
 
@@ -66,10 +67,17 @@ export function canConfirmImportCase(status: ImportCaseStatus) {
 }
 
 /**
- * 判断用例是否可以单条重试。已确认和解析失败的条目不能重试。
+ * 判断用例是否可以单条重试。已确认、已发布和解析失败的条目不能重试。
  */
 export function canRetryImportCase(status: ImportCaseStatus) {
-  return status !== 'publishable' && status !== 'parse-failed' && status !== 'parsed';
+  return status !== 'publishable' && status !== 'published' && status !== 'parse-failed' && status !== 'parsed';
+}
+
+/**
+ * 判断用例是否可以显式发布为正式用例。
+ */
+export function canPublishImportCase(status: ImportCaseStatus) {
+  return status === 'publishable';
 }
 
 /**

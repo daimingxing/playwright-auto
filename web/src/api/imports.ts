@@ -65,3 +65,13 @@ export function retryImportCase(projectKey: string, taskId: string, caseId: stri
     { method: 'POST' }
   );
 }
+
+/**
+ * 显式发布一条已确认用例，写入正式 case.json 并生成 case.spec.ts。
+ */
+export function publishImportCase(projectKey: string, taskId: string, caseId: string) {
+  return requestJson<ImportTaskDetail>(
+    `/api/projects/${projectKey}/imports/${taskId}/cases/${caseId}/publish`,
+    { method: 'POST' }
+  );
+}

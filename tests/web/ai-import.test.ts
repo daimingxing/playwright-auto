@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   canConfirmImportCase,
+  canPublishImportCase,
   canRetryImportCase,
   formatImportCaseStatus,
   formatImportSummary,
@@ -39,12 +40,16 @@ describe('AI 导入展示文案', () => {
     expect(formatImportCaseStatus('generating')).toEqual({ label: '生成中', type: 'warning' });
     expect(formatImportCaseStatus('pending-review')).toEqual({ label: '待确认', type: 'warning' });
     expect(formatImportCaseStatus('publishable')).toEqual({ label: '可发布', type: 'success' });
+    expect(formatImportCaseStatus('published')).toEqual({ label: '已发布', type: 'success' });
     expect(formatImportCaseStatus('failed')).toEqual({ label: '失败', type: 'danger' });
     expect(canConfirmImportCase('pending-review')).toBe(true);
     expect(canConfirmImportCase('publishable')).toBe(false);
     expect(canRetryImportCase('failed')).toBe(true);
     expect(canRetryImportCase('publishable')).toBe(false);
+    expect(canRetryImportCase('published')).toBe(false);
     expect(canRetryImportCase('parse-failed')).toBe(false);
+    expect(canPublishImportCase('publishable')).toBe(true);
+    expect(canPublishImportCase('published')).toBe(false);
     expect(formatSourceRef({ sheet: '步骤', row: 3, caseNumber: 'TC-001', cells: {} })).toBe(
       '「步骤」第 3 行 · TC-001'
     );

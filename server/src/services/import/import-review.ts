@@ -5,6 +5,7 @@ import { badRequest, notFound } from '../../lib/http-error';
 import {
   getImportParseSnapshot,
   getImportTask,
+  persistImportCaseIntent,
   updateImportCaseStatus,
   writeImportCaseIntent
 } from '../../lib/import-store';
@@ -17,7 +18,7 @@ import type { AgentRunner, AgentRunResult } from './agent-runner';
 import { isIntentActionType } from './agent-runner';
 
 const REVIEW_ELIGIBLE: ImportCaseStatus[] = ['parsed', 'exploring', 'generating'];
-const RETRY_BLOCKED: ImportCaseStatus[] = ['publishable', 'parse-failed'];
+const RETRY_BLOCKED: ImportCaseStatus[] = ['publishable', 'published', 'parse-failed'];
 
 /**
  * 对已解析且尚未确认的用例运行 Agent，生成可审阅 TestIntent。
@@ -69,6 +70,7 @@ export async function confirmImportCase(
     throw badRequest('缺少可审阅的测试意图');
   }
 
+  await persistImportCaseIntent(projectKey, taskId, item.id, item.intent);
   await updateImportCaseStatus(projectKey, taskId, item, 'publishable');
   return getImportTask(projectKey, taskId);
 }
@@ -85,7 +87,7 @@ export async function retryImportCase(
   const { item, parsed } = await getImportCaseContext(projectKey, taskId, caseId);
 
   if (RETRY_BLOCKED.includes(item.status)) {
-    throw badRequest(item.status === 'publishable' ? '已确认的用例不能重试' : '解析失败的用例不能重试');
+    throw badRequest(retryBlockedMessage(item.status));
   }
 
   await processImportCase(projectKey, taskId, parsed, runner);
@@ -207,4 +209,19 @@ function assertReviewIntent(intent: TestIntent): TestIntent {
  */
 function getResultMessage(result: AgentRunResult) {
   return 'message' in result ? result.message : result.kind;
+}
+
+/**
+ * 已确认或已发布、以及解析失败的条目不能重试。
+ */
+function retryBlockedMessage(status: ImportCaseStatus) {
+  if (status === 'parse-failed') {
+    return '解析失败的用例不能重试';
+  }
+
+  if (status === 'published') {
+    return '已发布的用例不能重试';
+  }
+
+  return '已确认的用例不能重试';
 }

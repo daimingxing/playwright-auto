@@ -9,6 +9,7 @@ import { formatDateTime } from "../../utils/time";
 import { useImportTaskReview } from "./ai-import-composables";
 import {
   canConfirmImportCase,
+  canPublishImportCase,
   canRetryImportCase,
   formatImportCaseStatus,
   formatImportSummary,
@@ -21,7 +22,7 @@ const route = useRoute();
 const router = useRouter();
 const projectKey = String(route.params.projectKey);
 const taskId = String(route.params.taskId);
-const { task, cases, reviewing, actingId, loadTask, confirmCase, retryCase } = useImportTaskReview(
+const { task, cases, reviewing, actingId, loadTask, confirmCase, retryCase, publishCase } = useImportTaskReview(
   projectKey,
   taskId
 );
@@ -52,6 +53,18 @@ async function submitRetry(item: ImportTaskCase) {
   try {
     await retryCase(item);
     ElMessage.success("已重新生成该用例");
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error));
+  }
+}
+
+/**
+ * 发布当前用例并提示结果。
+ */
+async function submitPublish(item: ImportTaskCase) {
+  try {
+    await publishCase(item);
+    ElMessage.success("已发布正式用例");
   } catch (error) {
     ElMessage.error(getErrorMessage(error));
   }
@@ -164,6 +177,22 @@ onMounted(async () => {
                     >
                       重试
                     </el-button>
+                    <el-button
+                      v-if="canPublishImportCase(row.status)"
+                      type="success"
+                      size="small"
+                      :loading="actingId === row.id"
+                      @click="submitPublish(row)"
+                    >
+                      发布
+                    </el-button>
+                    <el-button
+                      v-if="row.publishedCaseKey"
+                      size="small"
+                      @click="router.push(`/projects/${projectKey}/cases/${row.publishedCaseKey}`)"
+                    >
+                      查看用例
+                    </el-button>
                   </div>
                 </div>
               </template>
@@ -190,7 +219,7 @@ onMounted(async () => {
                 <span v-else>—</span>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="160">
+            <el-table-column label="操作" width="220">
               <template #default="{ row }">
                 <el-button
                   v-if="canConfirmImportCase(row.status)"
@@ -208,6 +237,22 @@ onMounted(async () => {
                   @click="submitRetry(row)"
                 >
                   重试
+                </el-button>
+                <el-button
+                  v-if="canPublishImportCase(row.status)"
+                  type="success"
+                  size="small"
+                  :loading="actingId === row.id"
+                  @click="submitPublish(row)"
+                >
+                  发布
+                </el-button>
+                <el-button
+                  v-if="row.publishedCaseKey"
+                  size="small"
+                  @click="router.push(`/projects/${projectKey}/cases/${row.publishedCaseKey}`)"
+                >
+                  查看
                 </el-button>
               </template>
             </el-table-column>

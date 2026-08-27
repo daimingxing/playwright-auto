@@ -60,6 +60,10 @@ export interface ProjectMeta {
   updatedAt: string;
 }
 
+/**
+ * 用例步骤，也是发布后保存在 case.json 中的 Action IR。
+ * 由封闭 Playwright 原语、结构化定位器和可观察等待条件组成。
+ */
 export interface CaseStep {
   id: string;
   type: StepType;
@@ -310,6 +314,7 @@ export type ImportActionType = (typeof importActionTypes)[number];
  * 导入用例阶段。`parsed` / `parse-failed` 来自 Excel 解析；其后为 Agent 审阅阶段。
  * `pending-review`：已有可审阅 TestIntent，等待确认。
  * `publishable`：已确认，仍未写入正式用例。
+ * `published`：已显式发布，正式 case.json 已写入。
  */
 export type ImportCaseStatus =
   | 'parsed'
@@ -318,6 +323,7 @@ export type ImportCaseStatus =
   | 'generating'
   | 'pending-review'
   | 'publishable'
+  | 'published'
   | 'failed';
 
 /**
@@ -473,6 +479,7 @@ export interface ImportTaskCase {
   errors: ImportParseError[];
   intent?: TestIntent;
   failure?: ImportCaseFailure;
+  publishedCaseKey?: string;
 }
 
 export type ImportParsedCase = Omit<ImportTaskCase, 'id'>;

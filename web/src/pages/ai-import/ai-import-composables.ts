@@ -1,7 +1,7 @@
 import { computed, ref } from 'vue';
 import type { ImportTaskCase, ImportTaskDetail } from '../../../../shared/types';
-import { confirmImportCase, getImportTask, retryImportCase, reviewImportTask } from '../../api/imports';
-import { canConfirmImportCase, canRetryImportCase, hasParsedCases } from './ai-import';
+import { confirmImportCase, getImportTask, publishImportCase, retryImportCase, reviewImportTask } from '../../api/imports';
+import { canConfirmImportCase, canPublishImportCase, canRetryImportCase, hasParsedCases } from './ai-import';
 
 /**
  * 管理导入任务详情的加载、审阅、确认和单条重试。
@@ -66,6 +66,23 @@ export function useImportTaskReview(projectKey: string, taskId: string) {
     }
   }
 
+  /**
+   * 显式发布一条已确认用例。
+   */
+  async function publishCase(item: ImportTaskCase) {
+    if (!canPublishImportCase(item.status)) {
+      return;
+    }
+
+    actingId.value = item.id;
+
+    try {
+      task.value = await publishImportCase(projectKey, taskId, item.id);
+    } finally {
+      actingId.value = '';
+    }
+  }
+
   return {
     task,
     cases,
@@ -74,6 +91,7 @@ export function useImportTaskReview(projectKey: string, taskId: string) {
     actingId,
     loadTask,
     confirmCase,
-    retryCase
+    retryCase,
+    publishCase
   };
 }

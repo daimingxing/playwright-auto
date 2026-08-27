@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { CaseMeta, CaseStatus, CaseStep } from '../../../shared/types';
-import { ensureDir, movePath, readJson, writeJson } from './fs';
+import { ensureDir, movePath, readJson, writeFileAtomic, writeJson } from './fs';
 import { getCasePath, getProjectPath, getTrashPath } from './path';
 import { expirePracticalReviewIfNeeded, resolvePracticalReviewView } from './practical-review-store';
 import { createCaseSchema } from './schema';
@@ -35,6 +35,50 @@ export async function createCase(projectKey: string, input: CreateCaseInput) {
 
   await ensureDir(getCasePath(projectKey, caseKey));
   await writeJson(join(getCasePath(projectKey, caseKey), 'case.json'), item);
+
+  return item;
+}
+
+/**
+ * 把已通过校验的步骤写入正式用例目录，并生成 case.spec.ts。
+ * 发布入口使用；写入前先生成 spec，失败时删除刚创建的目录。
+ */
+export async function createOfficialCase(
+  projectKey: string,
+  input: { name: string; startPath: string; steps: CaseStep[] }
+) {
+  const name = input.name.trim();
+  const startPath = input.startPath.trim() || '/';
+
+  if (!name) {
+    throw badRequest('用例名称不能为空');
+  }
+
+  const caseKey = await getNextCaseKey(projectKey);
+  const now = new Date().toISOString();
+  const item: CaseMeta = {
+    name,
+    key: caseKey,
+    status: 'active',
+    startPath,
+    steps: input.steps,
+    createdAt: now,
+    updatedAt: now
+  };
+  item.review = reviewCase(item);
+  assertReviewPassedForSpec(item, '基础检查不通过，不能发布正式用例');
+
+  const spec = generateSpec(item);
+  const dir = getCasePath(projectKey, caseKey);
+  await ensureDir(dir);
+
+  try {
+    await writeJson(join(dir, 'case.json'), item);
+    await writeFileAtomic(join(dir, 'case.spec.ts'), spec);
+  } catch (error) {
+    await rm(dir, { recursive: true, force: true });
+    throw error;
+  }
 
   return item;
 }

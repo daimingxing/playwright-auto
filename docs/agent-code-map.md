@@ -37,6 +37,7 @@
 - AI 导入任务与 Excel 解析：`web/src/api/imports.ts`、`web/src/pages/ai-import/`、`server/src/routes/imports.ts`、`server/src/services/import/`、`server/src/lib/import-store.ts`
 - 导入任务检查点、恢复与清理：`server/src/lib/import-store.ts`、`server/src/routes/imports.ts`
 - TestIntent 审阅与 Fake AgentRunner：`shared/types.ts`、`server/src/services/import/agent-runner.ts`、`server/src/services/import/import-review.ts`
+- Action IR 校验与显式发布：`server/src/services/import/intent-compile.ts`、`server/src/services/import/import-publish.ts`
 - 项目测试资产库：`server/src/lib/asset-store.ts`
 - 本地应用配置和 CORS：`playwright-auto.config.json.example`、`server/src/lib/app-config.ts`
 - 浏览器依赖：`server/src/services/playwright/`、`scripts/install-browsers.mjs`
@@ -48,10 +49,10 @@
 - 前端通过 `web/src/api/` 调用 `/api/`，Vite 在 `web/vite.config.ts` 将 `/api` 转发到本地服务。
 - 后端路由由 `server/src/app.ts` 挂载；路由层处理 HTTP 入参和响应，业务逻辑放在 `server/src/services/` 或 `server/src/lib/`。
 - `data/projects/<projectKey>/` 保存项目数据；`case.json` 是用例源数据，`case.spec.ts` 由它生成。
-- AI 导入任务保存在 `data/projects/<projectKey>/imports/<taskId>/`，解析结果和 TestIntent 属于任务临时数据，确认后也不写入正式 `case.json`。
+- AI 导入任务保存在 `data/projects/<projectKey>/imports/<taskId>/`，解析结果属于任务临时数据；确认后的 TestIntent 保存在任务 `cases/<itemId>/intent.json`。只有显式发布才写入正式 `case.json`。
 - 测试资产保存在 `data/projects/<projectKey>/assets/<sha256>/`，按内容去重；导入任务不得因相同文件哈希而跳过创建。
 - 导入任务恢复以 `checkpoint.json` 和逐用例 `status.json` 为准，不重新解析 Excel。
-- Agent 过程资料写入该任务的 `work/`、`output/`、`diagnostics/`；清理只删除这些目录，不影响输入快照、检查点、正式用例或其他项目。
+- Agent 过程资料写入该任务的 `work/`、`output/`、`diagnostics/`；清理只删除这些目录，不影响已确认意图、输入快照、检查点、正式用例或其他项目。
 - AgentRunner 可替换；当前导入审阅使用 Fake，不调用 OpenCode 或 Playwright MCP。
 - 只有 `active` 且基础检查通过的用例能进入运行中心。
 - `browser.openTimeoutMs` 控制平台打开业务 URL；`steps.timeouts` 控制生成、运行和实测等待。
