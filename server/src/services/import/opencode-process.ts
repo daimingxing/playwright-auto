@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
 export interface OpenCodeJsonlEvent {
@@ -67,9 +67,11 @@ export async function runOpenCodeProcess(input: RunOpenCodeProcessInput): Promis
 
   child.stdout?.on('data', (chunk: Buffer) => {
     stdoutChunks.push(chunk);
+    void appendFile(input.stdoutPath, chunk).catch(() => undefined);
   });
   child.stderr?.on('data', (chunk: Buffer) => {
     stderrChunks.push(chunk);
+    void appendFile(input.stderrPath, chunk).catch(() => undefined);
   });
 
   if (child.stdin) {

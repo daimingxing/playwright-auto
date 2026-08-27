@@ -10,6 +10,7 @@ import {
   type IntentStep,
   type TestIntent
 } from '../../../../shared/types';
+import { buildStartUrl } from '../../../../shared/url';
 import { writeJson } from '../../lib/fs';
 import { createFakeExplorationLocators } from './verified-locator';
 
@@ -276,11 +277,7 @@ function padNumber(value: number) {
  * 拼接 Fake 探索用的页面地址，仅写入过程资料。
  */
 function joinFakeUrl(baseUrl: string, startPath: string) {
-  try {
-    return new URL(startPath || '/', baseUrl).toString();
-  } catch {
-    return `${baseUrl}${startPath}`;
-  }
+  return buildStartUrl(baseUrl, startPath);
 }
 
 /**

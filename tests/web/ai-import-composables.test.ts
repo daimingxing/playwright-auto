@@ -56,6 +56,23 @@ describe('导入任务审阅组合函数', () => {
     expect(mocks.retryImportCase).toHaveBeenCalledWith('crm', confirmed.id, failed.id);
     expect(page.task.value?.cases[0]?.status).toBe('publishable');
     expect(page.task.value?.cases[1]?.status).toBe('pending-review');
+    expect(page.actingId.value).toBe('');
+  });
+
+  it('探索未完成时轮询任务，不把审阅请求一直挂起', async () => {
+    const parsed = makeTask([makeCase('parsed')]);
+    const exploring = makeTask([makeCase('exploring')]);
+    const reviewed = makeTask([makeCase('pending-review')]);
+    mocks.getImportTask.mockResolvedValueOnce(parsed).mockResolvedValue(reviewed);
+    mocks.reviewImportTask.mockResolvedValue(exploring);
+    const page = useImportTaskReview('crm', parsed.id);
+
+    await page.loadTask();
+
+    expect(mocks.reviewImportTask).toHaveBeenCalledTimes(1);
+    expect(mocks.getImportTask).toHaveBeenCalledTimes(2);
+    expect(page.task.value?.cases[0]?.status).toBe('pending-review');
+    expect(page.reviewing.value).toBe(false);
   });
 });
 

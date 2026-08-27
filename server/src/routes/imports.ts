@@ -1,10 +1,10 @@
 import { Router, type Request } from 'express';
 import multer from 'multer';
-import { cleanupImportTask, createImportTask, getImportTask, listImportTasks, resumeImportTask } from '../lib/import-store';
+import { cleanupImportTask, createImportTask, deleteImportTask, getImportTask, listImportTasks, resumeImportTask } from '../lib/import-store';
 import { badRequest } from '../lib/http-error';
 import type { AgentRunner } from '../services/import/agent-runner';
 import { createDefaultAgentRunner } from '../services/import/opencode-runner';
-import { confirmImportCase, retryImportCase, reviewImportTask } from '../services/import/import-review';
+import { confirmImportCase, startRetryImportCase, startReviewImportTask } from '../services/import/import-review';
 import { publishImportCase } from '../services/import/import-publish';
 
 interface ProjectParams {
@@ -78,13 +78,18 @@ importsRouter.post<ImportTaskParams>('/:taskId/cleanup', async (req, res, next) 
   }
 });
 
+importsRouter.delete<ImportTaskParams>('/:taskId', async (req, res, next) => {
+  try {
+    await deleteImportTask(req.params.projectKey, req.params.taskId);
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+});
+
 importsRouter.post<ImportTaskParams>('/:taskId/review', async (req, res, next) => {
   try {
-    res.json(
-      await reviewImportTask(req.params.projectKey, req.params.taskId, getAgentRunner(req), {
-        signal: createAbortSignal(req, res)
-      })
-    );
+    res.json(await startReviewImportTask(req.params.projectKey, req.params.taskId, getAgentRunner(req)));
   } catch (error) {
     next(error);
   }
@@ -101,9 +106,7 @@ importsRouter.post<ImportCaseParams>('/:taskId/cases/:caseId/confirm', async (re
 importsRouter.post<ImportCaseParams>('/:taskId/cases/:caseId/retry', async (req, res, next) => {
   try {
     res.json(
-      await retryImportCase(req.params.projectKey, req.params.taskId, req.params.caseId, getAgentRunner(req), {
-        signal: createAbortSignal(req, res)
-      })
+      await startRetryImportCase(req.params.projectKey, req.params.taskId, req.params.caseId, getAgentRunner(req))
     );
   } catch (error) {
     next(error);
@@ -155,21 +158,6 @@ function toUploadError(error: unknown) {
 function getAgentRunner(req: Pick<Request, 'app'>): AgentRunner {
   const runner = req.app.locals.agentRunner as AgentRunner | undefined;
   return runner ?? createDefaultAgentRunner();
-}
-
-/**
- * 请求断开时取消进行中的探索进程。
- */
-function createAbortSignal(req: { on: (event: 'close', listener: () => void) => void }, res: { writableEnded?: boolean }) {
-  const controller = new AbortController();
-
-  req.on('close', () => {
-    if (!res.writableEnded) {
-      controller.abort();
-    }
-  });
-
-  return controller.signal;
 }
 
 /**

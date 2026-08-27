@@ -25,14 +25,35 @@ export function formatImportCaseStatus(status: ImportCaseStatus) {
 }
 
 /**
- * 把解析错误格式化为带工作表和行号的展示文案。
+ * 把解析错误格式化为带工作表、行号和步骤摘要的展示文案。
  */
 export function formatParseError(error: ImportParseError) {
   const sheet = error.sheet ? `「${error.sheet}」` : '';
   const row = error.row > 0 ? `第 ${error.row} 行` : '';
   const location = `${sheet}${row}`;
+  const subject = formatParseErrorSubject(error.cells);
+  const prefix = [location, subject ? `（${subject}）` : ''].join('');
 
-  return location ? `${location}：${error.reason}` : error.reason;
+  return prefix ? `${prefix}：${error.reason}` : error.reason;
+}
+
+/**
+ * 从原始单元格拼出步骤序号和动作对象，避免把 Excel 行号当成步骤序号。
+ */
+function formatParseErrorSubject(cells: ImportParseError['cells']) {
+  if (!cells) {
+    return '';
+  }
+
+  const order = cells['步骤序号']?.trim();
+  const action = cells['动作类型']?.trim();
+  const target = cells['目标']?.trim();
+  const parts = [
+    order ? `步骤序号 ${order}` : '',
+    action ? (target ? `${action}「${target}」` : action) : ''
+  ];
+
+  return parts.filter(Boolean).join('，');
 }
 
 /**
@@ -40,6 +61,13 @@ export function formatParseError(error: ImportParseError) {
  */
 export function formatImportSummary(task: Pick<ImportTask, 'parsedCount' | 'failedCount'>) {
   return `已解析 ${task.parsedCount} 条，解析失败 ${task.failedCount} 条`;
+}
+
+/**
+ * 生成删除导入任务的确认文案。已发布正式用例不受影响。
+ */
+export function getDeleteImportTaskConfirm(fileName: string) {
+  return `确认删除导入任务「${fileName}」吗？这次导入记录无法恢复，已发布的正式用例不受影响。`;
 }
 
 /**
@@ -70,7 +98,13 @@ export function canConfirmImportCase(status: ImportCaseStatus) {
  * 判断用例是否可以单条重试。已确认、已发布和解析失败的条目不能重试。
  */
 export function canRetryImportCase(status: ImportCaseStatus) {
-  return status !== 'publishable' && status !== 'published' && status !== 'parse-failed' && status !== 'parsed';
+  return (
+    status !== 'publishable' &&
+    status !== 'published' &&
+    status !== 'parse-failed' &&
+    status !== 'parsed' &&
+    !isExploreRunning(status)
+  );
 }
 
 /**
@@ -85,6 +119,31 @@ export function canPublishImportCase(status: ImportCaseStatus) {
  */
 export function hasParsedCases(cases: ImportTaskCase[]) {
   return cases.some((item) => item.status === 'parsed');
+}
+
+/**
+ * 判断用例是否正在页面探索或生成意图。
+ */
+export function isExploreRunning(status: ImportCaseStatus) {
+  return status === 'exploring' || status === 'generating';
+}
+
+/**
+ * 判断任务是否仍需启动或等待页面探索。
+ */
+export function needsImportReview(cases: Array<Pick<ImportTaskCase, 'status'>>) {
+  return cases.some((item) => item.status === 'parsed' || isExploreRunning(item.status));
+}
+
+/**
+ * 把探索等待时间格式化为页面可见说明。
+ */
+export function formatExploreWait(elapsedMs: number) {
+  const totalSeconds = Math.max(0, Math.floor(elapsedMs / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  const clock = minutes > 0 ? `${minutes} 分 ${seconds} 秒` : `${seconds} 秒`;
+  return `正在后台探索页面，已等待 ${clock}。离开本页不影响，完成后可回来查看结果。`;
 }
 
 /**

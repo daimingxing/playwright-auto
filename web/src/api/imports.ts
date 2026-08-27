@@ -75,3 +75,12 @@ export function publishImportCase(projectKey: string, taskId: string, caseId: st
     { method: 'POST' }
   );
 }
+
+/**
+ * 删除整个导入任务。不影响已发布正式用例和项目资产库。
+ */
+export function deleteImportTask(projectKey: string, taskId: string) {
+  return requestJson<void>(`/api/projects/${projectKey}/imports/${taskId}`, {
+    method: 'DELETE'
+  });
+}

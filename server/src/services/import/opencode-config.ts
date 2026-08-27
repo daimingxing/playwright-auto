@@ -218,6 +218,9 @@ export function buildOpenCodeArgs(input: {
 }) {
   return [
     '--pure',
+    '--print-logs',
+    '--log-level',
+    'INFO',
     'run',
     '--format',
     'json',

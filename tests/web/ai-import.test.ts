@@ -7,6 +7,8 @@ import {
   formatImportSummary,
   formatParseError,
   formatSourceRef,
+  formatExploreWait,
+  getDeleteImportTaskConfirm,
   getImportErrors,
   hasParsedCases
 } from '../../web/src/pages/ai-import/ai-import';
@@ -33,6 +35,21 @@ describe('AI 导入展示文案', () => {
         reason: '动作类型必须是：打开页面、填写、选择、点击、检查可见、检查文本'
       })
     ).toBe('「步骤」第 5 行：动作类型必须是：打开页面、填写、选择、点击、检查可见、检查文本');
+    expect(
+      formatParseError({
+        sheet: '步骤',
+        row: 7,
+        caseNumber: 'TC-001',
+        reason: '数据不能为空',
+        cells: {
+          用例编号: 'TC-001',
+          步骤序号: '6',
+          动作类型: '填写',
+          目标: '取样人',
+          数据: ''
+        }
+      })
+    ).toBe('「步骤」第 7 行（步骤序号 6，填写「取样人」）：数据不能为空');
   });
 
   it('展示审阅阶段，并区分确认与重试', () => {
@@ -45,6 +62,8 @@ describe('AI 导入展示文案', () => {
     expect(canConfirmImportCase('pending-review')).toBe(true);
     expect(canConfirmImportCase('publishable')).toBe(false);
     expect(canRetryImportCase('failed')).toBe(true);
+    expect(canRetryImportCase('exploring')).toBe(false);
+    expect(canRetryImportCase('generating')).toBe(false);
     expect(canRetryImportCase('publishable')).toBe(false);
     expect(canRetryImportCase('published')).toBe(false);
     expect(canRetryImportCase('parse-failed')).toBe(false);
@@ -58,6 +77,17 @@ describe('AI 导入展示文案', () => {
 
   it('汇总任务解析条数', () => {
     expect(formatImportSummary({ parsedCount: 2, failedCount: 1 })).toBe('已解析 2 条，解析失败 1 条');
+  });
+
+  it('删除导入任务确认文案说明不影响已发布用例', () => {
+    expect(getDeleteImportTaskConfirm('orders.xlsx')).toBe(
+      '确认删除导入任务「orders.xlsx」吗？这次导入记录无法恢复，已发布的正式用例不受影响。'
+    );
+  });
+
+  it('探索等待文案包含已等待时间', () => {
+    expect(formatExploreWait(5000)).toBe('正在后台探索页面，已等待 5 秒。离开本页不影响，完成后可回来查看结果。');
+    expect(formatExploreWait(125000)).toBe('正在后台探索页面，已等待 2 分 5 秒。离开本页不影响，完成后可回来查看结果。');
   });
 
   it('从接口错误中读取结构错误列表', () => {

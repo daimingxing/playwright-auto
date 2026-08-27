@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { Back } from "@element-plus/icons-vue";
-import { ElMessage } from "element-plus";
+import { Back, Delete } from "@element-plus/icons-vue";
+import { ElMessage, ElMessageBox } from "element-plus";
 import { onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import type { ImportTaskCase } from "../../../../shared/types";
+import { deleteImportTask } from "../../api/imports";
 import { getErrorMessage } from "../../utils/error";
 import { formatDateTime } from "../../utils/time";
 import { useImportTaskReview } from "./ai-import-composables";
@@ -15,14 +16,17 @@ import {
   formatImportSummary,
   formatParseError,
   formatSourceCells,
-  formatSourceRef
+  formatSourceRef,
+  formatExploreWait,
+  getDeleteImportTaskConfirm,
+  isExploreRunning
 } from "./ai-import";
 
 const route = useRoute();
 const router = useRouter();
 const projectKey = String(route.params.projectKey);
 const taskId = String(route.params.taskId);
-const { task, cases, reviewing, actingId, loadTask, confirmCase, retryCase, publishCase } = useImportTaskReview(
+const { task, cases, reviewing, actingId, waitMs, loadTask, confirmCase, retryCase, publishCase } = useImportTaskReview(
   projectKey,
   taskId
 );
@@ -51,8 +55,11 @@ async function submitConfirm(item: ImportTaskCase) {
  */
 async function submitRetry(item: ImportTaskCase) {
   try {
-    await retryCase(item);
-    ElMessage.success("已重新生成该用例");
+    const done = await retryCase(item);
+
+    if (done) {
+      ElMessage.success("已重新生成该用例");
+    }
   } catch (error) {
     ElMessage.error(getErrorMessage(error));
   }
@@ -65,6 +72,35 @@ async function submitPublish(item: ImportTaskCase) {
   try {
     await publishCase(item);
     ElMessage.success("已发布正式用例");
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error));
+  }
+}
+
+/**
+ * 确认后删除当前导入任务并返回任务列表。已发布正式用例不受影响。
+ */
+async function removeTask() {
+  const fileName = task.value?.fileName;
+
+  if (!fileName) {
+    return;
+  }
+
+  const confirmed = await ElMessageBox.confirm(getDeleteImportTaskConfirm(fileName), "删除导入任务", {
+    confirmButtonText: "删除",
+    cancelButtonText: "取消",
+    type: "warning"
+  }).catch(() => false);
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    await deleteImportTask(projectKey, taskId);
+    ElMessage.success("已删除导入任务");
+    await router.push(`/projects/${projectKey}/imports`);
   } catch (error) {
     ElMessage.error(getErrorMessage(error));
   }
@@ -88,6 +124,7 @@ onMounted(async () => {
         </el-button>
         <h2>任务详情</h2>
       </div>
+      <el-button v-if="task" type="danger" plain :icon="Delete" @click="removeTask">删除任务</el-button>
     </div>
 
     <div v-if="task" class="content">
@@ -95,7 +132,7 @@ onMounted(async () => {
         <div>
           <strong>{{ task.fileName }}</strong>
           <span>{{ formatImportSummary(task) }}</span>
-          <span v-if="reviewing">正在生成可审阅的测试意图</span>
+          <span v-if="reviewing">{{ formatExploreWait(waitMs) }}</span>
         </div>
         <span class="time">创建于 {{ formatDateTime(task.createdAt) }}</span>
       </section>
@@ -149,7 +186,7 @@ onMounted(async () => {
                     </el-table>
                   </template>
                   <el-table v-else-if="row.steps.length" :data="row.steps" border size="small" class="step-table">
-                    <el-table-column prop="order" label="序号" width="80" />
+                    <el-table-column prop="order" label="步骤序号" width="90" />
                     <el-table-column prop="action" label="动作类型" width="120" />
                     <el-table-column prop="target" label="目标" min-width="160" />
                     <el-table-column prop="data" label="数据" min-width="140" />
@@ -164,7 +201,7 @@ onMounted(async () => {
                       v-if="canConfirmImportCase(row.status)"
                       type="primary"
                       size="small"
-                      :loading="actingId === row.id"
+                      :loading="actingId === row.id || isExploreRunning(row.status)"
                       @click="submitConfirm(row)"
                     >
                       确认
@@ -172,7 +209,7 @@ onMounted(async () => {
                     <el-button
                       v-if="canRetryImportCase(row.status)"
                       size="small"
-                      :loading="actingId === row.id"
+                      :loading="actingId === row.id || isExploreRunning(row.status)"
                       @click="submitRetry(row)"
                     >
                       重试
@@ -181,7 +218,7 @@ onMounted(async () => {
                       v-if="canPublishImportCase(row.status)"
                       type="success"
                       size="small"
-                      :loading="actingId === row.id"
+                      :loading="actingId === row.id || isExploreRunning(row.status)"
                       @click="submitPublish(row)"
                     >
                       发布
@@ -213,7 +250,8 @@ onMounted(async () => {
             </el-table-column>
             <el-table-column label="说明" min-width="240">
               <template #default="{ row }">
-                <span v-if="row.failure">{{ row.failure.message }}</span>
+                <span v-if="actingId === row.id || isExploreRunning(row.status)">{{ formatExploreWait(waitMs) }}</span>
+                <span v-else-if="row.failure">{{ row.failure.message }}</span>
                 <span v-else-if="row.intent?.pendingItems.length">{{ row.intent.pendingItems[0]?.message }}</span>
                 <span v-else-if="row.errors.length">{{ formatParseError(row.errors[0]) }}</span>
                 <span v-else>—</span>
@@ -276,7 +314,11 @@ onMounted(async () => {
 
 .toolbar {
   flex: 0 0 auto;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
   margin-bottom: 14px;
+  align-items: flex-end;
 }
 
 .toolbar h2 {

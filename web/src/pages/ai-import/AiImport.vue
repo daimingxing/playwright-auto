@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import { Back, Upload } from "@element-plus/icons-vue";
-import { ElMessage } from "element-plus";
+import { Back, Delete, Upload } from "@element-plus/icons-vue";
+import { ElMessage, ElMessageBox } from "element-plus";
 import { onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import type { ImportParseError, ImportTask } from "../../../../shared/types";
-import { createImportTask, listImportTasks } from "../../api/imports";
+import { createImportTask, deleteImportTask, listImportTasks } from "../../api/imports";
 import { getErrorMessage } from "../../utils/error";
 import { formatDateTime } from "../../utils/time";
-import { formatImportSummary, formatParseError, getImportErrors } from "./ai-import";
+import { formatImportSummary, formatParseError, getDeleteImportTaskConfirm, getImportErrors } from "./ai-import";
 
 const route = useRoute();
 const router = useRouter();
@@ -53,6 +53,29 @@ async function submitImport() {
     ElMessage.error(getErrorMessage(error));
   } finally {
     uploading.value = false;
+  }
+}
+
+/**
+ * 确认后删除整次导入任务，不影响已发布正式用例。
+ */
+async function removeTask(task: ImportTask) {
+  const confirmed = await ElMessageBox.confirm(getDeleteImportTaskConfirm(task.fileName), "删除导入任务", {
+    confirmButtonText: "删除",
+    cancelButtonText: "取消",
+    type: "warning"
+  }).catch(() => false);
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    await deleteImportTask(projectKey, task.id);
+    await loadTasks();
+    ElMessage.success("已删除导入任务");
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error));
   }
 }
 
@@ -116,10 +139,13 @@ onMounted(async () => {
                 {{ formatDateTime(row.createdAt) }}
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="140">
+            <el-table-column label="操作" width="220">
               <template #default="{ row }">
                 <el-button size="small" @click="router.push(`/projects/${projectKey}/imports/${row.id}`)">
                   查看详情
+                </el-button>
+                <el-button size="small" type="danger" plain :icon="Delete" @click="removeTask(row)">
+                  删除
                 </el-button>
               </template>
             </el-table-column>

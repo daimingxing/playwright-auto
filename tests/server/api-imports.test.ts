@@ -325,6 +325,42 @@ describe('AI 导入接口', () => {
     expect(res.status).toBe(404);
     expect(res.body.message).toBe('导入任务不存在');
   });
+
+  it('删除导入任务后列表不再出现，已发布用例和资产仍保留', async () => {
+    const app = await createProjectApp();
+    const buffer = await buildValidWorkbook();
+    const first = await request(app).post('/api/projects/crm/imports').attach('file', buffer, 'orders.xlsx');
+    const second = await request(app).post('/api/projects/crm/imports').attach('file', buffer, 'orders-copy.xlsx');
+    const taskId = first.body.id as string;
+    const keptId = second.body.id as string;
+    const caseRes = await request(app).post('/api/projects/crm/cases').send({
+      name: '正式用例',
+      startPath: '/orders'
+    });
+
+    const removed = await request(app).delete(`/api/projects/crm/imports/${taskId}`);
+
+    expect(removed.status).toBe(204);
+    expect(existsSync(join(root, 'projects', 'crm', 'imports', taskId))).toBe(false);
+    expect(existsSync(join(root, 'projects', 'crm', 'imports', keptId, 'task.json'))).toBe(true);
+    expect(existsSync(join(root, 'projects', 'crm', 'assets', first.body.assetId, 'content'))).toBe(true);
+    expect(existsSync(join(root, 'projects', 'crm', 'cases', caseRes.body.key, 'case.json'))).toBe(true);
+
+    const listed = await request(app).get('/api/projects/crm/imports');
+    expect(listed.body.map((item: { id: string }) => item.id)).toEqual([keptId]);
+
+    const missing = await request(app).get(`/api/projects/crm/imports/${taskId}`);
+    expect(missing.status).toBe(404);
+    expect(missing.body.message).toBe('导入任务不存在');
+  });
+
+  it('删除不存在的导入任务时返回 404', async () => {
+    const app = await createProjectApp();
+
+    const res = await request(app).delete('/api/projects/crm/imports/imp-20990101-000000-abcd');
+    expect(res.status).toBe(404);
+    expect(res.body.message).toBe('导入任务不存在');
+  });
 });
 
 /**

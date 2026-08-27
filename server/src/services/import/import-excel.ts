@@ -369,9 +369,9 @@ function parseStepRows(caseNumber: string, rows: SheetRow[]) {
 
     if (rowErrors.length > 0) {
       errors.push(...rowErrors);
-      continue;
     }
 
+    // 字段错误仍保留可识别步骤，避免审阅表漏行，把 Excel 行号错对到后面的步骤序号。
     if (order == null || !isImportActionType(actionRaw)) {
       continue;
     }

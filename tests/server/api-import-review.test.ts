@@ -9,7 +9,8 @@ import { createApp } from '../../server/src/app';
 import { readJson } from '../../server/src/lib/fs';
 import type { AgentRunInput, AgentRunResult, AgentRunner } from '../../server/src/services/import/agent-runner';
 import { createFakeAgentRunner, toTestIntent } from '../../server/src/services/import/agent-runner';
-import type { ImportTaskCase, ImportTaskDetail } from '../../shared/types';
+import type { ImportTaskCase } from '../../shared/types';
+import { startImportReview, startImportRetry, waitForImportReview } from './import-task-wait';
 
 let root = '';
 const CASE_HEADER = ['用例编号', '用例名称', '起始路径', '前置条件', '预期结果', '备注'];
@@ -32,10 +33,8 @@ describe('AI 导入 TestIntent 审阅', () => {
     const taskId = created.body.id as string;
     const caseId = created.body.cases[0].id as string;
 
-    const reviewed = await request(app).post(`/api/projects/crm/imports/${taskId}/review`);
-
-    expect(reviewed.status).toBe(200);
-    const item = reviewed.body.cases[0] as ImportTaskCase;
+    const reviewed = await startImportReview(app, taskId);
+    const item = reviewed.cases[0] as ImportTaskCase;
     expect(item.status).toBe('pending-review');
     expect(item.intent?.caseNumber).toBe('TC-001');
     expect(item.intent?.steps[0]?.action).toBe('点击');
@@ -51,10 +50,50 @@ describe('AI 导入 TestIntent 审阅', () => {
       join(taskDir, 'diagnostics', caseId, 'result.json')
     );
     expect(diagnostics.kind).toBe('success');
-    expect(diagnostics.stages).toEqual(['exploring', 'generating', 'pending-review']);
+    expect(diagnostics.stages).toEqual(['exploring', 'pending-review']);
     expect(existsSync(join(taskDir, 'work', caseId, 'input.json'))).toBe(true);
     expect(existsSync(join(taskDir, 'output', caseId, 'intent.json'))).toBe(true);
     expect(existsSync(join(taskDir, 'input', 'input.xlsx'))).toBe(true);
+  });
+
+  it('审阅请求在探索完成前返回，断开连接后探索仍继续', async () => {
+    const app = await createProjectApp(createFakeAgentRunner({ delayMs: 400 }));
+    const created = await createTask(app, await buildValidWorkbook());
+    const taskId = created.body.id as string;
+    const startedAt = Date.now();
+    const started = await request(app).post(`/api/projects/crm/imports/${taskId}/review`);
+
+    expect(started.status).toBe(200);
+    expect(Date.now() - startedAt).toBeLessThan(300);
+    expect(['parsed', 'exploring', 'generating']).toContain(started.body.cases[0]?.status);
+
+    const reviewed = await waitForImportReview(app, taskId);
+    expect(reviewed.cases[0]?.status).toBe('pending-review');
+    expect(reviewed.cases[0]?.failure).toBeUndefined();
+  });
+
+  it('同一任务重复提交审阅不会启动第二次探索', async () => {
+    let runs = 0;
+    const runner: AgentRunner = {
+      async run(input) {
+        runs += 1;
+        await new Promise((resolve) => setTimeout(resolve, 120));
+        await writeFile(join(input.workDir, 'once.json'), '{}');
+        return { kind: 'success', intent: toTestIntent(input.item) };
+      }
+    };
+    const app = await createProjectApp(runner);
+    const created = await createTask(app, await buildValidWorkbook());
+    const taskId = created.body.id as string;
+
+    await Promise.all([
+      request(app).post(`/api/projects/crm/imports/${taskId}/review`),
+      request(app).post(`/api/projects/crm/imports/${taskId}/review`)
+    ]);
+    const reviewed = await waitForImportReview(app, taskId);
+
+    expect(runs).toBe(1);
+    expect(reviewed.cases[0]?.status).toBe('pending-review');
   });
 
   it('可以注入 AgentRunner，并覆盖成功、歧义与失败结果', async () => {
@@ -72,10 +111,8 @@ describe('AI 导入 TestIntent 审阅', () => {
     const app = await createProjectApp(runner);
     const created = await createTask(app, await buildThreeCaseWorkbook());
 
-    const reviewed = await request(app).post(`/api/projects/crm/imports/${created.body.id}/review`);
-    const cases = Object.fromEntries(
-      (reviewed.body.cases as ImportTaskCase[]).map((item) => [item.caseNumber, item])
-    );
+    const reviewed = await startImportReview(app, created.body.id as string);
+    const cases = Object.fromEntries(reviewed.cases.map((item) => [item.caseNumber, item]));
 
     expect(seen).toEqual(['TC-001', 'TC-002', 'TC-003']);
     expect(cases['TC-001']?.status).toBe('pending-review');
@@ -92,7 +129,7 @@ describe('AI 导入 TestIntent 审阅', () => {
     const taskId = created.body.id as string;
     const caseId = created.body.cases[0].id as string;
 
-    await request(app).post(`/api/projects/crm/imports/${taskId}/review`);
+    await startImportReview(app, taskId);
     const confirmed = await request(app).post(`/api/projects/crm/imports/${taskId}/cases/${caseId}/confirm`);
 
     expect(confirmed.status).toBe(200);
@@ -124,17 +161,15 @@ describe('AI 导入 TestIntent 审阅', () => {
     const firstId = first?.id as string;
     const secondId = second?.id as string;
 
-    await request(app).post(`/api/projects/crm/imports/${taskId}/review`);
+    await startImportReview(app, taskId);
     const confirmed = await request(app).post(`/api/projects/crm/imports/${taskId}/cases/${firstId}/confirm`);
     expect(confirmed.body.cases.find((item: ImportTaskCase) => item.id === firstId).status).toBe('publishable');
 
     outcomes.set('TC-002', 'success');
-    const retried = await request(app).post(`/api/projects/crm/imports/${taskId}/cases/${secondId}/retry`);
-    const after = retried.body as ImportTaskDetail;
+    const after = await startImportRetry(app, taskId, secondId);
     const confirmedCase = after.cases.find((item) => item.id === firstId);
     const retriedCase = after.cases.find((item) => item.id === secondId);
 
-    expect(retried.status).toBe(200);
     expect(confirmedCase?.status).toBe('publishable');
     expect(retriedCase?.status).toBe('pending-review');
     expect(retriedCase?.intent?.caseNumber).toBe('TC-002');
@@ -196,10 +231,8 @@ describe('AI 导入 TestIntent 审阅', () => {
       ]
     });
     const created = await createTask(app, buffer);
-    const reviewed = await request(app).post(`/api/projects/crm/imports/${created.body.id}/review`);
-    const cases = Object.fromEntries(
-      (reviewed.body.cases as ImportTaskCase[]).map((item) => [item.caseNumber, item])
-    );
+    const reviewed = await startImportReview(app, created.body.id as string);
+    const cases = Object.fromEntries(reviewed.cases.map((item) => [item.caseNumber, item]));
 
     expect(cases['TC-001']?.status).toBe('pending-review');
     expect(cases['TC-002']?.failure?.kind).toBe('explore-failed');

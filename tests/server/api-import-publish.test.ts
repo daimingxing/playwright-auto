@@ -10,7 +10,8 @@ import { readJson } from '../../server/src/lib/fs';
 import type { AgentRunInput, AgentRunResult, AgentRunner } from '../../server/src/services/import/agent-runner';
 import { createFakeAgentRunner, toTestIntent } from '../../server/src/services/import/agent-runner';
 import { getProjectRunFiles } from '../../server/src/services/run/runner';
-import type { CaseMeta, ImportTaskCase, ImportTaskDetail, TestIntent } from '../../shared/types';
+import type { CaseMeta, ImportTaskCase, TestIntent } from '../../shared/types';
+import { startImportReview } from './import-task-wait';
 
 const spawnMock = vi.hoisted(() => vi.fn());
 
@@ -40,7 +41,7 @@ describe('AI 导入显式发布', () => {
     const taskId = created.body.id as string;
     const caseId = created.body.cases[0].id as string;
 
-    await request(app).post(`/api/projects/crm/imports/${taskId}/review`);
+    await startImportReview(app, taskId);
     const confirmed = await request(app).post(`/api/projects/crm/imports/${taskId}/cases/${caseId}/confirm`);
 
     expect(confirmed.status).toBe(200);
@@ -85,7 +86,7 @@ describe('AI 导入显式发布', () => {
     const taskId = created.body.id as string;
     const caseId = created.body.cases[0].id as string;
 
-    await request(app).post(`/api/projects/crm/imports/${taskId}/review`);
+    await startImportReview(app, taskId);
     const confirmed = await request(app).post(`/api/projects/crm/imports/${taskId}/cases/${caseId}/confirm`);
     expect(confirmed.status).toBe(200);
     expect(confirmed.body.cases[0].intent?.pendingItems.length).toBe(1);
@@ -110,7 +111,7 @@ describe('AI 导入显式发布', () => {
     const taskId = created.body.id as string;
     const caseId = created.body.cases[0].id as string;
 
-    await request(app).post(`/api/projects/crm/imports/${taskId}/review`);
+    await startImportReview(app, taskId);
     await request(app).post(`/api/projects/crm/imports/${taskId}/cases/${caseId}/confirm`);
     const published = await request(app).post(`/api/projects/crm/imports/${taskId}/cases/${caseId}/publish`);
 
@@ -127,7 +128,7 @@ describe('AI 导入显式发布', () => {
     const taskId = created.body.id as string;
     const caseId = created.body.cases[0].id as string;
 
-    await request(app).post(`/api/projects/crm/imports/${taskId}/review`);
+    await startImportReview(app, taskId);
     await request(app).post(`/api/projects/crm/imports/${taskId}/cases/${caseId}/confirm`);
     await request(app).post(`/api/projects/crm/imports/${taskId}/cleanup`);
 
@@ -146,7 +147,7 @@ describe('AI 导入显式发布', () => {
     const taskId = created.body.id as string;
     const caseId = created.body.cases[0].id as string;
 
-    await request(app).post(`/api/projects/crm/imports/${taskId}/review`);
+    await startImportReview(app, taskId);
     await request(app).post(`/api/projects/crm/imports/${taskId}/cases/${caseId}/confirm`);
     const published = await request(app).post(`/api/projects/crm/imports/${taskId}/cases/${caseId}/publish`);
     const caseKey = published.body.cases[0].publishedCaseKey as string;
@@ -199,7 +200,7 @@ describe('AI 导入显式发布', () => {
     expect(notConfirmed.status).toBe(400);
     expect(notConfirmed.body.message).toBe('只有已确认的用例可以发布');
 
-    await request(app).post(`/api/projects/crm/imports/${taskId}/review`);
+    await startImportReview(app, taskId);
     await request(app).post(`/api/projects/crm/imports/${taskId}/cases/${caseId}/confirm`);
     const first = await request(app).post(`/api/projects/crm/imports/${taskId}/cases/${caseId}/publish`);
     expect(first.status).toBe(200);

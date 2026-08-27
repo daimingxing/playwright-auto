@@ -26,6 +26,20 @@ import { isIntentActionType } from './agent-runner';
 
 const REVIEW_ELIGIBLE: ImportCaseStatus[] = ['parsed', 'exploring', 'generating'];
 const RETRY_BLOCKED: ImportCaseStatus[] = ['publishable', 'published', 'parse-failed'];
+const reviewJobs = new Map<string, Promise<void>>();
+
+/**
+ * 启动整单审阅并立即返回当前任务。探索在后台继续，离开页面不会取消。
+ */
+export async function startReviewImportTask(
+  projectKey: string,
+  taskId: string,
+  runner: AgentRunner
+): Promise<ImportTaskDetail> {
+  await assertReviewReady(projectKey, taskId);
+  enqueueReviewJob(projectKey, taskId, () => runReviewImportTask(projectKey, taskId, runner));
+  return getImportTask(projectKey, taskId);
+}
 
 /**
  * 对已解析且尚未确认的用例运行 Agent，生成可审阅 TestIntent。
@@ -36,23 +50,8 @@ export async function reviewImportTask(
   runner: AgentRunner,
   options: { signal?: AbortSignal } = {}
 ): Promise<ImportTaskDetail> {
-  const task = await getImportTask(projectKey, taskId);
-  const parseSnapshot = await getImportParseSnapshot(projectKey, taskId);
-
-  if (!parseSnapshot) {
-    throw badRequest('解析快照缺失，无法审阅');
-  }
-
-  for (const parsed of parseSnapshot.cases) {
-    const current = task.cases.find((item) => item.id === parsed.id) ?? parsed;
-
-    if (!REVIEW_ELIGIBLE.includes(current.status)) {
-      continue;
-    }
-
-    await processImportCase(projectKey, taskId, { ...parsed, id: current.id }, runner, options.signal);
-  }
-
+  await assertReviewReady(projectKey, taskId);
+  await runReviewImportTask(projectKey, taskId, runner, options.signal);
   return getImportTask(projectKey, taskId);
 }
 
@@ -90,6 +89,20 @@ export async function confirmImportCase(
 }
 
 /**
+ * 启动单条重试并立即返回当前任务。探索在后台继续，离开页面不会取消。
+ */
+export async function startRetryImportCase(
+  projectKey: string,
+  taskId: string,
+  caseId: string,
+  runner: AgentRunner
+): Promise<ImportTaskDetail> {
+  const { parsed } = await assertRetryReady(projectKey, taskId, caseId);
+  enqueueReviewJob(projectKey, taskId, () => processImportCase(projectKey, taskId, parsed, runner));
+  return getImportTask(projectKey, taskId);
+}
+
+/**
  * 只重试目标用例，不影响已确认条目。
  */
 export async function retryImportCase(
@@ -99,14 +112,80 @@ export async function retryImportCase(
   runner: AgentRunner,
   options: { signal?: AbortSignal } = {}
 ): Promise<ImportTaskDetail> {
+  const { parsed } = await assertRetryReady(projectKey, taskId, caseId);
+  await processImportCase(projectKey, taskId, parsed, runner, options.signal);
+  return getImportTask(projectKey, taskId);
+}
+
+/**
+ * 校验任务和解析快照已就绪。
+ */
+async function assertReviewReady(projectKey: string, taskId: string) {
+  await getImportTask(projectKey, taskId);
+  const parseSnapshot = await getImportParseSnapshot(projectKey, taskId);
+
+  if (!parseSnapshot) {
+    throw badRequest('解析快照缺失，无法审阅');
+  }
+}
+
+/**
+ * 按解析快照逐条探索；已确认或已发布的条目跳过。
+ */
+async function runReviewImportTask(
+  projectKey: string,
+  taskId: string,
+  runner: AgentRunner,
+  signal?: AbortSignal
+) {
+  const task = await getImportTask(projectKey, taskId);
+  const parseSnapshot = await getImportParseSnapshot(projectKey, taskId);
+
+  if (!parseSnapshot) {
+    throw badRequest('解析快照缺失，无法审阅');
+  }
+
+  for (const parsed of parseSnapshot.cases) {
+    const current = task.cases.find((item) => item.id === parsed.id) ?? parsed;
+
+    if (!REVIEW_ELIGIBLE.includes(current.status)) {
+      continue;
+    }
+
+    await processImportCase(projectKey, taskId, { ...parsed, id: current.id }, runner, signal);
+  }
+}
+
+/**
+ * 校验目标用例可以重试。
+ */
+async function assertRetryReady(projectKey: string, taskId: string, caseId: string) {
   const { item, parsed } = await getImportCaseContext(projectKey, taskId, caseId);
 
   if (RETRY_BLOCKED.includes(item.status)) {
     throw badRequest(retryBlockedMessage(item.status));
   }
 
-  await processImportCase(projectKey, taskId, parsed, runner, options.signal);
-  return getImportTask(projectKey, taskId);
+  return { item, parsed };
+}
+
+/**
+ * 同一导入任务同时只跑一个探索作业，重复提交直接复用进行中的作业。
+ */
+function enqueueReviewJob(projectKey: string, taskId: string, run: () => Promise<void>) {
+  const key = `${projectKey}/${taskId}`;
+
+  if (reviewJobs.has(key)) {
+    return;
+  }
+
+  const job = run().finally(() => {
+    if (reviewJobs.get(key) === job) {
+      reviewJobs.delete(key);
+    }
+  });
+  reviewJobs.set(key, job);
+  void job.catch(() => undefined);
 }
 
 /**
@@ -154,41 +233,55 @@ async function processImportCase(
   await ensureDir(workDir);
   await ensureDir(outputDir);
   await ensureDir(diagnosticsDir);
-  await recordCaseStage(projectKey, taskId, item, 'exploring', stages);
-  await recordCaseStage(projectKey, taskId, item, 'generating', stages);
 
-  const result = await runner.run({
-    projectKey,
-    taskId,
-    item,
-    workDir,
-    outputDir,
-    diagnosticsDir,
-    signal,
-    timeoutMs: getAppConfig().agent.timeoutMs,
-    baseUrl: explore.baseUrl,
-    storageStatePath: explore.storageStatePath
-  });
+  try {
+    await recordCaseStage(projectKey, taskId, item, 'exploring', stages);
 
-  // 失败结果带 message；成功/歧义带 intent。用 in 收窄，避免联合 kind 无法互斥。
-  if ('message' in result) {
+    const result = await runner.run({
+      projectKey,
+      taskId,
+      item,
+      workDir,
+      outputDir,
+      diagnosticsDir,
+      signal,
+      timeoutMs: getAppConfig().agent.timeoutMs,
+      baseUrl: explore.baseUrl,
+      storageStatePath: explore.storageStatePath
+    });
+
+    // 失败结果带 message；成功/歧义带 intent。用 in 收窄，避免联合 kind 无法互斥。
+    if ('message' in result) {
+      await updateImportCaseStatus(projectKey, taskId, item, 'failed', {
+        failure: { kind: result.kind, message: result.message }
+      });
+      stages.push('failed');
+    } else {
+      const intent = assertReviewIntent(result.intent);
+      await writeImportCaseIntent(projectKey, taskId, item.id, intent);
+      await writeExplorationIfPresent(projectKey, taskId, item.id, result.exploration);
+      await recordCaseStage(projectKey, taskId, item, 'pending-review', stages);
+    }
+
+    await writeJson(join(diagnosticsDir, 'result.json'), {
+      kind: result.kind,
+      stages,
+      at: new Date().toISOString(),
+      message: getResultMessage(result)
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '页面探索失败';
     await updateImportCaseStatus(projectKey, taskId, item, 'failed', {
-      failure: { kind: result.kind, message: result.message }
+      failure: { kind: 'process-failed', message }
     });
     stages.push('failed');
-  } else {
-    const intent = assertReviewIntent(result.intent);
-    await writeImportCaseIntent(projectKey, taskId, item.id, intent);
-    await writeExplorationIfPresent(projectKey, taskId, item.id, result.exploration);
-    await recordCaseStage(projectKey, taskId, item, 'pending-review', stages);
+    await writeJson(join(diagnosticsDir, 'result.json'), {
+      kind: 'process-failed',
+      stages,
+      at: new Date().toISOString(),
+      message
+    });
   }
-
-  await writeJson(join(diagnosticsDir, 'result.json'), {
-    kind: result.kind,
-    stages,
-    at: new Date().toISOString(),
-    message: getResultMessage(result)
-  });
 }
 
 /**
@@ -249,6 +342,7 @@ async function readExploreContext(projectKey: string) {
 
 /**
  * 把单次探索定位器写入任务 output，确认前不进入正式用例。
+ * 探索进程若已写入同路径则跳过，避免轮询读取时二次替换失败。
  */
 async function writeExplorationIfPresent(
   projectKey: string,
@@ -257,6 +351,12 @@ async function writeExplorationIfPresent(
   exploration: ExplorationResult | undefined
 ) {
   if (!exploration) {
+    return;
+  }
+
+  const path = join(getImportCaseOutputPath(projectKey, taskId, caseId), 'exploration.json');
+
+  if (existsSync(path)) {
     return;
   }
 

@@ -172,6 +172,37 @@ describe('AI 导入 Excel 解析', () => {
     expect(byNumber['TC-010']?.errors.map((item) => item.reason)).toEqual(
       expect.arrayContaining(['数据不能为空', '目标不能为空'])
     );
+    expect(byNumber['TC-010']?.steps.map((item) => item.action)).toEqual(['填写', '点击']);
+    expect(byNumber['TC-010']?.steps[0]).toMatchObject({ order: 1, action: '填写', target: '数量', data: '' });
+  });
+
+  it('点击空数据可通过，填写空数据失败但仍保留该步骤', async () => {
+    const buffer = await buildXlsx({
+      用例: [CASE_HEADER, ['TC-001', '新建工单', '/web/IMQM14', '', '', '']],
+      步骤: [
+        STEP_HEADER,
+        ['TC-001', 1, '点击', '新增按钮', '', ''],
+        ['TC-001', 6, '填写', '取样人', '', ''],
+        ['TC-001', 7, '点击', '保存按钮', '', '']
+      ]
+    });
+
+    const result = await parseImportExcel(buffer);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+
+    expect(result.cases[0]?.status).toBe('parse-failed');
+    expect(result.cases[0]?.errors).toEqual([
+      expect.objectContaining({ sheet: '步骤', row: 3, reason: '数据不能为空' })
+    ]);
+    expect(result.cases[0]?.steps.map((item) => ({ order: item.order, action: item.action }))).toEqual([
+      { order: 1, action: '点击' },
+      { order: 6, action: '填写' },
+      { order: 7, action: '点击' }
+    ]);
   });
 
   it('用例编号重复只失败重复项，且不把 Playwright 步骤类型当作动作', async () => {

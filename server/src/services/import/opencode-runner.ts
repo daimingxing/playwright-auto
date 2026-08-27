@@ -1,6 +1,7 @@
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { AgentConfig, ExplorationResult, ImportAgentFailureKind, ImportTaskCase, TestIntent } from '../../../../shared/types';
+import { buildStartUrl } from '../../../../shared/url';
 import { getAppConfig } from '../../lib/app-config';
 import { ensureDir, writeJson } from '../../lib/fs';
 import { getVendorEnv } from '../playwright/vendor-browser';
@@ -172,7 +173,7 @@ export class OpenCodeAgentRunner implements AgentRunner {
       }
 
       if (result.timedOut) {
-        return this.fail(input, 'timeout');
+        return this.fail(input, 'timeout', describeTimeout(result));
       }
 
       if (result.exitCode !== 0) {
@@ -283,11 +284,22 @@ export function joinUrl(baseUrl: string | undefined, startPath: string) {
     return startPath;
   }
 
-  try {
-    return new URL(startPath || '/', baseUrl).toString();
-  } catch {
-    return `${baseUrl.replace(/\/+$/, '')}${startPath.startsWith('/') ? startPath : `/${startPath}`}`;
+  return buildStartUrl(baseUrl, startPath);
+}
+
+/**
+ * 把超时结果转成可定位的失败说明，避免只看到「页面探索超时」。
+ */
+function describeTimeout(result: { events: Array<{ type: string }>; stderr: string }) {
+  if (result.events.length === 0 && !result.stderr.trim()) {
+    return '页面探索超时：时限内 OpenCode 没有输出日志，进程可能未开始探索或输出被中断';
   }
+
+  const types = result.events.slice(-5).map((event) => event.type).join('、') || '无';
+  const logLine = result.stderr.trim().split(/\r?\n/).at(-1)?.slice(0, 180);
+  return logLine
+    ? `页面探索超时：最后事件 ${types}；${logLine}`
+    : `页面探索超时：最后事件 ${types}`;
 }
 
 /**

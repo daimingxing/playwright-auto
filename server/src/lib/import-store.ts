@@ -238,6 +238,14 @@ export async function cleanupImportTask(projectKey: string, taskId: string): Pro
 }
 
 /**
+ * 删除整个导入任务目录。不影响已发布正式用例和项目资产库。
+ */
+export async function deleteImportTask(projectKey: string, taskId: string) {
+  await getImportTask(projectKey, taskId);
+  await rm(getImportTaskPath(projectKey, taskId), { recursive: true, force: true });
+}
+
+/**
  * 读取任务检查点。半截临时文件不会被当作检查点；损坏的 JSON 视为缺失。
  */
 export async function readImportCheckpoint(projectKey: string, taskId: string): Promise<ImportCheckpoint> {

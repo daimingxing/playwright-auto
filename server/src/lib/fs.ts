@@ -10,6 +10,7 @@ export async function ensureDir(path: string) {
 
 /**
  * 原子写入文件：先写临时文件再 rename，崩溃时不会留下半截目标文件。
+ * Windows 上目标文件若正被读取，rename 可能短暂 EPERM，短暂重试后再失败。
  */
 export async function writeFileAtomic(path: string, data: Buffer | string) {
   await ensureDir(dirname(path));
@@ -18,11 +19,47 @@ export async function writeFileAtomic(path: string, data: Buffer | string) {
 
   try {
     await writeFile(tempPath, data);
-    await rename(tempPath, path);
+    await renameWithRetry(tempPath, path);
   } catch (error) {
     await rm(tempPath, { force: true });
     throw error;
   }
+}
+
+/**
+ * 替换目标文件；文件正被读取时短暂重试。
+ */
+async function renameWithRetry(from: string, to: string, attempts = 5) {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      await rename(from, to);
+      return;
+    } catch (error) {
+      lastError = error;
+
+      if (!isBusyFileError(error) || attempt === attempts) {
+        throw error;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 20 * attempt));
+    }
+  }
+
+  throw lastError;
+}
+
+/**
+ * 判断是否为文件正被占用导致的替换失败。
+ */
+function isBusyFileError(error: unknown) {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error.code === 'EPERM' || error.code === 'EACCES' || error.code === 'EBUSY')
+  );
 }
 
 /**

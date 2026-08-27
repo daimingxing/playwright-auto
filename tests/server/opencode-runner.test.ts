@@ -9,6 +9,7 @@ import { FakeAgentRunner } from '../../server/src/services/import/agent-runner';
 import {
   ALLOWED_MCP_TOOLS,
   DENIED_MCP_TOOLS,
+  buildOpenCodeArgs,
   buildOpenCodeConfigContent,
   buildOpenCodeEnv,
   buildOpenCodeModelEntry,
@@ -18,7 +19,8 @@ import { extractCandidateJson, parseOpenCodeJsonl, type SpawnFn } from '../../se
 import {
   OpenCodeAgentRunner,
   createDefaultAgentRunner,
-  createOpenCodeAgentRunner
+  createOpenCodeAgentRunner,
+  joinUrl
 } from '../../server/src/services/import/opencode-runner';
 import type { ImportTaskCase } from '../../shared/types';
 
@@ -60,6 +62,15 @@ describe('OpenCode 接入契约', () => {
     expect(chat.permission.playwright_browser_navigate).toBe('allow');
     expect(DENIED_MCP_TOOLS).toContain('playwright_browser_evaluate');
     expect(ALLOWED_MCP_TOOLS).toContain('playwright_browser_generate_locator');
+    expect(joinUrl('http://10.82.7.5/xmdmpms-imms-f', '/web/IMQM14')).toBe(
+      'http://10.82.7.5/xmdmpms-imms-f/web/IMQM14'
+    );
+    expect(buildOpenCodeArgs({
+      workDir: join(root, 'work'),
+      provider: 'corp',
+      model: 'grok-4.6',
+      title: 'ai-import:probe'
+    })).toEqual(expect.arrayContaining(['--print-logs', '--log-level', 'INFO', 'run', '--format', 'json']));
 
     const command = buildPlaywrightMcpCommand(launch);
     expect(command[0]).toBe(process.execPath);
@@ -332,6 +343,9 @@ describe('OpenCode 接入契约', () => {
       }
     }).run(makeRunInput({ timeoutMs: 800 }));
     expect(timedOut.kind).toBe('timeout');
+    if ('message' in timedOut) {
+      expect(timedOut.message).toContain('页面探索超时');
+    }
     expect(existsSync(join(root, 'work', 'user-data'))).toBe(false);
   }, 20000);
 });
