@@ -8,6 +8,7 @@ import {
   formatParseError,
   formatSourceRef,
   formatExploreWait,
+  formatImportFailure,
   getDeleteImportTaskConfirm,
   getImportErrors,
   hasParsedCases
@@ -88,6 +89,16 @@ describe('AI 导入展示文案', () => {
   it('探索等待文案包含已等待时间', () => {
     expect(formatExploreWait(5000)).toBe('正在后台探索页面，已等待 5 秒。离开本页不影响，完成后可回来查看结果。');
     expect(formatExploreWait(125000)).toBe('正在后台探索页面，已等待 2 分 5 秒。离开本页不影响，完成后可回来查看结果。');
+  });
+
+  it('失败说明不展示 OpenCode 过程日志', () => {
+    expect(
+      formatImportFailure({
+        kind: 'process-failed',
+        message:
+          'timestamp=2026-08-27T08:33:52.262Z level=ERROR error.error="AI_APICallError: Cannot connect to API: The socket connection was closed unexpectedly."'
+      })
+    ).toBe('模型服务连接中断，请稍后重试');
   });
 
   it('从接口错误中读取结构错误列表', () => {

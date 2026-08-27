@@ -1,7 +1,10 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { AgentConfig, AgentProtocol, AgentReasoningEffort } from '../../../../shared/types';
-import { getChromePath } from '../playwright/vendor-browser';
+import { getChromePath, getVendorEnv } from '../playwright/vendor-browser';
+
+/** OpenCode 拉取 MCP 工具列表的超时。官方 Playwright MCP 冷启动 Chromium 可能超过默认 5 秒。 */
+export const PLAYWRIGHT_MCP_TIMEOUT_MS = 60_000;
 
 export const DENIED_MCP_TOOLS = [
   'playwright_browser_evaluate',
@@ -43,6 +46,7 @@ export interface OpenCodeLaunchConfig {
   opencodePath: string;
   playwrightMcpPath: string;
   workDir: string;
+  /** 任务结束后清理的残留目录；isolated 模式下不得传给 Playwright MCP。 */
   userDataDir: string;
   mcpOutputDir: string;
   storageStatePath?: string;
@@ -142,7 +146,9 @@ export function buildOpenCodeConfigContent(input: OpenCodeLaunchConfig) {
         type: 'local',
         command: buildPlaywrightMcpCommand(input),
         cwd: input.workDir,
-        enabled: true
+        enabled: true,
+        timeout: PLAYWRIGHT_MCP_TIMEOUT_MS,
+        environment: getVendorEnv()
       }
     },
     permission
@@ -179,7 +185,8 @@ export function buildOpenCodeModelEntry(input: Pick<OpenCodeLaunchConfig, 'model
 }
 
 /**
- * 用绝对 Node 路径启动官方 MCP，注入登录态和隔离目录，不使用 npx。
+ * 用绝对 Node 路径启动官方 MCP，注入登录态和隔离会话，不使用 npx。
+ * `--isolated` 与 `--user-data-dir` 不能同时使用，否则 MCP 会立刻退出，OpenCode 会话里就没有浏览器工具。
  */
 export function buildPlaywrightMcpCommand(input: OpenCodeLaunchConfig) {
   const command = [
@@ -187,7 +194,6 @@ export function buildPlaywrightMcpCommand(input: OpenCodeLaunchConfig) {
     input.playwrightMcpPath,
     '--headless',
     '--isolated',
-    `--user-data-dir=${input.userDataDir}`,
     `--output-dir=${input.mcpOutputDir}`
   ];
   const executablePath = input.executablePath ?? (existsSync(getChromePath()) ? getChromePath() : undefined);

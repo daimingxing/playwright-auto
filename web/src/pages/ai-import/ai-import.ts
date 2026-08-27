@@ -1,10 +1,12 @@
 import type {
+  ImportCaseFailure,
   ImportCaseStatus,
   ImportParseError,
   ImportSourceRow,
   ImportTask,
   ImportTaskCase
 } from '../../../../shared/types';
+import { summarizeImportFailure } from '../../../../shared/import-failure';
 
 const caseStatusMap: Record<ImportCaseStatus, { label: string; type: 'success' | 'danger' | 'warning' | 'info' }> = {
   parsed: { label: '已解析', type: 'success' },
@@ -129,10 +131,17 @@ export function isExploreRunning(status: ImportCaseStatus) {
 }
 
 /**
+ * 判断用例是否仍在等待或执行页面探索。
+ */
+export function isImportCaseBusy(status: ImportCaseStatus) {
+  return status === 'parsed' || isExploreRunning(status);
+}
+
+/**
  * 判断任务是否仍需启动或等待页面探索。
  */
 export function needsImportReview(cases: Array<Pick<ImportTaskCase, 'status'>>) {
-  return cases.some((item) => item.status === 'parsed' || isExploreRunning(item.status));
+  return cases.some((item) => isImportCaseBusy(item.status));
 }
 
 /**
@@ -144,6 +153,13 @@ export function formatExploreWait(elapsedMs: number) {
   const seconds = totalSeconds % 60;
   const clock = minutes > 0 ? `${minutes} 分 ${seconds} 秒` : `${seconds} 秒`;
   return `正在后台探索页面，已等待 ${clock}。离开本页不影响，完成后可回来查看结果。`;
+}
+
+/**
+ * 把失败说明收成页面可见的短摘要，不展示过程日志。
+ */
+export function formatImportFailure(failure: ImportCaseFailure) {
+  return summarizeImportFailure(failure.kind, failure.message);
 }
 
 /**

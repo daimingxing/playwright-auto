@@ -50,13 +50,37 @@ describe('导入任务审阅组合函数', () => {
     page.task.value = makeTask([pending, failed]);
 
     await page.confirmCase(pending);
-    await page.retryCase(failed);
+    const retriedResult = await page.retryCase(failed);
 
     expect(mocks.confirmImportCase).toHaveBeenCalledWith('crm', confirmed.id, pending.id);
     expect(mocks.retryImportCase).toHaveBeenCalledWith('crm', confirmed.id, failed.id);
     expect(page.task.value?.cases[0]?.status).toBe('publishable');
     expect(page.task.value?.cases[1]?.status).toBe('pending-review');
     expect(page.actingId.value).toBe('');
+    expect(retriedResult).toEqual({ outcome: 'generated' });
+  });
+
+  it('重试后仍在探索时继续轮询，失败不会当成已重新生成', async () => {
+    const failed = makeCase('failed');
+    const exploring = makeTask([{ ...failed, status: 'exploring' }]);
+    const stillFailed = makeTask([
+      {
+        ...failed,
+        status: 'failed',
+        failure: { kind: 'explore-failed', message: '页面探索失败，无法生成测试意图' }
+      }
+    ]);
+    mocks.retryImportCase.mockResolvedValue(exploring);
+    mocks.getImportTask.mockResolvedValue(stillFailed);
+    const page = useImportTaskReview('crm', exploring.id);
+    page.task.value = makeTask([failed]);
+
+    await expect(page.retryCase(failed)).resolves.toEqual({
+      outcome: 'failed',
+      failure: stillFailed.cases[0]?.failure
+    });
+    expect(mocks.getImportTask).toHaveBeenCalled();
+    expect(page.task.value?.cases[0]?.status).toBe('failed');
   });
 
   it('探索未完成时轮询任务，不把审阅请求一直挂起', async () => {

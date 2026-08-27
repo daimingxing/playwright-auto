@@ -18,6 +18,7 @@ import {
   formatSourceCells,
   formatSourceRef,
   formatExploreWait,
+  formatImportFailure,
   getDeleteImportTaskConfirm,
   isExploreRunning
 } from "./ai-import";
@@ -51,14 +52,16 @@ async function submitConfirm(item: ImportTaskCase) {
 }
 
 /**
- * 重试当前用例并提示结果。
+ * 重试当前用例并提示结果。成功提示只在生成待确认意图之后出现。
  */
 async function submitRetry(item: ImportTaskCase) {
   try {
-    const done = await retryCase(item);
+    const result = await retryCase(item);
 
-    if (done) {
+    if (result.outcome === 'generated') {
       ElMessage.success("已重新生成该用例");
+    } else if (result.outcome === 'failed') {
+      ElMessage.error(formatImportFailure(result.failure ?? { kind: 'explore-failed', message: '' }));
     }
   } catch (error) {
     ElMessage.error(getErrorMessage(error));
@@ -152,7 +155,7 @@ onMounted(async () => {
                     {{ formatSourceRef(row.source) }}
                     <span v-if="formatSourceCells(row.source)">；{{ formatSourceCells(row.source) }}</span>
                   </p>
-                  <p v-if="row.failure"><strong>失败原因：</strong>{{ row.failure.message }}</p>
+                  <p v-if="row.failure"><strong>失败原因：</strong>{{ formatImportFailure(row.failure) }}</p>
                   <p v-if="row.errors.length"><strong>错误：</strong></p>
                   <ul v-if="row.errors.length" class="error-list">
                     <li v-for="(error, index) in row.errors" :key="`${error.sheet}-${error.row}-${index}`">
@@ -251,7 +254,7 @@ onMounted(async () => {
             <el-table-column label="说明" min-width="240">
               <template #default="{ row }">
                 <span v-if="actingId === row.id || isExploreRunning(row.status)">{{ formatExploreWait(waitMs) }}</span>
-                <span v-else-if="row.failure">{{ row.failure.message }}</span>
+                <span v-else-if="row.failure" class="failure-note">{{ formatImportFailure(row.failure) }}</span>
                 <span v-else-if="row.intent?.pendingItems.length">{{ row.intent.pendingItems[0]?.message }}</span>
                 <span v-else-if="row.errors.length">{{ formatParseError(row.errors[0]) }}</span>
                 <span v-else>—</span>
@@ -396,6 +399,14 @@ onMounted(async () => {
 
 .pending-list {
   color: #b45309;
+}
+
+.failure-note {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
 }
 
 .step-table,

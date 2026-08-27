@@ -155,7 +155,7 @@ npm run dev
 - 录制导入：通过 Playwright codegen 录制操作，并把录制步骤插入到当前选中步骤后方；未选中步骤时追加到末尾
 - 登录态：在用例管理页或运行中心维护项目环境对应的 storageState，编辑页实测检查和运行测试会复用；不需要登录的项目可以直接运行
 - 运行管理：按项目运行测试，查看运行状态、报告地址并导出报告
-- AI 导入：在项目中上传「用例」「步骤」双表 Excel，校验后创建导入任务；打开任务详情后由 OpenCode 结合官方 Playwright MCP 做单次页面探索，生成可审阅的 TestIntent。探索在后台进行，离开详情页不会取消。测试可注入 Fake AgentRunner。用户可以确认或单条重试；确认不会发布正式用例。只有显式发布才会把意图转为 Action IR，写入 `case.json` 并生成 `case.spec.ts`，发布后的用例进入运行中心。服务中断后可通过恢复接口从检查点继续，已成功项不会重做。相同内容的上传文件在项目资产库中只保存一份。
+- AI 导入：在项目中上传「用例」「步骤」双表 Excel，校验后创建导入任务；打开任务详情后由 OpenCode 结合官方 Playwright MCP 做单次页面探索，生成可审阅的 TestIntent。探索在后台进行，离开详情页不会取消。探索失败时页面只显示短摘要。测试可注入 Fake AgentRunner。用户可以确认或单条重试；确认不会发布正式用例。只有显式发布才会把意图转为 Action IR，写入 `case.json` 并生成 `case.spec.ts`，发布后的用例进入运行中心。服务中断后可通过恢复接口从检查点继续，已成功项不会重做。相同内容的上传文件在项目资产库中只保存一份。
 
 ## 数据目录
 
@@ -238,7 +238,7 @@ data/projects/<projectKey>/auth/default.storageState.json
 
 某字段本次不用填时，删掉该步骤行，不要留空数据。
 
-文件缺少工作表、缺少列或出现重复列时，整批导入会被阻断，并返回工作表、行号和原因。单个用例内容错误只影响该用例，其他有效用例仍会写入任务。成功后可在任务详情查看解析结果，并对已解析用例生成可审阅的测试意图。打开详情或点击重试会启动后台探索并立即返回，页面按任务状态轮询；离开详情页不会取消探索。确认只把该条标为可发布，不会写入正式 `case.json` 或 `case.spec.ts`。发布会校验 Action IR，拒绝未解决歧义和未验证定位器，通过后写入正式用例并生成测试代码。
+文件缺少工作表、缺少列或出现重复列时，整批导入会被阻断，并返回工作表、行号和原因。单个用例内容错误只影响该用例，其他有效用例仍会写入任务。成功后可在任务详情查看解析结果，并对已解析用例生成可审阅的测试意图。打开详情或点击重试会启动后台探索并立即进入「探索中」，页面按任务状态轮询；离开详情页不会取消探索。重试成功提示只在生成待确认意图之后出现，失败显示短摘要。确认只把该条标为可发布，不会写入正式 `case.json` 或 `case.spec.ts`。发布会校验 Action IR，拒绝未解决歧义和未验证定位器，通过后写入正式用例并生成测试代码。
 
 相同内容的 Excel 会登记到项目资产库并只存一份物理文件，但仍会创建新的导入任务，不会因为文件哈希相同而跳过上传。任务执行过程中逐项写入原子检查点；`POST /api/projects/<projectKey>/imports/<taskId>/resume` 会跳过已成功项、补写未完成项，且不会重新解析 Excel。`POST /api/projects/<projectKey>/imports/<taskId>/review` 启动后台探索并立即返回当前任务，详情页轮询 `GET` 直到探索结束。`POST /api/projects/<projectKey>/imports/<taskId>/cases/<caseId>/confirm` 确认单条意图；`POST /api/projects/<projectKey>/imports/<taskId>/cases/<caseId>/retry` 只重试目标条并同样立即返回；`POST /api/projects/<projectKey>/imports/<taskId>/cases/<caseId>/publish` 显式发布正式用例。`POST /api/projects/<projectKey>/imports/<taskId>/cleanup` 只删除该任务的工作、输出和诊断临时资料，已确认意图和探索定位器保留在 `cases/<itemId>/intent.json` 与 `exploration.json`。`DELETE /api/projects/<projectKey>/imports/<taskId>` 删除整个导入任务，不影响已发布正式用例和项目资产库。
 

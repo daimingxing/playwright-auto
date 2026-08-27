@@ -1,9 +1,15 @@
 import { computed, getCurrentInstance, onUnmounted, ref } from 'vue';
-import type { ImportTaskCase, ImportTaskDetail } from '../../../../shared/types';
+import type { ImportCaseFailure, ImportTaskCase, ImportTaskDetail } from '../../../../shared/types';
 import { confirmImportCase, getImportTask, publishImportCase, retryImportCase, reviewImportTask } from '../../api/imports';
-import { canConfirmImportCase, canPublishImportCase, canRetryImportCase, needsImportReview } from './ai-import';
+import { canConfirmImportCase, canPublishImportCase, canRetryImportCase, isImportCaseBusy, needsImportReview } from './ai-import';
 
 const POLL_MS = 2000;
+
+export type ImportRetryOutcome =
+  | { outcome: 'skipped' }
+  | { outcome: 'left' }
+  | { outcome: 'generated' }
+  | { outcome: 'failed'; failure?: ImportCaseFailure };
 
 /**
  * 管理导入任务详情的加载、审阅、确认和单条重试。
@@ -60,11 +66,11 @@ export function useImportTaskReview(projectKey: string, taskId: string) {
   }
 
   /**
-   * 启动目标用例重试；页面停留时轮询到结束，离开页面不取消后台探索。
+   * 启动目标用例重试；页面停留时轮询到该条结束，离开页面不取消后台探索。
    */
-  async function retryCase(item: ImportTaskCase) {
+  async function retryCase(item: ImportTaskCase): Promise<ImportRetryOutcome> {
     if (!canRetryImportCase(item.status)) {
-      return false;
+      return { outcome: 'skipped' };
     }
 
     actingId.value = item.id;
@@ -73,7 +79,7 @@ export function useImportTaskReview(projectKey: string, taskId: string) {
 
     try {
       task.value = await retryImportCase(projectKey, taskId, item.id);
-      return await pollUntilSettled();
+      return settleRetry(await pollCaseUntilSettled(item.id));
     } finally {
       if (!closed) {
         stopWait();
@@ -115,6 +121,48 @@ export function useImportTaskReview(projectKey: string, taskId: string) {
     }
 
     return !closed && !needsImportReview(task.value?.cases ?? []);
+  }
+
+  /**
+   * 轮询目标用例直到不再忙碌；离开页面时停止，不把旧失败态当成重试完成。
+   */
+  async function pollCaseUntilSettled(caseId: string) {
+    while (!closed) {
+      const current = task.value?.cases.find((entry) => entry.id === caseId);
+
+      if (!current || !isImportCaseBusy(current.status)) {
+        return current ?? null;
+      }
+
+      await waitPoll();
+
+      if (closed) {
+        return null;
+      }
+
+      task.value = await getImportTask(projectKey, taskId);
+    }
+
+    return null;
+  }
+
+  /**
+   * 把目标用例的终态转成重试提示结果。
+   */
+  function settleRetry(item: ImportTaskCase | null): ImportRetryOutcome {
+    if (!item) {
+      return { outcome: 'left' };
+    }
+
+    if (item.status === 'pending-review' || item.status === 'publishable') {
+      return { outcome: 'generated' };
+    }
+
+    if (item.status === 'failed') {
+      return { outcome: 'failed', failure: item.failure };
+    }
+
+    return { outcome: 'left' };
   }
 
   /**

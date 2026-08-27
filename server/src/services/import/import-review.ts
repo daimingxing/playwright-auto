@@ -23,6 +23,7 @@ import { getProject } from '../../lib/project-store';
 import { getProjectAuthPath } from '../auth-session';
 import type { AgentRunner, AgentRunResult } from './agent-runner';
 import { isIntentActionType } from './agent-runner';
+import { summarizeImportFailure } from '../../../../shared/import-failure';
 
 const REVIEW_ELIGIBLE: ImportCaseStatus[] = ['parsed', 'exploring', 'generating'];
 const RETRY_BLOCKED: ImportCaseStatus[] = ['publishable', 'published', 'parse-failed'];
@@ -37,8 +38,14 @@ export async function startReviewImportTask(
   runner: AgentRunner
 ): Promise<ImportTaskDetail> {
   await assertReviewReady(projectKey, taskId);
-  enqueueReviewJob(projectKey, taskId, () => runReviewImportTask(projectKey, taskId, runner));
-  return getImportTask(projectKey, taskId);
+  const started = await beginReviewJob(
+    projectKey,
+    taskId,
+    () => markEligibleCasesExploring(projectKey, taskId),
+    () => runReviewImportTask(projectKey, taskId, runner)
+  );
+
+  return started ?? getImportTask(projectKey, taskId);
 }
 
 /**
@@ -97,9 +104,26 @@ export async function startRetryImportCase(
   caseId: string,
   runner: AgentRunner
 ): Promise<ImportTaskDetail> {
-  const { parsed } = await assertRetryReady(projectKey, taskId, caseId);
-  enqueueReviewJob(projectKey, taskId, () => processImportCase(projectKey, taskId, parsed, runner));
-  return getImportTask(projectKey, taskId);
+  const { item, parsed } = await assertRetryReady(projectKey, taskId, caseId);
+  const started = await beginReviewJob(
+    projectKey,
+    taskId,
+    () => updateImportCaseStatus(projectKey, taskId, item, 'exploring'),
+    () => processImportCase(projectKey, taskId, parsed, runner)
+  );
+
+  if (started) {
+    return started;
+  }
+
+  const task = await getImportTask(projectKey, taskId);
+  const current = task.cases.find((entry) => entry.id === caseId);
+
+  if (current && REVIEW_ELIGIBLE.includes(current.status)) {
+    return task;
+  }
+
+  throw badRequest('当前任务正在探索其他用例，请稍后再试');
 }
 
 /**
@@ -170,22 +194,60 @@ async function assertRetryReady(projectKey: string, taskId: string, caseId: stri
 }
 
 /**
- * 同一导入任务同时只跑一个探索作业，重复提交直接复用进行中的作业。
+ * 占用任务锁、先把目标用例标成探索中，再返回当前任务；后台作业在返回之后才真正跑探索。
+ * 同一任务已有作业时返回 null，由调用方决定复用还是拒绝。
  */
-function enqueueReviewJob(projectKey: string, taskId: string, run: () => Promise<void>) {
+async function beginReviewJob(
+  projectKey: string,
+  taskId: string,
+  prepare: () => Promise<void>,
+  run: () => Promise<void>
+): Promise<ImportTaskDetail | null> {
   const key = `${projectKey}/${taskId}`;
 
   if (reviewJobs.has(key)) {
-    return;
+    return null;
   }
 
-  const job = run().finally(() => {
+  let release!: () => void;
+  const ready = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const job = runAfter(ready, run).finally(() => {
     if (reviewJobs.get(key) === job) {
       reviewJobs.delete(key);
     }
   });
   reviewJobs.set(key, job);
   void job.catch(() => undefined);
+
+  try {
+    await prepare();
+    return await getImportTask(projectKey, taskId);
+  } finally {
+    release();
+  }
+}
+
+/**
+ * 等调用方把探索中状态写盘后再执行作业，避免 HTTP 仍返回旧的失败态。
+ */
+async function runAfter(ready: Promise<void>, run: () => Promise<void>) {
+  await ready;
+  await run();
+}
+
+/**
+ * 把尚未开始探索的已解析用例标成探索中，供审阅接口立即返回忙碌态。
+ */
+async function markEligibleCasesExploring(projectKey: string, taskId: string) {
+  const task = await getImportTask(projectKey, taskId);
+
+  for (const item of task.cases) {
+    if (item.status === 'parsed') {
+      await updateImportCaseStatus(projectKey, taskId, item, 'exploring');
+    }
+  }
 }
 
 /**
@@ -270,7 +332,10 @@ async function processImportCase(
       message: getResultMessage(result)
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : '页面探索失败';
+    const message = summarizeImportFailure(
+      'process-failed',
+      error instanceof Error ? error.message : '页面探索失败'
+    );
     await updateImportCaseStatus(projectKey, taskId, item, 'failed', {
       failure: { kind: 'process-failed', message }
     });

@@ -1,6 +1,7 @@
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { AgentConfig, ExplorationResult, ImportAgentFailureKind, ImportTaskCase, TestIntent } from '../../../../shared/types';
+import { summarizeImportFailure } from '../../../../shared/import-failure';
 import { buildStartUrl } from '../../../../shared/url';
 import { getAppConfig } from '../../lib/app-config';
 import { ensureDir, writeJson } from '../../lib/fs';
@@ -178,11 +179,11 @@ export class OpenCodeAgentRunner implements AgentRunner {
 
       if (result.exitCode !== 0) {
         const jsonlError = readJsonlError(result.events);
-        return this.fail(
-          input,
-          jsonlError ? 'model-failed' : 'process-failed',
-          jsonlError || result.stderr.trim() || FAILURE_MESSAGES['process-failed']
-        );
+        return this.fail(input, jsonlError ? 'model-failed' : 'process-failed', jsonlError || result.stderr);
+      }
+
+      if (isPlaywrightMcpUnavailable(result.stderr)) {
+        return this.fail(input, 'process-failed', result.stderr);
       }
 
       const candidate = extractCandidateJson(result.events);
@@ -241,7 +242,7 @@ export class OpenCodeAgentRunner implements AgentRunner {
    * 写入诊断并返回结构化失败。
    */
   private async fail(input: AgentRunInput, kind: ImportAgentFailureKind, message?: string): Promise<AgentRunResult> {
-    const result = { kind, message: message?.trim() || FAILURE_MESSAGES[kind] };
+    const result = { kind, message: summarizeImportFailure(kind, message) };
     await writeJson(join(input.diagnosticsDir, 'agent.json'), result);
     return result;
   }
@@ -292,14 +293,17 @@ export function joinUrl(baseUrl: string | undefined, startPath: string) {
  */
 function describeTimeout(result: { events: Array<{ type: string }>; stderr: string }) {
   if (result.events.length === 0 && !result.stderr.trim()) {
-    return '页面探索超时：时限内 OpenCode 没有输出日志，进程可能未开始探索或输出被中断';
+    return '页面探索超时：时限内没有过程输出';
   }
 
-  const types = result.events.slice(-5).map((event) => event.type).join('、') || '无';
-  const logLine = result.stderr.trim().split(/\r?\n/).at(-1)?.slice(0, 180);
-  return logLine
-    ? `页面探索超时：最后事件 ${types}；${logLine}`
-    : `页面探索超时：最后事件 ${types}`;
+  return '页面探索超时';
+}
+
+/**
+ * 判断 OpenCode 日志是否表明 Playwright MCP 未能进入会话。
+ */
+function isPlaywrightMcpUnavailable(stderr: string) {
+  return /server unavailable/i.test(stderr) && /playwright/i.test(stderr);
 }
 
 /**

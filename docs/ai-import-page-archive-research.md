@@ -163,7 +163,7 @@ Playwright 官方明确说明 MCP 不是安全边界，因此应同时使用进�
 - 根据项目环境设置 `--allowed-origins`，并包含业务页面实际需要的 API、静态资源和 SSO origin。官方特别说明 origin allowlist 不构成安全边界且不影响重定向，不能代替网络隔离；`--blocked-origins` 先于 allowlist 判断。
 - 不传 `--allow-unrestricted-file-access`。MCP 默认只允许 workspace roots（没有 roots 时为 `cwd`）内的文件，且阻止 `file://` 导航。文件上传虽然接受绝对路径，也只能使用任务目录内由宿主准备的 fixture。
 - 固定 `--output-dir=<TASK_ARTIFACTS>`。snapshot、截图、Trace 和其他输出只写任务目录；浏览器触发下载后，由宿主从该目录筛选、登记和清理，Agent 不获得任意外部路径。
-- 后台任务使用 `--headless --isolated --storage-state=<PROJECT_STORAGE_STATE>`。项目已保存的登录态由宿主按精确路径传给 MCP，不复制进页面档案；任务结束后隔离上下文丢弃。默认持久化 profile 会跨 session 保留浏览器数据且同一 profile 不能并发使用，不适合作为首版任务默认值。
+- 后台任务使用 `--headless --isolated --storage-state=<PROJECT_STORAGE_STATE>`，不要同时传 `--user-data-dir`：当前 Playwright MCP 在 isolated 模式下会因此立即退出，OpenCode 会话里就没有浏览器工具。项目已保存的登录态由宿主按精确路径传给 MCP，不复制进页面档案；任务结束后隔离上下文丢弃。默认持久化 profile 会跨 session 保留浏览器数据且同一 profile 不能并发使用，不适合作为首版任务默认值。
 - 不使用 `--extension`。Extension 会连接用户正在运行的 Edge/Chrome 和现有登录态，适合人工协助，不适合后台隔离任务。
 - 禁用 `playwright_browser_run_code_unsafe`；官方将其标注为等同 RCE。默认也应禁用 storage/cookie 读写和完整网络请求正文工具，只有诊断任务按需开放，避免 Agent 把 Cookie、Token 或响应正文写入候选档案。
 - `browser_evaluate` 只在结构化工具无法完成页面内观察时使用；它运行于页面上下文，不等同于宿主 Shell，但仍可能读取页面敏感数据。

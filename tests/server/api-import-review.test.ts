@@ -65,7 +65,7 @@ describe('AI 导入 TestIntent 审阅', () => {
 
     expect(started.status).toBe(200);
     expect(Date.now() - startedAt).toBeLessThan(300);
-    expect(['parsed', 'exploring', 'generating']).toContain(started.body.cases[0]?.status);
+    expect(started.body.cases[0]?.status).toBe('exploring');
 
     const reviewed = await waitForImportReview(app, taskId);
     expect(reviewed.cases[0]?.status).toBe('pending-review');
@@ -173,6 +173,36 @@ describe('AI 导入 TestIntent 审阅', () => {
     expect(confirmedCase?.status).toBe('publishable');
     expect(retriedCase?.status).toBe('pending-review');
     expect(retriedCase?.intent?.caseNumber).toBe('TC-002');
+  });
+
+  it('单条重试立即返回探索中，不把旧失败当成已完成', async () => {
+    let runs = 0;
+    const runner: AgentRunner = {
+      async run(input) {
+        runs += 1;
+        if (runs === 1) {
+          return { kind: 'explore-failed', message: '页面探索失败，无法生成测试意图' };
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        return { kind: 'success', intent: toTestIntent(input.item) };
+      }
+    };
+    const app = await createProjectApp(runner);
+    const created = await createTask(app, await buildValidWorkbook());
+    const taskId = created.body.id as string;
+    const caseId = created.body.cases[0].id as string;
+
+    await startImportReview(app, taskId);
+    const startedAt = Date.now();
+    const started = await request(app).post(`/api/projects/crm/imports/${taskId}/cases/${caseId}/retry`);
+
+    expect(started.status).toBe(200);
+    expect(Date.now() - startedAt).toBeLessThan(300);
+    expect(started.body.cases[0]?.status).toBe('exploring');
+
+    const retried = await waitForImportReview(app, taskId);
+    expect(retried.cases[0]?.status).toBe('pending-review');
   });
 
   it('审阅、确认和重试在项目或任务不存在时返回 404', async () => {

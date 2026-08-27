@@ -13,7 +13,8 @@ import {
   buildOpenCodeConfigContent,
   buildOpenCodeEnv,
   buildOpenCodeModelEntry,
-  buildPlaywrightMcpCommand
+  buildPlaywrightMcpCommand,
+  PLAYWRIGHT_MCP_TIMEOUT_MS
 } from '../../server/src/services/import/opencode-config';
 import { extractCandidateJson, parseOpenCodeJsonl, type SpawnFn } from '../../server/src/services/import/opencode-process';
 import {
@@ -77,7 +78,8 @@ describe('OpenCode 接入契约', () => {
     expect(command.join(' ')).not.toContain('npx');
     expect(command.join(' ')).toContain('--isolated');
     expect(command.join(' ')).toContain(`--storage-state=${launch.storageStatePath}`);
-    expect(command.join(' ')).toContain(`--user-data-dir=${launch.userDataDir}`);
+    expect(command.join(' ')).not.toContain('--user-data-dir=');
+    expect(chat.mcp.playwright.timeout).toBe(PLAYWRIGHT_MCP_TIMEOUT_MS);
     expect(chat.provider.corp.models['test-agent']).toEqual({ name: 'test-agent' });
   });
 
@@ -263,6 +265,54 @@ describe('OpenCode 接入契约', () => {
       })
     }).run(makeRunInput());
     expect(model.kind).toBe('model-failed');
+    if (model.kind === 'model-failed') {
+      expect(model.message.length).toBeLessThanOrEqual(80);
+      expect(model.message).not.toContain('timestamp=');
+    }
+  });
+
+  it('进程失败时页面说明是短摘要，完整日志只写诊断目录', async () => {
+    await writeFile(join(root, 'opencode.exe'), 'fake');
+    await writeFile(join(root, 'mcp.js'), 'fake');
+    const dump = [
+      'timestamp=2026-08-27T08:33:47.383Z level=WARN message="server unavailable" key=playwright status=failed',
+      'timestamp=2026-08-27T08:33:52.262Z level=ERROR error.error="AI_APICallError: Cannot connect to API: The socket connection was closed unexpectedly."'
+    ].join('\n');
+    const failed = await createOpenCodeAgentRunner({
+      resolveOpenCodePath: () => join(root, 'opencode.exe'),
+      resolveMcpPath: () => join(root, 'mcp.js'),
+      spawn: createSpawnMock({ stdout: '', stderr: dump, exitCode: 1 })
+    }).run(makeRunInput());
+
+    expect(failed.kind).toBe('process-failed');
+    if (failed.kind === 'process-failed') {
+      expect(failed.message).toBe('模型服务连接中断，请稍后重试');
+      expect(failed.message).not.toContain('timestamp=');
+    }
+    expect(existsSync(join(root, 'diagnostics', 'stderr.txt'))).toBe(true);
+  });
+
+  it('MCP 未进入会话时不把模型的 explore-failed 当成页面探索失败', async () => {
+    await writeFile(join(root, 'opencode.exe'), 'fake');
+    await writeFile(join(root, 'mcp.js'), 'fake');
+    const failed = await createOpenCodeAgentRunner({
+      resolveOpenCodePath: () => join(root, 'opencode.exe'),
+      resolveMcpPath: () => join(root, 'mcp.js'),
+      spawn: createSpawnMock({
+        stdout: jsonl({
+          kind: 'explore-failed',
+          message: '当前会话未提供 Playwright MCP 浏览器工具，无法打开或观察目标页面'
+        }),
+        stderr:
+          'timestamp=2026-08-27T08:56:57.000Z level=WARN message="server unavailable" key=playwright type=local status=failed\n',
+        exitCode: 0
+      })
+    }).run(makeRunInput());
+
+    expect(failed.kind).toBe('process-failed');
+    if (failed.kind === 'process-failed') {
+      expect(failed.message).toBe('Playwright 浏览器服务未能启动，无法探索页面');
+    }
   });
 
   it('成功候选使用探索定位器，并清理 user-data-dir', async () => {
@@ -434,7 +484,7 @@ function jsonl(candidate: unknown) {
 /**
  * 构造立即退出的假子进程，用于契约测试。
  */
-function createSpawnMock(options: { stdout: string; exitCode: number }) {
+function createSpawnMock(options: { stdout: string; stderr?: string; exitCode: number }) {
   return () => {
     const child = new EventEmitter() as EventEmitter & {
       pid: number;
@@ -453,6 +503,9 @@ function createSpawnMock(options: { stdout: string; exitCode: number }) {
 
     queueMicrotask(() => {
       child.stdout.emit('data', Buffer.from(options.stdout));
+      if (options.stderr) {
+        child.stderr.emit('data', Buffer.from(options.stderr));
+      }
       child.exitCode = options.exitCode;
       child.emit('exit', options.exitCode);
     });
