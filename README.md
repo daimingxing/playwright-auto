@@ -100,9 +100,13 @@ npm run dev
     "provider": "corp",
     "model": "test-agent",
     "baseUrl": "",
+    "apiKey": "",
     "opencodePath": "",
     "playwrightMcpPath": "",
-    "timeoutMs": 180000
+    "timeoutMs": 180000,
+    "contextLimit": 0,
+    "outputLimit": 0,
+    "reasoningEffort": ""
   }
 }
 ```
@@ -120,10 +124,13 @@ npm run dev
 - `steps.timeouts.action`：手动新增点击、输入、选择等操作步骤，和录制导入操作步骤的默认等待毫秒数。
 - `steps.timeouts.wait`：手动新增等待步骤的默认等待毫秒数。
 - `agent.protocol`：模型协议，`chat-completions` 或 `responses`。
-- `agent.provider` / `agent.model`：OpenCode Provider 与模型名。
-- `agent.baseUrl`：模型服务地址，也可用 `AI_BASE_URL`；`AI_API_KEY` 只走环境变量。
+- `agent.provider` / `agent.model`：OpenCode 自定义供应商标识与模型名。`provider` 可自定（示例用 `corp` 表示公司内部模型），会拼进 `--model <provider>/<model>`。
+- `agent.baseUrl`：模型服务地址，也可用 `AI_BASE_URL`。
+- `agent.apiKey`：模型密钥，写在已被 gitignore 的本地 `playwright-auto.config.json`；也可用 `AI_API_KEY`，环境变量优先。密钥不会返回给前端，也不会写入任务目录。
 - `agent.opencodePath` / `agent.playwrightMcpPath`：OpenCode 与官方 Playwright MCP 的本机路径。
 - `agent.timeoutMs`：单次页面探索的总超时。
+- `agent.contextLimit` / `agent.outputLimit`：写入 OpenCode 自定义模型的 `limit.context` / `limit.output`。`0` 或不填则不写入。Grok 4.6 上下文为 `500000`；官方输出无硬上限，OpenCode 需要两项时可同样填 `500000`。只填 context 时 output 与 context 相同。
+- `agent.reasoningEffort`：写入模型 `options.reasoningEffort`，可选 `low` / `medium` / `high` / `xhigh`。空字符串不写入。Grok 4.6 不填时网关默认 `high`，且不能关闭思考。
 同名环境变量仍可临时覆盖或扩展配置文件：`PORT`、`DATA_ROOT`、`VITE_API_BASE`、`PLAYWRIGHT_AUTO_CORS_ORIGINS`、`PLAYWRIGHT_AUTO_HEADLESS_WORKERS`、`PLAYWRIGHT_AUTO_HEADED_WORKERS`、`PLAYWRIGHT_AUTO_MAX_WORKERS`、`PLAYWRIGHT_AUTO_AGENT_PROTOCOL`、`OPENCODE_BIN`、`PLAYWRIGHT_MCP_CLI`。`PLAYWRIGHT_AUTO_CORS_ORIGINS` 使用英文逗号分隔多个来源，例如 `https://tool.example,http://localhost:5174`。
 
 ## 安全边界

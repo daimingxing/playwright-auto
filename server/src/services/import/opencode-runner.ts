@@ -108,7 +108,10 @@ export class OpenCodeAgentRunner implements AgentRunner {
         mcpOutputDir,
         storageStatePath: input.storageStatePath,
         allowedOrigin: originOf(input.baseUrl),
-        executablePath: input.executablePath
+        executablePath: input.executablePath,
+        contextLimit: config.contextLimit,
+        outputLimit: config.outputLimit,
+        reasoningEffort: config.reasoningEffort
       });
 
       await writeJson(join(inputDir, 'case.json'), {
@@ -145,6 +148,7 @@ export class OpenCodeAgentRunner implements AgentRunner {
         cwd: input.workDir,
         env: buildOpenCodeEnv(JSON.stringify(configContent), {
           AI_BASE_URL: config.baseUrl,
+          AI_API_KEY: config.apiKey,
           ...getVendorEnv()
         }),
         stdin: buildExplorePrompt(input),

@@ -21,6 +21,7 @@ afterEach(async () => {
   delete process.env.VITE_API_BASE;
   delete process.env.PLAYWRIGHT_AUTO_AGENT_PROTOCOL;
   delete process.env.AI_BASE_URL;
+  delete process.env.AI_API_KEY;
   delete process.env.OPENCODE_BIN;
   delete process.env.PLAYWRIGHT_MCP_CLI;
   await rm(root, { recursive: true, force: true });
@@ -60,9 +61,13 @@ describe('应用配置', () => {
         provider: 'corp',
         model: 'test-agent',
         baseUrl: '',
+        apiKey: '',
         opencodePath: '',
         playwrightMcpPath: '',
-        timeoutMs: 180000
+        timeoutMs: 180000,
+        contextLimit: 0,
+        outputLimit: 0,
+        reasoningEffort: ''
       }
     });
   });
@@ -126,9 +131,13 @@ describe('应用配置', () => {
         provider: 'corp',
         model: 'test-agent',
         baseUrl: '',
+        apiKey: '',
         opencodePath: '',
         playwrightMcpPath: '',
-        timeoutMs: 180000
+        timeoutMs: 180000,
+        contextLimit: 0,
+        outputLimit: 0,
+        reasoningEffort: ''
       }
     });
   });
@@ -150,6 +159,9 @@ describe('应用配置', () => {
           action: 3000,
           wait: 1500
         }
+      },
+      agent: {
+        apiKey: 'file-secret'
       }
     });
     process.env.PORT = '3200';
@@ -161,6 +173,7 @@ describe('应用配置', () => {
     process.env.VITE_API_BASE = 'https://env-api.example';
     process.env.PLAYWRIGHT_AUTO_AGENT_PROTOCOL = 'responses';
     process.env.AI_BASE_URL = 'https://llm.example/v1';
+    process.env.AI_API_KEY = 'env-secret';
     const { getAppConfig } = await importFreshConfig();
 
     expect(getAppConfig()).toEqual({
@@ -193,9 +206,13 @@ describe('应用配置', () => {
         provider: 'corp',
         model: 'test-agent',
         baseUrl: 'https://llm.example/v1',
+        apiKey: 'env-secret',
         opencodePath: '',
         playwrightMcpPath: '',
-        timeoutMs: 180000
+        timeoutMs: 180000,
+        contextLimit: 0,
+        outputLimit: 0,
+        reasoningEffort: ''
       }
     });
   });
@@ -208,6 +225,36 @@ describe('应用配置', () => {
 
     expect(() => getAppConfig()).toThrow('配置文件解析失败');
     expect(() => getAppConfig()).toThrow('playwright-auto.config.json');
+  });
+
+  it('读取配置文件中的 API Key', async () => {
+    await writeConfig({
+      agent: {
+        apiKey: 'file-secret',
+        baseUrl: 'https://file.example/v1'
+      }
+    });
+    const { getAppConfig } = await importFreshConfig();
+
+    expect(getAppConfig().agent.apiKey).toBe('file-secret');
+    expect(getAppConfig().agent.baseUrl).toBe('https://file.example/v1');
+  });
+
+  it('读取自定义模型的上下文窗口和思考档位', async () => {
+    await writeConfig({
+      agent: {
+        model: 'grok-4.6',
+        contextLimit: 500000,
+        outputLimit: 500000,
+        reasoningEffort: 'high'
+      }
+    });
+    const { getAppConfig } = await importFreshConfig();
+
+    expect(getAppConfig().agent.model).toBe('grok-4.6');
+    expect(getAppConfig().agent.contextLimit).toBe(500000);
+    expect(getAppConfig().agent.outputLimit).toBe(500000);
+    expect(getAppConfig().agent.reasoningEffort).toBe('high');
   });
 });
 

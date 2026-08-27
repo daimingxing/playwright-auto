@@ -31,8 +31,12 @@
     "provider": "corp",
     "model": "test-agent",
     "baseUrl": "",
+    "apiKey": "",
     "opencodePath": "",
     "playwrightMcpPath": "",
-    "timeoutMs": 180000
+    "timeoutMs": 180000,
+    "contextLimit": 0,
+    "outputLimit": 0,
+    "reasoningEffort": ""
   }
 }

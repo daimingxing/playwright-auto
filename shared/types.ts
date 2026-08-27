@@ -254,16 +254,27 @@ export interface StepConfig {
 export type AgentProtocol = 'chat-completions' | 'responses';
 
 /**
- * AI 导入 Agent 本地设置。凭据不入库，只通过进程环境变量注入。
+ * OpenCode 自定义模型可识别的思考档位。空字符串表示不写入，交给模型服务默认。
+ */
+export type AgentReasoningEffort = '' | 'low' | 'medium' | 'high' | 'xhigh';
+
+/**
+ * AI 导入 Agent 本地设置。
+ * `apiKey` 只存在于 gitignore 的本地配置或进程环境变量，不进仓库、不进 `/api/app-config`、不进任务目录。
+ * `contextLimit` / `outputLimit` / `reasoningEffort` 为 0 或空时不写入 OpenCode 模型段。
  */
 export interface AgentConfig {
   protocol: AgentProtocol;
   provider: string;
   model: string;
   baseUrl: string;
+  apiKey: string;
   opencodePath: string;
   playwrightMcpPath: string;
   timeoutMs: number;
+  contextLimit: number;
+  outputLimit: number;
+  reasoningEffort: AgentReasoningEffort;
 }
 
 /**

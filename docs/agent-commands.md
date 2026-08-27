@@ -45,7 +45,8 @@ npm run test:e2e
 - `server.corsOrigins` 是配置文件中 `server` 对象下的字段，不是单独文件
 - `browser.openTimeoutMs` 用于平台自身打开业务 URL，包括手动登录初始打开
 - `steps.timeouts` 用于生成、运行和实测步骤等待，不用于平台自身打开业务 URL
-- `agent.protocol` 只接受 `chat-completions` 或 `responses`；凭据用 `AI_API_KEY` / `AI_BASE_URL`，不要写入配置文件
+- `agent.protocol` 只接受 `chat-completions` 或 `responses`；模型地址与密钥可写在 gitignore 的本地配置（`agent.baseUrl` / `agent.apiKey`），也可用 `AI_BASE_URL` / `AI_API_KEY`，环境变量优先。`/api/app-config` 不返回密钥
+- `agent.contextLimit` / `agent.outputLimit` / `agent.reasoningEffort` 可留空；有值时写入 OpenCode 自定义模型的 `limit` 与 `options.reasoningEffort`
 - `agent.opencodePath` / `OPENCODE_BIN` 与 `agent.playwrightMcpPath` / `PLAYWRIGHT_MCP_CLI` 指向本机二进制；缺少时探索返回进程失败，不会回退假装成功
 - 测试或无 OpenCode 环境可设 `PLAYWRIGHT_AUTO_AGENT_RUNNER=fake` 注入 Fake；默认生产 runner 仍是 OpenCode
 - 完整配置类型定义在 `shared/types.ts`，后端读取完整配置，`/api/app-config` 只返回前端需要的安全子集

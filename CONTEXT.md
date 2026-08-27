@@ -59,6 +59,8 @@
 - 用户确认 TestIntent 后仍不写入正式用例；显式发布时将意图转为 Action IR，通过校验门后写入 `case.json` 并生成 `case.spec.ts`。
 - 发布所用定位器必须来自该次页面探索的已验证结果；编译不得对目标文本做启发式猜测。
 - AI 导入默认使用固定 OpenCode 与官方 Playwright MCP 做单次页面探索；测试可注入 Fake AgentRunner。
+- 模型密钥可写在 gitignore 的本地 `playwright-auto.config.json`，不得进入仓库、前端配置接口或导入任务目录；进程环境变量优先于配置文件。
+- 自定义模型的上下文窗口和思考档位可写在本地配置；未填写时不写入 OpenCode 模型段，沿用模型服务默认。
 - 存在未解决待确认项、结构校验失败或缺少已验证结构化定位器的用例不能发布。
 - 已确认的测试意图保存在导入任务 `cases/<itemId>/intent.json`，cleanup 只删除 `work/`、`output/`、`diagnostics/`，不删除已确认意图。
 - Excel 文件结构错误时阻断整次导入；单个用例内容错误时只阻断该用例，并返回工作表、行号和原因。

@@ -62,6 +62,7 @@ describe('项目接口', () => {
       action: 2000,
       wait: 1000
     });
+    expect(res.body).not.toHaveProperty('agent');
   });
 
   it('通过接口创建并读取项目', async () => {

@@ -11,6 +11,7 @@ import {
   DENIED_MCP_TOOLS,
   buildOpenCodeConfigContent,
   buildOpenCodeEnv,
+  buildOpenCodeModelEntry,
   buildPlaywrightMcpCommand
 } from '../../server/src/services/import/opencode-config';
 import { extractCandidateJson, parseOpenCodeJsonl, type SpawnFn } from '../../server/src/services/import/opencode-process';
@@ -66,6 +67,38 @@ describe('OpenCode 接入契约', () => {
     expect(command.join(' ')).toContain('--isolated');
     expect(command.join(' ')).toContain(`--storage-state=${launch.storageStatePath}`);
     expect(command.join(' ')).toContain(`--user-data-dir=${launch.userDataDir}`);
+    expect(chat.provider.corp.models['test-agent']).toEqual({ name: 'test-agent' });
+  });
+
+  it('未填窗口和思考档位时不写入 OpenCode 模型段；Grok 4.6 可声明 500k', () => {
+    expect(buildOpenCodeModelEntry({ model: 'grok-4.6' })).toEqual({ name: 'grok-4.6' });
+    expect(buildOpenCodeModelEntry({
+      model: 'grok-4.6',
+      contextLimit: 500000,
+      reasoningEffort: 'high'
+    })).toEqual({
+      name: 'grok-4.6',
+      limit: { context: 500000, output: 500000 },
+      options: { reasoningEffort: 'high' }
+    });
+    expect(buildOpenCodeConfigContent({
+      protocol: 'chat-completions',
+      provider: 'corp',
+      model: 'grok-4.6',
+      baseUrl: 'https://llm.example/v1',
+      opencodePath: 'C:\\app\\opencode.exe',
+      playwrightMcpPath: 'C:\\app\\mcp\\cli.js',
+      workDir: join(root, 'work'),
+      userDataDir: join(root, 'user-data'),
+      mcpOutputDir: join(root, 'mcp-output'),
+      contextLimit: 500000,
+      outputLimit: 500000,
+      reasoningEffort: 'medium'
+    }).provider.corp.models['grok-4.6']).toEqual({
+      name: 'grok-4.6',
+      limit: { context: 500000, output: 500000 },
+      options: { reasoningEffort: 'medium' }
+    });
   });
 
   it('生产默认 OpenCode，测试可注入 Fake', () => {
@@ -84,6 +117,23 @@ describe('OpenCode 接入契约', () => {
         delete process.env.PLAYWRIGHT_AUTO_AGENT_RUNNER;
       } else {
         process.env.PLAYWRIGHT_AUTO_AGENT_RUNNER = previous;
+      }
+    }
+  });
+
+  it('子进程 API Key 优先环境变量，否则用本地配置', () => {
+    const previous = process.env.AI_API_KEY;
+    delete process.env.AI_API_KEY;
+
+    try {
+      expect(buildOpenCodeEnv('{}', { AI_API_KEY: 'file-secret' }).AI_API_KEY).toBe('file-secret');
+      process.env.AI_API_KEY = 'env-secret';
+      expect(buildOpenCodeEnv('{}', { AI_API_KEY: 'file-secret' }).AI_API_KEY).toBe('env-secret');
+    } finally {
+      if (previous === undefined) {
+        delete process.env.AI_API_KEY;
+      } else {
+        process.env.AI_API_KEY = previous;
       }
     }
   });

@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import type { AgentConfig, AgentProtocol } from '../../../../shared/types';
+import type { AgentConfig, AgentProtocol, AgentReasoningEffort } from '../../../../shared/types';
 import { getChromePath } from '../playwright/vendor-browser';
 
 export const DENIED_MCP_TOOLS = [
@@ -48,6 +48,9 @@ export interface OpenCodeLaunchConfig {
   storageStatePath?: string;
   allowedOrigin?: string;
   executablePath?: string;
+  contextLimit?: number;
+  outputLimit?: number;
+  reasoningEffort?: AgentReasoningEffort;
 }
 
 /**
@@ -130,9 +133,7 @@ export function buildOpenCodeConfigContent(input: OpenCodeLaunchConfig) {
           apiKey: '{env:AI_API_KEY}'
         },
         models: {
-          [input.model]: {
-            name: input.model
-          }
+          [input.model]: buildOpenCodeModelEntry(input)
         }
       }
     },
@@ -146,6 +147,35 @@ export function buildOpenCodeConfigContent(input: OpenCodeLaunchConfig) {
     },
     permission
   };
+}
+
+/**
+ * 按 OpenCode 自定义模型规则组装 models 条目。
+ * 未填的窗口和思考档位不写入，避免覆盖模型服务默认；只填 context 时 output 与之相同。
+ */
+export function buildOpenCodeModelEntry(input: Pick<OpenCodeLaunchConfig, 'model' | 'contextLimit' | 'outputLimit' | 'reasoningEffort'>) {
+  const entry: {
+    name: string;
+    limit?: { context: number; output: number };
+    options?: { reasoningEffort: Exclude<AgentReasoningEffort, ''> };
+  } = {
+    name: input.model
+  };
+  const contextLimit = input.contextLimit ?? 0;
+  const outputLimit = input.outputLimit ?? 0;
+
+  if (contextLimit > 0) {
+    entry.limit = {
+      context: contextLimit,
+      output: outputLimit > 0 ? outputLimit : contextLimit
+    };
+  }
+
+  if (input.reasoningEffort) {
+    entry.options = { reasoningEffort: input.reasoningEffort };
+  }
+
+  return entry;
 }
 
 /**
@@ -201,7 +231,8 @@ export function buildOpenCodeArgs(input: {
 }
 
 /**
- * 构造给 OpenCode 子进程的干净环境，凭据只走环境变量。
+ * 构造给 OpenCode 子进程的干净环境。
+ * 凭据只作为子进程环境变量注入；`AI_API_KEY` 优先读进程环境，否则用调用方从本地配置传入的值。
  */
 export function buildOpenCodeEnv(configContent: string, extra: Record<string, string | undefined> = {}) {
   const allow = [
@@ -233,11 +264,11 @@ export function buildOpenCodeEnv(configContent: string, extra: Record<string, st
   }
 
   env.OPENCODE_CONFIG_CONTENT = configContent;
-  env.AI_API_KEY = process.env.AI_API_KEY ?? '';
+  env.AI_API_KEY = process.env.AI_API_KEY || extra.AI_API_KEY || '';
   env.AI_BASE_URL = extra.AI_BASE_URL || process.env.AI_BASE_URL || extra.baseUrl || '';
 
   for (const [key, value] of Object.entries(extra)) {
-    if (value && key !== 'baseUrl') {
+    if (value && key !== 'baseUrl' && key !== 'AI_API_KEY' && key !== 'AI_BASE_URL') {
       env[key] = value;
     }
   }

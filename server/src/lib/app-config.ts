@@ -33,9 +33,13 @@ const DEFAULT_CONFIG: FullAppConfig = {
     provider: 'corp',
     model: 'test-agent',
     baseUrl: '',
+    apiKey: '',
     opencodePath: '',
     playwrightMcpPath: '',
-    timeoutMs: 180000
+    timeoutMs: 180000,
+    contextLimit: 0,
+    outputLimit: 0,
+    reasoningEffort: ''
   }
 };
 
@@ -78,9 +82,13 @@ export function getAppConfig(): FullAppConfig {
       provider: envOrFile('PLAYWRIGHT_AUTO_AGENT_PROVIDER', getValue(file, 'agent', 'provider')),
       model: envOrFile('PLAYWRIGHT_AUTO_AGENT_MODEL', getValue(file, 'agent', 'model')),
       baseUrl: envOrFile('AI_BASE_URL', getValue(file, 'agent', 'baseUrl')),
+      apiKey: envOrFile('AI_API_KEY', getValue(file, 'agent', 'apiKey')),
       opencodePath: envOrFile('OPENCODE_BIN', getValue(file, 'agent', 'opencodePath')),
       playwrightMcpPath: envOrFile('PLAYWRIGHT_MCP_CLI', getValue(file, 'agent', 'playwrightMcpPath')),
-      timeoutMs: envOrFile('PLAYWRIGHT_AUTO_AGENT_TIMEOUT_MS', getValue(file, 'agent', 'timeoutMs'))
+      timeoutMs: envOrFile('PLAYWRIGHT_AUTO_AGENT_TIMEOUT_MS', getValue(file, 'agent', 'timeoutMs')),
+      contextLimit: envOrFile('PLAYWRIGHT_AUTO_AGENT_CONTEXT_LIMIT', getValue(file, 'agent', 'contextLimit')),
+      outputLimit: envOrFile('PLAYWRIGHT_AUTO_AGENT_OUTPUT_LIMIT', getValue(file, 'agent', 'outputLimit')),
+      reasoningEffort: envOrFile('PLAYWRIGHT_AUTO_AGENT_REASONING_EFFORT', getValue(file, 'agent', 'reasoningEffort'))
     }
   });
 
@@ -127,9 +135,13 @@ function createConfigSchema(maxWorkers: number) {
       provider: textField(DEFAULT_CONFIG.agent.provider),
       model: textField(DEFAULT_CONFIG.agent.model),
       baseUrl: textField(DEFAULT_CONFIG.agent.baseUrl, true),
+      apiKey: textField(DEFAULT_CONFIG.agent.apiKey, true),
       opencodePath: textField(DEFAULT_CONFIG.agent.opencodePath, true),
       playwrightMcpPath: textField(DEFAULT_CONFIG.agent.playwrightMcpPath, true),
-      timeoutMs: intField(DEFAULT_CONFIG.agent.timeoutMs, 1000, 3600000)
+      timeoutMs: intField(DEFAULT_CONFIG.agent.timeoutMs, 1000, 3600000),
+      contextLimit: intField(DEFAULT_CONFIG.agent.contextLimit, 0, 2000000),
+      outputLimit: intField(DEFAULT_CONFIG.agent.outputLimit, 0, 2000000),
+      reasoningEffort: reasoningField
     })
   });
 }
@@ -158,6 +170,12 @@ const protocolField = z.preprocess(
   (value) => typeof value === 'string' ? value.trim().toLowerCase() : value,
   z.enum(['chat-completions', 'responses'])
 ).catch(DEFAULT_CONFIG.agent.protocol);
+
+/** 非法或未填的思考档位回退为空，不写入 OpenCode。 */
+const reasoningField = z.preprocess(
+  (value) => typeof value === 'string' ? value.trim().toLowerCase() : value,
+  z.enum(['', 'low', 'medium', 'high', 'xhigh'])
+).catch(DEFAULT_CONFIG.agent.reasoningEffort);
 
 const listField = z.preprocess(
   (value) => typeof value === 'string' ? value.split(',') : Array.isArray(value) ? value : [],
