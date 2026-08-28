@@ -58,6 +58,8 @@ CASE_HEADER.forEach((header, index) => {
 STEP_HEADER.forEach((header, index) => {
   steps.getColumn(index + 1).width = Math.max(12, header.length * 2 + 4);
 });
+// 「数据」列设为文本，避免 Excel 把 2026-08-27 收成日期序列号。
+steps.getColumn(5).numFmt = '@';
 cases.views = [{ state: 'frozen', ySplit: 1 }];
 steps.views = [{ state: 'frozen', ySplit: 1 }];
 

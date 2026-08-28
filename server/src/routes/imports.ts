@@ -4,7 +4,7 @@ import { cleanupImportTask, createImportTask, deleteImportTask, getImportTask, l
 import { badRequest } from '../lib/http-error';
 import type { AgentRunner } from '../services/import/agent-runner';
 import { createDefaultAgentRunner } from '../services/import/opencode-runner';
-import { confirmImportCase, startRetryImportCase, startReviewImportTask } from '../services/import/import-review';
+import { confirmImportCase, startRetryImportCase, startReviewImportTask, unconfirmImportCase } from '../services/import/import-review';
 import { publishImportCase } from '../services/import/import-publish';
 
 interface ProjectParams {
@@ -98,6 +98,14 @@ importsRouter.post<ImportTaskParams>('/:taskId/review', async (req, res, next) =
 importsRouter.post<ImportCaseParams>('/:taskId/cases/:caseId/confirm', async (req, res, next) => {
   try {
     res.json(await confirmImportCase(req.params.projectKey, req.params.taskId, req.params.caseId));
+  } catch (error) {
+    next(error);
+  }
+});
+
+importsRouter.post<ImportCaseParams>('/:taskId/cases/:caseId/unconfirm', async (req, res, next) => {
+  try {
+    res.json(await unconfirmImportCase(req.params.projectKey, req.params.taskId, req.params.caseId));
   } catch (error) {
     next(error);
   }

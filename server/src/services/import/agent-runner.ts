@@ -123,12 +123,7 @@ export function toTestIntent(item: ImportTaskCase, ambiguous = false): TestInten
   const pendingItems: IntentPendingItem[] = [];
 
   if (ambiguous) {
-    const target = steps.find((step) => Boolean(step.target)) ?? steps[0];
-    pendingItems.push({
-      id: createPrefixedId('cfm'),
-      stepId: target?.id,
-      message: '目标描述存在歧义，请确认具体页面对象后再继续'
-    });
+    applyAmbiguityPending({ pendingItems, steps }, undefined);
   }
 
   return {
@@ -143,6 +138,26 @@ export function toTestIntent(item: ImportTaskCase, ambiguous = false): TestInten
     steps,
     pendingItems
   };
+}
+
+const DEFAULT_AMBIGUITY_PENDING = '目标描述存在歧义，请确认具体页面对象后再继续';
+
+/**
+ * 把探索发现的歧义挂到最相关的意图步骤上，优先使用探索给出的说明。
+ */
+export function applyAmbiguityPending(
+  intent: Pick<TestIntent, 'pendingItems' | 'steps'>,
+  message?: string
+) {
+  const step =
+    intent.steps.find((item) => item.action === '检查文本') ??
+    intent.steps.find((item) => Boolean(item.target)) ??
+    intent.steps[0];
+  intent.pendingItems.splice(0, intent.pendingItems.length, {
+    id: createPrefixedId('cfm'),
+    stepId: step?.id,
+    message: message?.trim() || DEFAULT_AMBIGUITY_PENDING
+  });
 }
 
 /**

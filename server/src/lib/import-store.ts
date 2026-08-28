@@ -362,7 +362,8 @@ async function writeCaseCheckpoint(
 ) {
   const statusPath = join(getImportCasePath(projectKey, taskId, item.id), 'status.json');
   const previous = existsSync(statusPath) ? await readJson<ImportCaseStatusFile>(statusPath) : undefined;
-  const failure = extra?.failure ?? previous?.failure;
+  // 非失败态不得沿用上次的 failure，否则待确认用例仍会显示「页面探索超时」。
+  const failure = extra?.failure ?? (item.status === 'failed' ? previous?.failure : undefined);
   const publishedCaseKey = extra?.publishedCaseKey ?? item.publishedCaseKey ?? previous?.publishedCaseKey;
   const status: ImportCaseStatusFile = {
     id: item.id,

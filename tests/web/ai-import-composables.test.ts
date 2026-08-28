@@ -6,14 +6,16 @@ const mocks = vi.hoisted(() => ({
   getImportTask: vi.fn(),
   reviewImportTask: vi.fn(),
   confirmImportCase: vi.fn(),
-  retryImportCase: vi.fn()
+  retryImportCase: vi.fn(),
+  unconfirmImportCase: vi.fn()
 }));
 
 vi.mock('../../web/src/api/imports', () => ({
   getImportTask: mocks.getImportTask,
   reviewImportTask: mocks.reviewImportTask,
   confirmImportCase: mocks.confirmImportCase,
-  retryImportCase: mocks.retryImportCase
+  retryImportCase: mocks.retryImportCase,
+  unconfirmImportCase: mocks.unconfirmImportCase
 }));
 
 afterEach(() => {

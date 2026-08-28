@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { FakeAgentRunner, inferFakeOutcome, toTestIntent } from '../../server/src/services/import/agent-runner';
+import { FakeAgentRunner, applyAmbiguityPending, inferFakeOutcome, toTestIntent } from '../../server/src/services/import/agent-runner';
 import { readJson } from '../../server/src/lib/fs';
 import type { ExplorationResult, ImportTaskCase } from '../../shared/types';
 
@@ -55,6 +55,32 @@ describe('Fake AgentRunner', () => {
     expect(inferFakeOutcome(makeParsedCase({ remark: '存在歧义' }))).toBe('ambiguity');
     expect(inferFakeOutcome(makeParsedCase({ remark: 'login required' }))).toBe('login-blocked');
     expect(toTestIntent(makeParsedCase(), true).pendingItems[0]?.message).toContain('歧义');
+  });
+
+  it('探索给出的歧义说明挂到检查文本步骤，不套成目标歧义', () => {
+    const intent = toTestIntent(
+      makeParsedCase({
+        steps: [
+          ...makeParsedCase().steps,
+          {
+            order: 3,
+            action: '检查文本',
+            target: '提示消息',
+            data: '无法创建工单',
+            note: '',
+            source: {
+              sheet: '步骤',
+              row: 4,
+              caseNumber: 'TC-001',
+              cells: { 用例编号: 'TC-001', 动作类型: '检查文本', 目标: '提示消息' }
+            }
+          }
+        ]
+      })
+    );
+    applyAmbiguityPending(intent, '保存后的提示与用例不一致');
+    expect(intent.pendingItems[0]?.message).toBe('保存后的提示与用例不一致');
+    expect(intent.steps.find((step) => step.id === intent.pendingItems[0]?.stepId)?.action).toBe('检查文本');
   });
 
   it('覆盖取消、超时、进程失败和模型失败', async () => {

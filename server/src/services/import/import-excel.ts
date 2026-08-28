@@ -149,7 +149,7 @@ function readSheetRows(sheet: ExcelJS.Worksheet, headers: { columns: HeaderMap }
 
     for (const name of columns) {
       const col = headers.columns.get(name);
-      cells[name] = col ? cellToString(row.getCell(col).value) : '';
+      cells[name] = col ? formatCell(row.getCell(col)) : '';
     }
 
     if (columns.every((name) => !cells[name])) {
@@ -452,6 +452,78 @@ function isRelativePath(value: string) {
   }
 
   return !value.startsWith('//');
+}
+
+/**
+ * 把单元格转成导入用的纯文本。日期不输出 ISO 或序列号，只保留日历日期或日期时间。
+ */
+function formatCell(cell: ExcelJS.Cell) {
+  const value = cell.value;
+
+  if (value instanceof Date) {
+    return formatExcelDate(value);
+  }
+
+  if (typeof value === 'number' && (cell.type === ExcelJS.ValueType.Date || isDateNumberFormat(cell.numFmt))) {
+    return formatExcelSerial(value);
+  }
+
+  if (typeof value === 'object' && value && 'result' in value && value.result instanceof Date) {
+    return formatExcelDate(value.result);
+  }
+
+  return cellToString(value);
+}
+
+/**
+ * 判断数字格式是否为日期或日期时间，避免把普通数量当成序列号。
+ */
+function isDateNumberFormat(numFmt: string | undefined) {
+  if (!numFmt) {
+    return false;
+  }
+
+  const fmt = numFmt.toLowerCase();
+
+  if (fmt === 'general' || fmt === '@') {
+    return false;
+  }
+
+  if (/^\d+$/.test(fmt)) {
+    const id = Number(fmt);
+    return (id >= 14 && id <= 22) || (id >= 27 && id <= 36) || (id >= 45 && id <= 47) || (id >= 50 && id <= 58);
+  }
+
+  return /y{2,4}|d{1,4}|am\/pm/.test(fmt) || (fmt.includes('m') && (fmt.includes('d') || fmt.includes('y')));
+}
+
+/**
+ * 把 Excel 日期序列号转成日历文字。Excel 以 1899-12-30 为原点，1990 年之后不必处理 1900 闰年偏差。
+ */
+function formatExcelSerial(serial: number) {
+  return formatExcelDate(new Date(Math.round((serial - 25569) * 86400 * 1000)));
+}
+
+/**
+ * 按 UTC 日历输出日期文字，去掉 ExcelJS 默认的 ISO 时间串。
+ */
+function formatExcelDate(date: Date) {
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  const hours = date.getUTCHours();
+  const minutes = date.getUTCMinutes();
+  const seconds = date.getUTCSeconds();
+
+  if (hours === 0 && minutes === 0 && seconds === 0) {
+    return `${year}-${month}-${day}`;
+  }
+
+  return `${year}-${month}-${day} ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
 /**

@@ -67,6 +67,16 @@ export function retryImportCase(projectKey: string, taskId: string, caseId: stri
 }
 
 /**
+ * 取消确认，回到待确认。未发布前可以重试。
+ */
+export function unconfirmImportCase(projectKey: string, taskId: string, caseId: string) {
+  return requestJson<ImportTaskDetail>(
+    `/api/projects/${projectKey}/imports/${taskId}/cases/${caseId}/unconfirm`,
+    { method: 'POST' }
+  );
+}
+
+/**
  * 显式发布一条已确认用例，写入正式 case.json 并生成 case.spec.ts。
  */
 export function publishImportCase(projectKey: string, taskId: string, caseId: string) {

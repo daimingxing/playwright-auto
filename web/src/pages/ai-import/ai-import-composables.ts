@@ -1,7 +1,7 @@
 import { computed, getCurrentInstance, onUnmounted, ref } from 'vue';
 import type { ImportCaseFailure, ImportTaskCase, ImportTaskDetail } from '../../../../shared/types';
-import { confirmImportCase, getImportTask, publishImportCase, retryImportCase, reviewImportTask } from '../../api/imports';
-import { canConfirmImportCase, canPublishImportCase, canRetryImportCase, isImportCaseBusy, needsImportReview } from './ai-import';
+import { confirmImportCase, getImportTask, publishImportCase, retryImportCase, reviewImportTask, unconfirmImportCase } from '../../api/imports';
+import { canConfirmImportCase, canPublishImportCase, canRetryImportCase, canUnconfirmImportCase, isImportCaseBusy, needsImportReview } from './ai-import';
 
 const POLL_MS = 2000;
 
@@ -52,7 +52,7 @@ export function useImportTaskReview(projectKey: string, taskId: string) {
    * 确认一条待确认用例。
    */
   async function confirmCase(item: ImportTaskCase) {
-    if (!canConfirmImportCase(item.status)) {
+    if (!canConfirmImportCase(item)) {
       return;
     }
 
@@ -101,6 +101,23 @@ export function useImportTaskReview(projectKey: string, taskId: string) {
 
     try {
       task.value = await publishImportCase(projectKey, taskId, item.id);
+    } finally {
+      actingId.value = '';
+    }
+  }
+
+  /**
+   * 取消确认，回到待确认。
+   */
+  async function unconfirmCase(item: ImportTaskCase) {
+    if (!canUnconfirmImportCase(item.status)) {
+      return;
+    }
+
+    actingId.value = item.id;
+
+    try {
+      task.value = await unconfirmImportCase(projectKey, taskId, item.id);
     } finally {
       actingId.value = '';
     }
@@ -219,6 +236,7 @@ export function useImportTaskReview(projectKey: string, taskId: string) {
     loadTask,
     confirmCase,
     retryCase,
-    publishCase
+    publishCase,
+    unconfirmCase
   };
 }

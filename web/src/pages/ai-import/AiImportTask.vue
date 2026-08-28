@@ -12,6 +12,7 @@ import {
   canConfirmImportCase,
   canPublishImportCase,
   canRetryImportCase,
+  canUnconfirmImportCase,
   formatImportCaseStatus,
   formatImportSummary,
   formatParseError,
@@ -19,6 +20,7 @@ import {
   formatSourceRef,
   formatExploreWait,
   formatImportFailure,
+  formatImportPublishError,
   getDeleteImportTaskConfirm,
   isExploreRunning
 } from "./ai-import";
@@ -27,7 +29,7 @@ const route = useRoute();
 const router = useRouter();
 const projectKey = String(route.params.projectKey);
 const taskId = String(route.params.taskId);
-const { task, cases, reviewing, actingId, waitMs, loadTask, confirmCase, retryCase, publishCase } = useImportTaskReview(
+const { task, cases, reviewing, actingId, waitMs, loadTask, confirmCase, retryCase, publishCase, unconfirmCase } = useImportTaskReview(
   projectKey,
   taskId
 );
@@ -75,6 +77,18 @@ async function submitPublish(item: ImportTaskCase) {
   try {
     await publishCase(item);
     ElMessage.success("已发布正式用例");
+  } catch (error) {
+    ElMessage.error(formatImportPublishError(error));
+  }
+}
+
+/**
+ * 取消确认，回到待确认。
+ */
+async function submitUnconfirm(item: ImportTaskCase) {
+  try {
+    await unconfirmCase(item);
+    ElMessage.success("已取消确认，可以重试或继续处理待确认项");
   } catch (error) {
     ElMessage.error(getErrorMessage(error));
   }
@@ -155,7 +169,7 @@ onMounted(async () => {
                     {{ formatSourceRef(row.source) }}
                     <span v-if="formatSourceCells(row.source)">；{{ formatSourceCells(row.source) }}</span>
                   </p>
-                  <p v-if="row.failure"><strong>失败原因：</strong>{{ formatImportFailure(row.failure) }}</p>
+                  <p v-if="row.status === 'failed' && row.failure"><strong>失败原因：</strong>{{ formatImportFailure(row.failure) }}</p>
                   <p v-if="row.errors.length"><strong>错误：</strong></p>
                   <ul v-if="row.errors.length" class="error-list">
                     <li v-for="(error, index) in row.errors" :key="`${error.sheet}-${error.row}-${index}`">
@@ -201,7 +215,7 @@ onMounted(async () => {
                   </el-table>
                   <div class="actions">
                     <el-button
-                      v-if="canConfirmImportCase(row.status)"
+                      v-if="canConfirmImportCase(row)"
                       type="primary"
                       size="small"
                       :loading="actingId === row.id || isExploreRunning(row.status)"
@@ -216,6 +230,14 @@ onMounted(async () => {
                       @click="submitRetry(row)"
                     >
                       重试
+                    </el-button>
+                    <el-button
+                      v-if="canUnconfirmImportCase(row.status)"
+                      size="small"
+                      :loading="actingId === row.id || isExploreRunning(row.status)"
+                      @click="submitUnconfirm(row)"
+                    >
+                      取消确认
                     </el-button>
                     <el-button
                       v-if="canPublishImportCase(row.status)"
@@ -254,16 +276,16 @@ onMounted(async () => {
             <el-table-column label="说明" min-width="240">
               <template #default="{ row }">
                 <span v-if="actingId === row.id || isExploreRunning(row.status)">{{ formatExploreWait(waitMs) }}</span>
-                <span v-else-if="row.failure" class="failure-note">{{ formatImportFailure(row.failure) }}</span>
+                <span v-else-if="row.status === 'failed' && row.failure" class="failure-note">{{ formatImportFailure(row.failure) }}</span>
                 <span v-else-if="row.intent?.pendingItems.length">{{ row.intent.pendingItems[0]?.message }}</span>
                 <span v-else-if="row.errors.length">{{ formatParseError(row.errors[0]) }}</span>
                 <span v-else>—</span>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="220">
+            <el-table-column label="操作" width="280">
               <template #default="{ row }">
                 <el-button
-                  v-if="canConfirmImportCase(row.status)"
+                  v-if="canConfirmImportCase(row)"
                   type="primary"
                   size="small"
                   :loading="actingId === row.id"
@@ -278,6 +300,14 @@ onMounted(async () => {
                   @click="submitRetry(row)"
                 >
                   重试
+                </el-button>
+                <el-button
+                  v-if="canUnconfirmImportCase(row.status)"
+                  size="small"
+                  :loading="actingId === row.id"
+                  @click="submitUnconfirm(row)"
+                >
+                  取消确认
                 </el-button>
                 <el-button
                   v-if="canPublishImportCase(row.status)"

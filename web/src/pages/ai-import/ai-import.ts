@@ -90,10 +90,17 @@ export function formatSourceCells(source: ImportSourceRow) {
 }
 
 /**
- * 判断用例是否可以确认。
+ * 判断用例是否可以确认。有未解决待确认项时不能确认。
  */
-export function canConfirmImportCase(status: ImportCaseStatus) {
-  return status === 'pending-review';
+export function canConfirmImportCase(item: Pick<ImportTaskCase, 'status' | 'intent'>) {
+  return item.status === 'pending-review' && (item.intent?.pendingItems.length ?? 0) === 0;
+}
+
+/**
+ * 判断已确认且未发布的用例是否可以取消确认。
+ */
+export function canUnconfirmImportCase(status: ImportCaseStatus) {
+  return status === 'publishable';
 }
 
 /**
@@ -160,6 +167,54 @@ export function formatExploreWait(elapsedMs: number) {
  */
 export function formatImportFailure(failure: ImportCaseFailure) {
   return summarizeImportFailure(failure.kind, failure.message);
+}
+
+/**
+ * 把发布失败整理成页面可见说明，带上未解决待确认项等具体原因。
+ */
+export function formatImportPublishError(error: unknown) {
+  const issues = getImportPublishIssues(error);
+  const message = readErrorMessage(error, '发布失败');
+
+  if (issues.length === 0) {
+    return message;
+  }
+
+  return `${message}：${issues[0]}`;
+}
+
+/**
+ * 从未知错误对象读取可展示文案。
+ */
+function readErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  if (typeof error === 'object' && error && 'message' in error && typeof error.message === 'string' && error.message) {
+    return error.message;
+  }
+
+  return fallback;
+}
+
+/**
+ * 从发布接口错误中读取校验问题说明。
+ */
+function getImportPublishIssues(error: unknown) {
+  if (typeof error !== 'object' || error === null || !('issues' in error)) {
+    return [];
+  }
+
+  const issues = (error as { issues?: unknown }).issues;
+
+  if (!Array.isArray(issues)) {
+    return [];
+  }
+
+  return issues
+    .map((item) => (typeof item === 'object' && item && 'message' in item ? String(item.message ?? '') : ''))
+    .filter(Boolean);
 }
 
 /**

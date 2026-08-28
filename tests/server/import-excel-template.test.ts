@@ -25,5 +25,6 @@ describe('AI 导入 Excel 模板', () => {
     expect(validations.C2?.formulae?.[0]).toBe(`"${importActionTypes.join(',')}"`);
     expect(validations.C2?.allowBlank).toBe(true);
     expect(validations.C44?.type).toBe('list');
+    expect(stepSheet?.getColumn(5).numFmt).toBe('@');
   });
 });

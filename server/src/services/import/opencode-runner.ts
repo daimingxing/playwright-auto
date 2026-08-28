@@ -7,6 +7,7 @@ import { getAppConfig } from '../../lib/app-config';
 import { ensureDir, writeJson } from '../../lib/fs';
 import { getVendorEnv } from '../playwright/vendor-browser';
 import {
+  applyAmbiguityPending,
   toTestIntent,
   type AgentRunInput,
   type AgentRunner,
@@ -216,7 +217,7 @@ export class OpenCodeAgentRunner implements AgentRunner {
       return this.fail(input, 'model-failed', `不支持的候选结果类型：${kind}`);
     }
 
-    const intent = toTestIntent(input.item, kind === 'ambiguity');
+    const intent = toTestIntent(input.item);
     const locators = assignLocatorsByOrder(
       intent.steps,
       candidate.locators ?? (isRecord(candidate.intent) ? candidate.intent.locators : undefined)
@@ -227,6 +228,10 @@ export class OpenCodeAgentRunner implements AgentRunner {
 
     if (missing.length > 0) {
       return this.fail(input, 'locator-failed');
+    }
+
+    if (kind === 'ambiguity') {
+      applyAmbiguityPending(intent, typeof candidate.message === 'string' ? candidate.message : undefined);
     }
 
     const exploration: ExplorationResult = {

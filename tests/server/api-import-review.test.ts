@@ -173,6 +173,7 @@ describe('AI 导入 TestIntent 审阅', () => {
     expect(confirmedCase?.status).toBe('publishable');
     expect(retriedCase?.status).toBe('pending-review');
     expect(retriedCase?.intent?.caseNumber).toBe('TC-002');
+    expect(retriedCase?.failure).toBeUndefined();
   });
 
   it('单条重试立即返回探索中，不把旧失败当成已完成', async () => {
@@ -224,6 +225,12 @@ describe('AI 导入 TestIntent 审阅', () => {
     );
     expect(confirmMissing.status).toBe(404);
     expect(confirmMissing.body.message).toBe('导入用例不存在');
+
+    const unconfirmMissing = await request(app).post(
+      `/api/projects/crm/imports/${created.body.id}/cases/${missingCase}/unconfirm`
+    );
+    expect(unconfirmMissing.status).toBe(404);
+    expect(unconfirmMissing.body.message).toBe('导入用例不存在');
 
     const retryMissing = await request(app).post(
       `/api/projects/crm/imports/${created.body.id}/cases/${missingCase}/retry`

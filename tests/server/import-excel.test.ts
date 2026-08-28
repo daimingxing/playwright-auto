@@ -291,6 +291,33 @@ describe('AI 导入 Excel 解析', () => {
     expect(result.errors[0]).toMatchObject({ sheet: '步骤', row: 0, reason: '缺少工作表「步骤」' });
     expect('cases' in result).toBe(false);
   });
+
+  it('日期单元格读成日历文字，不输出序列号或 ISO 时间', async () => {
+    const workbook = new ExcelJS.Workbook();
+    const cases = workbook.addWorksheet('用例');
+    cases.addRow(CASE_HEADER);
+    cases.addRow(VALID_CASE);
+    const steps = workbook.addWorksheet('步骤');
+    steps.addRow(STEP_HEADER);
+    const dateRow = steps.addRow(['TC-001', 1, '选择', '要求取样时间的结束时间', '', '']);
+    dateRow.getCell(5).value = new Date(Date.UTC(2026, 7, 28));
+    dateRow.getCell(5).numFmt = 'yyyy-mm-dd';
+    const serialRow = steps.addRow(['TC-001', 2, '选择', '要求取样时间的起始时间', '', '']);
+    serialRow.getCell(5).value = 46262;
+    serialRow.getCell(5).numFmt = 'yyyy-mm-dd';
+    const textRow = steps.addRow(['TC-001', 3, '选择', '成品堆场', '粗矿堆', '']);
+    const quantityRow = steps.addRow(['TC-001', 4, '填写', '数量', 12, '']);
+    const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+
+    const result = await parseImportExcel(buffer);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+
+    expect(result.cases[0]?.steps.map((item) => item.data)).toEqual(['2026-08-28', '2026-08-27', '粗矿堆', '12']);
+  });
 });
 
 /**

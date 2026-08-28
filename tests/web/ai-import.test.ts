@@ -3,12 +3,14 @@ import {
   canConfirmImportCase,
   canPublishImportCase,
   canRetryImportCase,
+  canUnconfirmImportCase,
   formatImportCaseStatus,
   formatImportSummary,
   formatParseError,
   formatSourceRef,
   formatExploreWait,
   formatImportFailure,
+  formatImportPublishError,
   getDeleteImportTaskConfirm,
   getImportErrors,
   hasParsedCases
@@ -60,8 +62,13 @@ describe('AI 导入展示文案', () => {
     expect(formatImportCaseStatus('publishable')).toEqual({ label: '可发布', type: 'success' });
     expect(formatImportCaseStatus('published')).toEqual({ label: '已发布', type: 'success' });
     expect(formatImportCaseStatus('failed')).toEqual({ label: '失败', type: 'danger' });
-    expect(canConfirmImportCase('pending-review')).toBe(true);
-    expect(canConfirmImportCase('publishable')).toBe(false);
+    expect(canConfirmImportCase({ status: 'pending-review', intent: { pendingItems: [] } as never })).toBe(true);
+    expect(canConfirmImportCase({ status: 'pending-review', intent: { pendingItems: [{ id: 'cfm-1' }] } as never })).toBe(
+      false
+    );
+    expect(canConfirmImportCase({ status: 'publishable' })).toBe(false);
+    expect(canUnconfirmImportCase('publishable')).toBe(true);
+    expect(canUnconfirmImportCase('pending-review')).toBe(false);
     expect(canRetryImportCase('failed')).toBe(true);
     expect(canRetryImportCase('exploring')).toBe(false);
     expect(canRetryImportCase('generating')).toBe(false);
@@ -73,7 +80,10 @@ describe('AI 导入展示文案', () => {
     expect(formatSourceRef({ sheet: '步骤', row: 3, caseNumber: 'TC-001', cells: {} })).toBe(
       '「步骤」第 3 行 · TC-001'
     );
-    expect(hasParsedCases([{ status: 'parsed' } as never])).toBe(true);
+    expect(formatImportPublishError({
+      message: 'Action IR 校验未通过，不能发布',
+      issues: [{ code: 'unresolved-ambiguity', message: '存在未解决的待确认项，不能生成可发布的 Action IR' }]
+    })).toBe('Action IR 校验未通过，不能发布：存在未解决的待确认项，不能生成可发布的 Action IR');
   });
 
   it('汇总任务解析条数', () => {

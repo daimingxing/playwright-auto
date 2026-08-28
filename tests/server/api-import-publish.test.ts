@@ -11,7 +11,7 @@ import type { AgentRunInput, AgentRunResult, AgentRunner } from '../../server/sr
 import { createFakeAgentRunner, toTestIntent } from '../../server/src/services/import/agent-runner';
 import { getProjectRunFiles } from '../../server/src/services/run/runner';
 import type { CaseMeta, ImportTaskCase, TestIntent } from '../../shared/types';
-import { startImportReview } from './import-task-wait';
+import { startImportReview, startImportRetry } from './import-task-wait';
 
 const spawnMock = vi.hoisted(() => vi.fn());
 
@@ -76,7 +76,7 @@ describe('AI 导入显式发布', () => {
     );
   });
 
-  it('未解决歧义不能发布，未发布不得当作正式用例', async () => {
+  it('未解决歧义不能确认，未发布不得当作正式用例', async () => {
     const runner = createScriptedRunner((item) => ({
       kind: 'ambiguity',
       intent: toTestIntent(item, true)
@@ -88,16 +88,26 @@ describe('AI 导入显式发布', () => {
 
     await startImportReview(app, taskId);
     const confirmed = await request(app).post(`/api/projects/crm/imports/${taskId}/cases/${caseId}/confirm`);
-    expect(confirmed.status).toBe(200);
-    expect(confirmed.body.cases[0].intent?.pendingItems.length).toBe(1);
-
-    const published = await request(app).post(`/api/projects/crm/imports/${taskId}/cases/${caseId}/publish`);
-    expect(published.status).toBe(400);
-    expect(published.body.message).toBe('Action IR 校验未通过，不能发布');
-    expect(published.body.issues).toEqual([
-      expect.objectContaining({ code: 'unresolved-ambiguity' })
-    ]);
+    expect(confirmed.status).toBe(400);
+    expect(confirmed.body.message).toBe('还有未解决的待确认项，不能确认');
     expect(await listPublishedCaseFiles(root)).toEqual([]);
+  });
+
+  it('取消确认后回到待确认，可以再次重试', async () => {
+    const app = await createProjectApp();
+    const created = await createTask(app, await buildPublishWorkbook());
+    const taskId = created.body.id as string;
+    const caseId = created.body.cases[0].id as string;
+
+    await startImportReview(app, taskId);
+    await request(app).post(`/api/projects/crm/imports/${taskId}/cases/${caseId}/confirm`);
+    const cancelled = await request(app).post(`/api/projects/crm/imports/${taskId}/cases/${caseId}/unconfirm`);
+
+    expect(cancelled.status).toBe(200);
+    expect(cancelled.body.cases[0].status).toBe('pending-review');
+
+    const retried = await startImportRetry(app, taskId, caseId);
+    expect(retried.cases[0]?.status).toBe('pending-review');
   });
 
   it('未验证定位器不能发布', async () => {

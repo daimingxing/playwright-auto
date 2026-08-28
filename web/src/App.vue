@@ -1,7 +1,7 @@
 <template>
   <main class="app-shell">
     <header class="app-header">
-      <h1>Playwright 自动化测试平台</h1>
+      <h1>自动化测试平台</h1>
     </header>
     <div class="app-main">
       <router-view />

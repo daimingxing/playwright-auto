@@ -84,6 +84,10 @@ export async function confirmImportCase(
     throw badRequest('缺少可审阅的测试意图');
   }
 
+  if (item.intent.pendingItems.length > 0) {
+    throw badRequest('还有未解决的待确认项，不能确认');
+  }
+
   await persistImportCaseIntent(projectKey, taskId, item.id, item.intent);
   const exploration = item.exploration ?? (await readImportCaseExploration(projectKey, taskId, item.id));
 
@@ -92,6 +96,28 @@ export async function confirmImportCase(
   }
 
   await updateImportCaseStatus(projectKey, taskId, item, 'publishable');
+  return getImportTask(projectKey, taskId);
+}
+
+/**
+ * 取消确认，回到待确认。未发布前可以重试或继续处理待确认项。
+ */
+export async function unconfirmImportCase(
+  projectKey: string,
+  taskId: string,
+  caseId: string
+): Promise<ImportTaskDetail> {
+  const { item } = await getImportCaseContext(projectKey, taskId, caseId);
+
+  if (item.status === 'published') {
+    throw badRequest('已发布的用例不能取消确认');
+  }
+
+  if (item.status !== 'publishable') {
+    throw badRequest('只有已确认且未发布的用例可以取消确认');
+  }
+
+  await updateImportCaseStatus(projectKey, taskId, item, 'pending-review');
   return getImportTask(projectKey, taskId);
 }
 
