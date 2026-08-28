@@ -6,6 +6,7 @@ import {
   canUnconfirmImportCase,
   formatImportCaseStatus,
   formatImportSummary,
+  formatImportProgress,
   formatParseError,
   formatSourceRef,
   formatExploreWait,
@@ -88,6 +89,18 @@ describe('AI 导入展示文案', () => {
 
   it('汇总任务解析条数', () => {
     expect(formatImportSummary({ parsedCount: 2, failedCount: 1 })).toBe('已解析 2 条，解析失败 1 条');
+  });
+
+  it('汇总任务详情的审阅和发布进度', () => {
+    expect(
+      formatImportProgress([
+        { status: 'pending-review' },
+        { status: 'publishable' },
+        { status: 'published' },
+        { status: 'failed' },
+        { status: 'exploring' }
+      ])
+    ).toBe('探索中 1，待确认 1，可发布 1，已发布 1，失败 1');
   });
 
   it('删除导入任务确认文案说明不影响已发布用例', () => {

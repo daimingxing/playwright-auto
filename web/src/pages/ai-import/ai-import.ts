@@ -66,6 +66,25 @@ export function formatImportSummary(task: Pick<ImportTask, 'parsedCount' | 'fail
 }
 
 /**
+ * 格式化任务详情的逐用例总进度，供用户看到审阅和发布进展。
+ */
+export function formatImportProgress(cases: Array<{ status: ImportCaseStatus }>) {
+  const count = (status: ImportCaseStatus) => cases.filter((item) => item.status === status).length;
+  const exploring = count('exploring') + count('generating');
+
+  return [
+    exploring ? `探索中 ${exploring}` : '',
+    count('pending-review') ? `待确认 ${count('pending-review')}` : '',
+    count('publishable') ? `可发布 ${count('publishable')}` : '',
+    count('published') ? `已发布 ${count('published')}` : '',
+    count('failed') ? `失败 ${count('failed')}` : '',
+    count('parse-failed') ? `解析失败 ${count('parse-failed')}` : ''
+  ]
+    .filter(Boolean)
+    .join('，') || `共 ${cases.length} 条`;
+}
+
+/**
  * 生成删除导入任务的确认文案。已发布正式用例不受影响。
  */
 export function getDeleteImportTaskConfirm(fileName: string) {

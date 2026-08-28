@@ -129,6 +129,27 @@ describe('页面档案版本替换', () => {
 
     expect(published.current.states[0]?.snapshotPath).toBe('evidence/page.yml');
     expect(published.current.states[0]?.snapshotHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(published.current.states[0]?.snapshotHash).not.toBe(
+      'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
+    );
+  });
+
+  it('有空快照时引用最新的非空证据，不把空文件当页面证据', async () => {
+    const evidenceDir = join(root, 'mcp-output');
+    await mkdir(evidenceDir, { recursive: true });
+    await writeFile(join(evidenceDir, 'page-2026-08-28T03-17-58-217Z.yml'), '');
+    await writeFile(join(evidenceDir, 'page-2026-08-28T03-18-06-425Z.yml'), '- role: button\n  name: 新增\n');
+    const published = await publishPageArchive('crm', {
+      envKey: 'default',
+      routePattern: '/orders',
+      evidenceDir,
+      revision: makeRevision([makeLocator('提交')])
+    });
+
+    expect(published.current.states[0]?.snapshotPath).toBe('evidence/page-2026-08-28T03-18-06-425Z.yml');
+    expect(published.current.states[0]?.snapshotHash).not.toBe(
+      'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
+    );
   });
 });
 

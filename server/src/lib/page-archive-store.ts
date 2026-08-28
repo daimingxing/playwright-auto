@@ -262,13 +262,12 @@ async function deleteRetiredRevisions(projectKey: string, archiveId: string, met
 }
 
 /**
- * 把探索证据复制进版本目录，并在默认状态上记录相对路径和内容摘要。
+ * 把探索证据复制进版本目录，并在默认状态上记录非空快照的相对路径和内容摘要。
  */
 async function copyEvidence(fromDir: string, toDir: string, revision: PageArchiveRevision) {
   await ensureDir(toDir);
   await cp(fromDir, toDir, { recursive: true });
-  const files = await readdir(toDir, { recursive: true });
-  const snapshot = files.find((name) => name.endsWith('.yml') || name.endsWith('.yaml'));
+  const snapshot = await pickSnapshotFile(toDir);
 
   if (!snapshot || !revision.states[0]) {
     return;
@@ -278,6 +277,26 @@ async function copyEvidence(fromDir: string, toDir: string, revision: PageArchiv
   revision.states[0].snapshotPath = snapshotPath;
   const content = await readFile(join(toDir, snapshot));
   revision.states[0].snapshotHash = createHash('sha256').update(content).digest('hex');
+}
+
+/**
+ * 选择最新的非空 yaml 快照，避免把 MCP 首张空文件当成页面证据。
+ */
+async function pickSnapshotFile(evidenceDir: string) {
+  const files = await readdir(evidenceDir, { recursive: true });
+  const snapshots = files
+    .filter((name) => name.endsWith('.yml') || name.endsWith('.yaml'))
+    .sort((left, right) => left.localeCompare(right));
+
+  for (const name of snapshots.reverse()) {
+    const content = await readFile(join(evidenceDir, name));
+
+    if (content.length > 0) {
+      return name;
+    }
+  }
+
+  return undefined;
 }
 
 /**

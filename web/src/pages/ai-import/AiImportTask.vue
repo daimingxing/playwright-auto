@@ -15,6 +15,7 @@ import {
   canUnconfirmImportCase,
   formatImportCaseStatus,
   formatImportSummary,
+  formatImportProgress,
   formatParseError,
   formatSourceCells,
   formatSourceRef,
@@ -149,6 +150,7 @@ onMounted(async () => {
         <div>
           <strong>{{ task.fileName }}</strong>
           <span>{{ formatImportSummary(task) }}</span>
+          <span>{{ formatImportProgress(cases) }}</span>
           <span v-if="reviewing">{{ formatExploreWait(waitMs) }}</span>
         </div>
         <span class="time">创建于 {{ formatDateTime(task.createdAt) }}</span>
