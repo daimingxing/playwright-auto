@@ -61,6 +61,7 @@ interface ImportCaseStatusFile {
 }
 
 const IMPORT_TEMP_DIRS = ['work', 'output', 'diagnostics'] as const;
+const checkpointLocks = new Map<string, Promise<void>>();
 
 /**
  * 创建 AI 导入任务：先解析再落盘。结构错误不写任务目录。
@@ -419,21 +420,46 @@ export async function updateImportCaseStatus(
   status: ImportCaseStatus,
   extra?: { failure?: ImportCaseFailure; publishedCaseKey?: string }
 ) {
-  const next: ImportTaskCase = {
-    ...item,
-    status,
-    failure: extra?.failure,
-    publishedCaseKey: extra?.publishedCaseKey ?? item.publishedCaseKey
-  };
-  await writeCaseCheckpoint(projectKey, taskId, next, extra);
-  const checkpoint = await readImportCheckpoint(projectKey, taskId);
-  const items = [...checkpoint.items];
-  upsertCheckpointItem(items, { id: item.id, status });
-  await writeImportCheckpoint(projectKey, taskId, {
-    stage: checkpoint.stage,
-    items,
-    error: checkpoint.error
+  return withCheckpointLock(projectKey, taskId, async () => {
+    const next: ImportTaskCase = {
+      ...item,
+      status,
+      failure: extra?.failure,
+      publishedCaseKey: extra?.publishedCaseKey ?? item.publishedCaseKey
+    };
+    await writeCaseCheckpoint(projectKey, taskId, next, extra);
+    const checkpoint = await readImportCheckpoint(projectKey, taskId);
+    const items = [...checkpoint.items];
+    upsertCheckpointItem(items, { id: item.id, status });
+    await writeImportCheckpoint(projectKey, taskId, {
+      stage: checkpoint.stage,
+      items,
+      error: checkpoint.error
+    });
   });
+}
+
+/**
+ * 串行写入同一任务的检查点，避免并行探索互相覆盖条目状态。
+ */
+async function withCheckpointLock<T>(projectKey: string, taskId: string, fn: () => Promise<T>): Promise<T> {
+  const key = `${projectKey}/${taskId}`;
+  const previous = checkpointLocks.get(key) ?? Promise.resolve();
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  checkpointLocks.set(
+    key,
+    previous.then(() => gate)
+  );
+  await previous;
+
+  try {
+    return await fn();
+  } finally {
+    release();
+  }
 }
 
 /**

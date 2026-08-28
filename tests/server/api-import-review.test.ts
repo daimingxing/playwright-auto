@@ -114,13 +114,85 @@ describe('AI 导入 TestIntent 审阅', () => {
     const reviewed = await startImportReview(app, created.body.id as string);
     const cases = Object.fromEntries(reviewed.cases.map((item) => [item.caseNumber, item]));
 
-    expect(seen).toEqual(['TC-001', 'TC-002', 'TC-003']);
+    expect(seen).toHaveLength(3);
+    expect(seen).toEqual(expect.arrayContaining(['TC-001', 'TC-002', 'TC-003']));
     expect(cases['TC-001']?.status).toBe('pending-review');
     expect(cases['TC-002']?.status).toBe('failed');
     expect(cases['TC-002']?.failure?.kind).toBe('login-blocked');
     expect(cases['TC-003']?.status).toBe('pending-review');
     expect(cases['TC-003']?.intent?.pendingItems.length).toBe(1);
     expect(cases['TC-001']?.status).not.toBe('failed');
+  });
+
+  it('同一页面的多条用例只探索一次，并写入项目级页面档案', async () => {
+    let runs = 0;
+    const inner = createFakeAgentRunner();
+    const runner: AgentRunner = {
+      async run(input) {
+        runs += 1;
+        return inner.run(input);
+      }
+    };
+    const app = await createProjectApp(runner);
+    const buffer = await buildXlsx({
+      用例: [
+        CASE_HEADER,
+        ['TC-001', '创建订单', '/orders/create', '', '', ''],
+        ['TC-002', '再次创建', '/orders/create?x=1', '', '', '']
+      ],
+      步骤: [
+        STEP_HEADER,
+        ['TC-001', 1, '点击', '提交', '', ''],
+        ['TC-002', 1, '点击', '提交', '', '']
+      ]
+    });
+    const created = await createTask(app, buffer);
+    const reviewed = await startImportReview(app, created.body.id as string);
+
+    expect(runs).toBe(1);
+    expect(reviewed.cases.every((item) => item.status === 'pending-review')).toBe(true);
+    const archives = await request(app).get('/api/projects/crm/page-archives');
+    expect(archives.status).toBe(200);
+    expect(archives.body).toHaveLength(1);
+    expect(archives.body[0].routePattern).toBe('/orders/create');
+  });
+
+  it('不同页面最多 4 个隔离 worker 并行探索', async () => {
+    let current = 0;
+    let peak = 0;
+    let started = 0;
+    let releaseHold!: () => void;
+    const hold = new Promise<void>((resolve) => {
+      releaseHold = resolve;
+    });
+    const runner: AgentRunner = {
+      async run(input) {
+        current += 1;
+        started += 1;
+        peak = Math.max(peak, current);
+        if (started >= 4) {
+          releaseHold();
+        }
+
+        await hold;
+        current -= 1;
+        return { kind: 'success', intent: toTestIntent(input.item) };
+      }
+    };
+    const app = await createProjectApp(runner);
+    const rows = [1, 2, 3, 4, 5, 6].map((index) => [`TC-00${index}`, `页面 ${index}`, `/page-${index}`, '', '', '']);
+    const steps = [1, 2, 3, 4, 5, 6].map((index) => [`TC-00${index}`, 1, '点击', '提交', '', '']);
+    const created = await createTask(
+      app,
+      await buildXlsx({
+        用例: [CASE_HEADER, ...rows],
+        步骤: [STEP_HEADER, ...steps]
+      })
+    );
+    await startImportReview(app, created.body.id as string);
+
+    expect(peak).toBeLessThanOrEqual(4);
+    expect(peak).toBe(4);
   });
 
   it('确认后变为可发布，且不写正式 case.json / case.spec.ts', async () => {

@@ -8,6 +8,8 @@ import { recordRouter } from './routes/record';
 import { importsRouter } from './routes/imports';
 import { createDefaultAgentRunner } from './services/import/opencode-runner';
 import { type AgentRunner } from './services/import/agent-runner';
+import { createExplorationCoordinator, type ExplorationCoordinator } from './services/import/exploration-lease';
+import { pageArchivesRouter } from './routes/page-archives';
 import { RunError } from './services/run/runner';
 import { getAppConfig } from './lib/app-config';
 import { ZodError, type ZodIssue } from 'zod';
@@ -15,6 +17,7 @@ import { HttpError } from './lib/http-error';
 
 export interface CreateAppOptions {
   agentRunner?: AgentRunner;
+  explorationCoordinator?: ExplorationCoordinator;
 }
 
 /**
@@ -23,6 +26,7 @@ export interface CreateAppOptions {
 export function createApp(options: CreateAppOptions = {}) {
   const app = express();
   app.locals.agentRunner = options.agentRunner ?? createDefaultAgentRunner();
+  app.locals.explorationCoordinator = options.explorationCoordinator ?? createExplorationCoordinator();
 
   app.use(
     cors({
@@ -58,6 +62,7 @@ export function createApp(options: CreateAppOptions = {}) {
   app.use('/api/projects/:projectKey/runs', runsRouter);
   app.use('/api/projects/:projectKey/auth', authRouter);
   app.use('/api/projects/:projectKey/imports', importsRouter);
+  app.use('/api/projects/:projectKey/page-archives', pageArchivesRouter);
 
   app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     const message = error instanceof Error ? error.message : '未知错误';

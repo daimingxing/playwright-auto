@@ -8,6 +8,7 @@ const workIdPattern = /^[a-f0-9-]{36}$/;
 const importTaskIdPattern = /^imp-\d{8}-\d{6}-[a-f0-9]{4}$/;
 const importCaseIdPattern = /^item-\d{8}-\d{6}-[a-f0-9]{4}$/;
 const assetIdPattern = /^[a-f0-9]{64}$/;
+const pageArchiveIdPattern = /^pag-[a-z][a-z0-9-]{1,40}-[a-f0-9]{12}$/;
 
 /**
  * 校验项目标识。
@@ -63,6 +64,13 @@ export function assertImportCaseId(value: string) {
  */
 export function assertAssetId(value: string) {
   assertText(value, assetIdPattern, '测试资产标识不合法');
+}
+
+/**
+ * 校验项目级页面档案标识。
+ */
+export function assertPageArchiveId(value: string) {
+  assertText(value, pageArchiveIdPattern, '页面档案标识不合法');
 }
 
 /**

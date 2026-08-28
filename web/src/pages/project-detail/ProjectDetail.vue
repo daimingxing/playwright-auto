@@ -319,6 +319,9 @@ onMounted(async () => {
         <el-button size="large" :icon="Upload" @click="router.push(`/projects/${projectKey}/imports`)"
           >AI 导入</el-button
         >
+        <el-button size="large" @click="router.push(`/projects/${projectKey}/page-archives`)"
+          >页面档案</el-button
+        >
         <el-button
           type="success"
           size="large"

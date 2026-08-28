@@ -5,6 +5,7 @@ import { badRequest } from '../lib/http-error';
 import type { AgentRunner } from '../services/import/agent-runner';
 import { createDefaultAgentRunner } from '../services/import/opencode-runner';
 import { confirmImportCase, startRetryImportCase, startReviewImportTask, unconfirmImportCase } from '../services/import/import-review';
+import { createExplorationCoordinator, type ExplorationCoordinator } from '../services/import/exploration-lease';
 import { publishImportCase } from '../services/import/import-publish';
 
 interface ProjectParams {
@@ -89,7 +90,9 @@ importsRouter.delete<ImportTaskParams>('/:taskId', async (req, res, next) => {
 
 importsRouter.post<ImportTaskParams>('/:taskId/review', async (req, res, next) => {
   try {
-    res.json(await startReviewImportTask(req.params.projectKey, req.params.taskId, getAgentRunner(req)));
+    res.json(
+      await startReviewImportTask(req.params.projectKey, req.params.taskId, getAgentRunner(req), getCoordinator(req))
+    );
   } catch (error) {
     next(error);
   }
@@ -114,7 +117,13 @@ importsRouter.post<ImportCaseParams>('/:taskId/cases/:caseId/unconfirm', async (
 importsRouter.post<ImportCaseParams>('/:taskId/cases/:caseId/retry', async (req, res, next) => {
   try {
     res.json(
-      await startRetryImportCase(req.params.projectKey, req.params.taskId, req.params.caseId, getAgentRunner(req))
+      await startRetryImportCase(
+        req.params.projectKey,
+        req.params.taskId,
+        req.params.caseId,
+        getAgentRunner(req),
+        getCoordinator(req)
+      )
     );
   } catch (error) {
     next(error);
@@ -166,6 +175,14 @@ function toUploadError(error: unknown) {
 function getAgentRunner(req: Pick<Request, 'app'>): AgentRunner {
   const runner = req.app.locals.agentRunner as AgentRunner | undefined;
   return runner ?? createDefaultAgentRunner();
+}
+
+/**
+ * 读取请求级探索租约协调器。
+ */
+function getCoordinator(req: Pick<Request, 'app'>): ExplorationCoordinator {
+  const coordinator = req.app.locals.explorationCoordinator as ExplorationCoordinator | undefined;
+  return coordinator ?? createExplorationCoordinator();
 }
 
 /**

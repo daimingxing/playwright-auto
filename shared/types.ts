@@ -414,6 +414,99 @@ export interface ExplorationResult {
   pageUrl?: string;
 }
 
+export type PageArchiveStatus = 'ready' | 'refreshing' | 'failed';
+
+/**
+ * 进入某个页面状态所需的业务步骤。有独立 URL 时通常是打开该路径。
+ */
+export interface PageArchiveEntryStep {
+  action: ImportActionType;
+  target: string;
+  data?: string;
+}
+
+/**
+ * 页面状态中已在真实页面验证 Locator 的交互或断言对象。
+ */
+export interface PageTarget {
+  key: string;
+  action: ImportActionType;
+  target: string;
+  meaning: string;
+  locator: VerifiedLocator;
+}
+
+/**
+ * 在指定页面状态下验证成功、可按目标复用的低层操作。
+ */
+export interface OperationRecipe {
+  id: string;
+  fromStateId: string;
+  toStateId: string;
+  action: ImportActionType;
+  target: string;
+  data?: string;
+  locator?: VerifiedLocator;
+}
+
+/**
+ * 用户可继续交互的一种页面形态。同一 URL 下弹窗等可以是不同状态。
+ */
+export interface PageState {
+  id: string;
+  url?: string;
+  title?: string;
+  entrySteps: PageArchiveEntryStep[];
+  targets: PageTarget[];
+  recipes: OperationRecipe[];
+  snapshotPath?: string;
+  snapshotHash?: string;
+  capturedAt: string;
+}
+
+/**
+ * 页面档案的一次不可变版本。
+ */
+export interface PageArchiveRevision {
+  id: string;
+  capturedAt: string;
+  envKey: string;
+  routePattern: string;
+  states: PageState[];
+}
+
+/**
+ * 刷新失败诊断。失败时继续使用旧版本。
+ */
+export interface PageArchiveFailure {
+  message: string;
+  at: string;
+}
+
+/**
+ * 项目级页面档案摘要。current/previous 指向不可变版本。
+ */
+export interface PageArchive {
+  id: string;
+  envKey: string;
+  routePattern: string;
+  title: string;
+  status: PageArchiveStatus;
+  currentRevisionId: string;
+  previousRevisionId?: string;
+  refreshFailure?: PageArchiveFailure;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * 页面档案详情，附带当前和上一份不可变版本。
+ */
+export interface PageArchiveDetail extends PageArchive {
+  current: PageArchiveRevision;
+  previous?: PageArchiveRevision;
+}
+
 /**
  * 一条测试用例的业务规格。不描述页面组件、定位器或具体浏览器操作。
  */

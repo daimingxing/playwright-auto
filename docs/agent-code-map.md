@@ -35,6 +35,7 @@
 - 用例运行和报告：`web/src/pages/run-center/`、`server/src/routes/runs.ts`、`server/src/services/run/`
 - 项目登录态：`web/src/composables/project-auth.ts`、`server/src/routes/auth.ts`、`server/src/services/auth-session.ts`
 - AI 导入任务与 Excel 解析：`web/src/api/imports.ts`、`web/src/pages/ai-import/`、`server/src/routes/imports.ts`、`server/src/services/import/`、`server/src/lib/import-store.ts`
+- 页面档案、版本替换与 Exploration Lease：`server/src/lib/page-archive-store.ts`、`server/src/services/import/exploration-lease.ts`、`web/src/pages/page-archives/`
 - 导入任务检查点、恢复、清理与删除：`server/src/lib/import-store.ts`、`server/src/routes/imports.ts`
 - TestIntent 审阅、OpenCode 探索与 Fake AgentRunner：`shared/types.ts`、`server/src/services/import/agent-runner.ts`、`server/src/services/import/opencode-runner.ts`、`server/src/services/import/import-review.ts`
 - Action IR 校验与显式发布：`server/src/services/import/intent-compile.ts`、`server/src/services/import/import-publish.ts`
@@ -53,7 +54,8 @@
 - 测试资产保存在 `data/projects/<projectKey>/assets/<sha256>/`，按内容去重；导入任务不得因相同文件哈希而跳过创建。
 - 导入任务恢复以 `checkpoint.json` 和逐用例 `status.json` 为准，不重新解析 Excel。
 - Agent 过程资料写入该任务的 `work/`、`output/`、`diagnostics/`；清理只删除这些目录，不影响已确认意图、输入快照、检查点、正式用例或其他项目。删除整个导入任务会去掉该任务目录，仍不影响已发布正式用例和项目资产库。
-- AgentRunner 可替换；生产默认 OpenCode + 官方 Playwright MCP，测试可注入 Fake。单次探索定位器写入任务 `output/`，确认后保留在 `cases/<itemId>/exploration.json`。
+- 页面档案保存在 `data/projects/<projectKey>/page-archives/`，使用 current/previous 不可变版本；刷新或删除不修改已发布 `case.json` / `case.spec.ts`。
+- 页面探索按探索租约去重；成功探索写入项目级页面档案，后续同一页面用例复用已验证定位器。AgentRunner 可替换；生产默认 OpenCode + 官方 Playwright MCP，测试可注入 Fake。单次探索定位器仍写入任务 `output/`，确认后保留在 `cases/<itemId>/exploration.json`。
 - 只有 `active` 且基础检查通过的用例能进入运行中心。
 - `browser.openTimeoutMs` 控制平台打开业务 URL；`steps.timeouts` 控制生成、运行和实测等待。
 

@@ -6,6 +6,7 @@ import {
   assertImportCaseId,
   assertImportTaskId,
   assertProjectKey,
+  assertPageArchiveId,
   assertReviewId,
   assertRunId,
   assertWorkId
@@ -116,6 +117,21 @@ export function getAssetsPath(projectKey: string) {
 export function getAssetPath(projectKey: string, assetId: string) {
   assertAssetId(assetId);
   return resolve(getAssetsPath(projectKey), assetId);
+}
+
+/**
+ * 获取项目页面档案根目录。
+ */
+export function getPageArchivesPath(projectKey: string) {
+  return resolve(getProjectPath(projectKey), 'page-archives');
+}
+
+/**
+ * 获取单个页面档案目录。
+ */
+export function getPageArchivePath(projectKey: string, archiveId: string) {
+  assertPageArchiveId(archiveId);
+  return resolve(getPageArchivesPath(projectKey), archiveId);
 }
 
 /**
