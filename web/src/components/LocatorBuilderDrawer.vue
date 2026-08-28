@@ -25,6 +25,7 @@ const props = defineProps<{
   modelValue: boolean;
   selector?: string;
   draft?: LocatorBuilderState;
+  hint?: string;
 }>();
 const emit = defineEmits<{
   "update:modelValue": [value: boolean];
@@ -364,6 +365,7 @@ function setSimpleText(target: SimpleLocatorState, field: SimpleTextField, patch
 <template>
   <el-drawer v-model="localOpen" title="编辑定位器" size="850px" destroy-on-close>
     <div class="locator-builder">
+      <p v-if="hint" class="builder-hint">{{ hint }}</p>
       <el-form class="builder-form" label-width="96px">
         <el-form-item label="定位方式">
           <el-radio-group :model-value="state.mode" @change="changeMode">
@@ -654,6 +656,13 @@ function setSimpleText(target: SimpleLocatorState, field: SimpleTextField, patch
 <style scoped>
 .locator-builder {
   padding-right: 4px;
+}
+
+.builder-hint {
+  margin: 0 0 12px;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .builder-form {

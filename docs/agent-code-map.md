@@ -38,7 +38,7 @@
 - 页面档案、版本替换与 Exploration Lease：`server/src/lib/page-archive-store.ts`、`server/src/services/import/exploration-lease.ts`、`web/src/pages/page-archives/`
 - 导入任务检查点、恢复、清理与删除：`server/src/lib/import-store.ts`、`server/src/routes/imports.ts`
 - TestIntent 审阅、OpenCode 探索与 Fake AgentRunner：`shared/types.ts`、`server/src/services/import/agent-runner.ts`、`server/src/services/import/opencode-runner.ts`、`server/src/services/import/import-review.ts`
-- Action IR 校验与显式发布：`server/src/services/import/intent-compile.ts`、`server/src/services/import/import-publish.ts`
+- Action IR 预览、定位编辑与显式发布：`server/src/services/import/intent-compile.ts`、`server/src/services/import/import-action-ir.ts`、`server/src/services/import/import-publish.ts`
 - 项目测试资产库：`server/src/lib/asset-store.ts`
 - 本地应用配置和 CORS：`playwright-auto.config.json.example`、`server/src/lib/app-config.ts`
 - 浏览器依赖：`server/src/services/playwright/`、`scripts/install-browsers.mjs`

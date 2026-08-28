@@ -1,5 +1,16 @@
-import type { ImportResumeResult, ImportTask, ImportTaskDetail } from '../../../shared/types';
+import type { CaseStep, ImportResumeResult, ImportTask, ImportTaskDetail, VerifiedLocator } from '../../../shared/types';
 import { requestJson } from './http';
+
+export interface ImportActionIrPreview {
+  ok: boolean;
+  steps: CaseStep[];
+  issues: Array<{ code: string; stepId?: string; message: string }>;
+}
+
+export interface SaveImportActionIrInput {
+  locators?: Record<string, VerifiedLocator>;
+  steps?: Array<{ id: string; target?: string; data?: string }>;
+}
 
 /**
  * 获取项目下的 AI 导入任务列表。
@@ -83,6 +94,33 @@ export function publishImportCase(projectKey: string, taskId: string, caseId: st
   return requestJson<ImportTaskDetail>(
     `/api/projects/${projectKey}/imports/${taskId}/cases/${caseId}/publish`,
     { method: 'POST' }
+  );
+}
+
+/**
+ * 预览当前测试意图编译出的 Action IR，供任务页高级区展示。
+ */
+export function previewImportActionIr(projectKey: string, taskId: string, caseId: string) {
+  return requestJson<ImportActionIrPreview>(
+    `/api/projects/${projectKey}/imports/${taskId}/cases/${caseId}/action-ir`
+  );
+}
+
+/**
+ * 保存高级区改过的定位器和步骤数据。未点发布前不会写入正式用例。
+ */
+export function saveImportActionIr(
+  projectKey: string,
+  taskId: string,
+  caseId: string,
+  input: SaveImportActionIrInput
+) {
+  return requestJson<ImportTaskDetail>(
+    `/api/projects/${projectKey}/imports/${taskId}/cases/${caseId}/action-ir`,
+    {
+      method: 'PUT',
+      body: JSON.stringify(input)
+    }
   );
 }
 

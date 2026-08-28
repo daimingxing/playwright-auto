@@ -7,6 +7,7 @@ import { createDefaultAgentRunner } from '../services/import/opencode-runner';
 import { confirmImportCase, startRetryImportCase, startReviewImportTask, unconfirmImportCase } from '../services/import/import-review';
 import { createExplorationCoordinator, type ExplorationCoordinator } from '../services/import/exploration-lease';
 import { publishImportCase } from '../services/import/import-publish';
+import { previewImportActionIr, saveImportActionIr } from '../services/import/import-action-ir';
 
 interface ProjectParams {
   projectKey: string;
@@ -133,6 +134,22 @@ importsRouter.post<ImportCaseParams>('/:taskId/cases/:caseId/retry', async (req,
 importsRouter.post<ImportCaseParams>('/:taskId/cases/:caseId/publish', async (req, res, next) => {
   try {
     res.json(await publishImportCase(req.params.projectKey, req.params.taskId, req.params.caseId));
+  } catch (error) {
+    next(error);
+  }
+});
+
+importsRouter.get<ImportCaseParams>('/:taskId/cases/:caseId/action-ir', async (req, res, next) => {
+  try {
+    res.json(await previewImportActionIr(req.params.projectKey, req.params.taskId, req.params.caseId));
+  } catch (error) {
+    next(error);
+  }
+});
+
+importsRouter.put<ImportCaseParams>('/:taskId/cases/:caseId/action-ir', async (req, res, next) => {
+  try {
+    res.json(await saveImportActionIr(req.params.projectKey, req.params.taskId, req.params.caseId, req.body ?? {}));
   } catch (error) {
     next(error);
   }

@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   canConfirmImportCase,
+  canEditImportActionIr,
   canPublishImportCase,
+  publishStepsEmpty,
+  publishStepsHint,
+  publishStepsTitle,
+  canResumeImportTask,
   canRetryImportCase,
   canUnconfirmImportCase,
   formatImportCaseStatus,
@@ -78,6 +83,15 @@ describe('AI 导入展示文案', () => {
     expect(canRetryImportCase('parse-failed')).toBe(false);
     expect(canPublishImportCase('publishable')).toBe(true);
     expect(canPublishImportCase('published')).toBe(false);
+    expect(canEditImportActionIr('pending-review')).toBe(true);
+    expect(canEditImportActionIr('publishable')).toBe(true);
+    expect(canEditImportActionIr('published')).toBe(false);
+    expect(publishStepsTitle).toBe('定位和填写值');
+    expect(publishStepsHint).toContain('编辑定位');
+    expect(publishStepsHint).toContain('输入值/断言值');
+    expect(publishStepsEmpty).toContain('探索完成');
+    expect(canResumeImportTask({ status: 'interrupted' })).toBe(true);
+    expect(canResumeImportTask({ status: 'completed' })).toBe(false);
     expect(formatSourceRef({ sheet: '步骤', row: 3, caseNumber: 'TC-001', cells: {} })).toBe(
       '「步骤」第 3 行 · TC-001'
     );

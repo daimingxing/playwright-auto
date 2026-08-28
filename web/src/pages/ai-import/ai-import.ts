@@ -1,11 +1,4 @@
-import type {
-  ImportCaseFailure,
-  ImportCaseStatus,
-  ImportParseError,
-  ImportSourceRow,
-  ImportTask,
-  ImportTaskCase
-} from '../../../../shared/types';
+import type { ImportCaseFailure, ImportCaseStatus, ImportParseError, ImportSourceRow, ImportTask, ImportTaskCase } from '../../../../shared/types';
 import { summarizeImportFailure } from '../../../../shared/import-failure';
 
 const caseStatusMap: Record<ImportCaseStatus, { label: string; type: 'success' | 'danger' | 'warning' | 'info' }> = {
@@ -140,6 +133,29 @@ export function canRetryImportCase(status: ImportCaseStatus) {
  */
 export function canPublishImportCase(status: ImportCaseStatus) {
   return status === 'publishable';
+}
+
+/**
+ * 任务详情中发布步骤区块的标题和说明。
+ */
+export const publishStepsTitle = '定位和填写值';
+export const publishStepsHint =
+  '选择器用「编辑定位」修改；输入值/断言值可直接改。改这里不会自动发布。';
+export const publishStepsEmpty = '探索完成后可查看和修改定位器、填写值';
+export const locatorEditHint = '这里只改怎么找到控件，不要把填写值或断言值写进选择器。';
+
+/**
+ * 判断任务是否可以从检查点恢复。只有检查点尚未写完时需要恢复。
+ */
+export function canResumeImportTask(task: Pick<ImportTask, 'status'>) {
+  return task.status === 'interrupted';
+}
+
+/**
+ * 判断用例是否可以改定位和填写值。已发布后改正式用例，不再改导入任务。
+ */
+export function canEditImportActionIr(status: ImportCaseStatus) {
+  return status === 'pending-review' || status === 'publishable';
 }
 
 /**

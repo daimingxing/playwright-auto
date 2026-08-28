@@ -1,7 +1,27 @@
 import { computed, getCurrentInstance, onUnmounted, ref } from 'vue';
-import type { ImportCaseFailure, ImportTaskCase, ImportTaskDetail } from '../../../../shared/types';
-import { confirmImportCase, getImportTask, publishImportCase, retryImportCase, reviewImportTask, unconfirmImportCase } from '../../api/imports';
-import { canConfirmImportCase, canPublishImportCase, canRetryImportCase, canUnconfirmImportCase, isImportCaseBusy, needsImportReview } from './ai-import';
+import type { CaseStep, ImportCaseFailure, ImportTaskCase, ImportTaskDetail, VerifiedLocator } from '../../../../shared/types';
+import type { LocatorBuilderState } from '../../../../shared/locator-builder';
+import type { ImportActionIrPreview, SaveImportActionIrInput } from '../../api/imports';
+import {
+  confirmImportCase,
+  getImportTask,
+  previewImportActionIr,
+  publishImportCase,
+  resumeImportTask,
+  retryImportCase,
+  reviewImportTask,
+  saveImportActionIr,
+  unconfirmImportCase
+} from '../../api/imports';
+import {
+  canConfirmImportCase,
+  canEditImportActionIr,
+  canPublishImportCase,
+  canRetryImportCase,
+  canUnconfirmImportCase,
+  isImportCaseBusy,
+  needsImportReview
+} from './ai-import';
 
 const POLL_MS = 2000;
 
@@ -21,6 +41,8 @@ export function useImportTaskReview(projectKey: string, taskId: string) {
   const actingId = ref('');
   const waitMs = ref(0);
   const cases = computed(() => task.value?.cases ?? []);
+  const actionIrById = ref<Record<string, ImportActionIrPreview>>({});
+  const actionIrLoadingId = ref('');
   let closed = false;
   let waitTimer: ReturnType<typeof setInterval> | undefined;
 
@@ -38,6 +60,8 @@ export function useImportTaskReview(projectKey: string, taskId: string) {
         startWait();
         task.value = await reviewImportTask(projectKey, taskId);
         await pollUntilSettled();
+      } else {
+        await syncPublishSteps();
       }
     } finally {
       if (!closed) {
@@ -76,10 +100,15 @@ export function useImportTaskReview(projectKey: string, taskId: string) {
     actingId.value = item.id;
     reviewing.value = true;
     startWait();
+    const next = { ...actionIrById.value };
+    delete next[item.id];
+    actionIrById.value = next;
 
     try {
       task.value = await retryImportCase(projectKey, taskId, item.id);
-      return settleRetry(await pollCaseUntilSettled(item.id));
+      const settled = settleRetry(await pollCaseUntilSettled(item.id));
+      await syncPublishSteps();
+      return settled;
     } finally {
       if (!closed) {
         stopWait();
@@ -124,17 +153,126 @@ export function useImportTaskReview(projectKey: string, taskId: string) {
   }
 
   /**
+   * 从检查点恢复导入任务，并在仍有未探索项时继续页面探索。
+   */
+  async function resumeTask() {
+    if (task.value?.status !== 'interrupted') {
+      return;
+    }
+
+    reviewing.value = true;
+    startWait();
+
+    try {
+      task.value = await resumeImportTask(projectKey, taskId);
+
+      if (needsImportReview(task.value.cases)) {
+        task.value = await reviewImportTask(projectKey, taskId);
+        await pollUntilSettled();
+      }
+    } finally {
+      if (!closed) {
+        stopWait();
+        reviewing.value = false;
+      }
+    }
+  }
+
+  /**
+   * 加载发布用的定位和填写值。没有意图时不请求。
+   */
+  async function loadActionIr(item: ImportTaskCase, options: { quiet?: boolean } = {}) {
+    if (!item.intent) {
+      return;
+    }
+
+    actionIrLoadingId.value = item.id;
+
+    try {
+      actionIrById.value = {
+        ...actionIrById.value,
+        [item.id]: await previewImportActionIr(projectKey, taskId, item.id)
+      };
+    } catch (error) {
+      if (!options.quiet) {
+        throw error;
+      }
+    } finally {
+      if (actionIrLoadingId.value === item.id) {
+        actionIrLoadingId.value = '';
+      }
+    }
+  }
+
+  /**
+   * 给已有意图且不在探索中的用例补齐定位和填写值，探索结束后不必离开页面。
+   */
+  async function syncPublishSteps() {
+    for (const item of cases.value) {
+      if (!item.intent || isImportCaseBusy(item.status) || actionIrById.value[item.id]) {
+        continue;
+      }
+
+      await loadActionIr(item, { quiet: true });
+    }
+  }
+
+  /**
+   * 保存高级区改过的定位器或步骤数据，并刷新预览。
+   */
+  async function saveActionIr(item: ImportTaskCase, input: SaveImportActionIrInput) {
+    if (!canEditImportActionIr(item.status)) {
+      throw new Error('当前状态不能改定位和填写值');
+    }
+
+    actingId.value = item.id;
+
+    try {
+      task.value = await saveImportActionIr(projectKey, taskId, item.id, input);
+      const current = task.value.cases.find((entry) => entry.id === item.id);
+
+      if (current) {
+        await loadActionIr(current);
+      }
+    } finally {
+      if (actingId.value === item.id) {
+        actingId.value = '';
+      }
+    }
+  }
+
+  /**
+   * 把定位器构建器结果写回对应意图步骤。
+   */
+  async function saveActionIrLocator(
+    item: ImportTaskCase,
+    step: CaseStep,
+    payload: { selector: string; draft: LocatorBuilderState }
+  ) {
+    const locator: VerifiedLocator = {
+      selector: payload.selector,
+      selectorDraft: payload.draft
+    };
+    await saveActionIr(item, { locators: { [step.id]: locator } });
+  }
+
+  /**
    * 轮询任务直到探索结束；组件卸载时停止轮询，不取消后台作业。
    */
   async function pollUntilSettled() {
     while (!closed && needsImportReview(task.value?.cases ?? [])) {
       task.value = await getImportTask(projectKey, taskId);
+      await syncPublishSteps();
 
       if (!needsImportReview(task.value.cases)) {
         return true;
       }
 
       await waitPoll();
+    }
+
+    if (!closed) {
+      await syncPublishSteps();
     }
 
     return !closed && !needsImportReview(task.value?.cases ?? []);
@@ -233,10 +371,16 @@ export function useImportTaskReview(projectKey: string, taskId: string) {
     reviewing,
     actingId,
     waitMs,
+    actionIrById,
+    actionIrLoadingId,
     loadTask,
     confirmCase,
     retryCase,
     publishCase,
-    unconfirmCase
+    unconfirmCase,
+    resumeTask,
+    loadActionIr,
+    saveActionIr,
+    saveActionIrLocator
   };
 }
