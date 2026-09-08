@@ -1,4 +1,5 @@
 import ts from 'typescript';
+import { parseLocatorSelector } from '../../../../shared/locator-builder';
 import type { CaseStep, StepTimeoutConfig } from '../../../../shared/types';
 import { getAppConfig } from '../../lib/app-config';
 
@@ -27,14 +28,28 @@ export function parseCodegenSpec(code: string, timeouts: StepTimeoutConfig = get
         return;
       }
 
-      steps.push({
-        ...step,
-        id: crypto.randomUUID()
-      });
+      steps.push(toRecordedCaseStep(step));
     }
   });
 
   return { steps };
+}
+
+/**
+ * 把 codegen 步骤收成可编辑的 Action IR：带上来源，有选择器时补齐定位草稿。
+ */
+function toRecordedCaseStep(step: Omit<CaseStep, 'id'>): CaseStep {
+  const recorded: CaseStep = {
+    ...step,
+    id: crypto.randomUUID(),
+    origin: { kind: 'record' }
+  };
+
+  if (recorded.selector?.trim()) {
+    recorded.selectorDraft = parseLocatorSelector(recorded.selector);
+  }
+
+  return recorded;
 }
 
 /**

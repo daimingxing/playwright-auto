@@ -61,6 +61,13 @@ export interface ProjectMeta {
 }
 
 /**
+ * 步骤来源。录制导入标记为 record；缺失表示手动编辑或尚未标记的历史数据。
+ */
+export interface CaseStepOrigin {
+  kind: 'record';
+}
+
+/**
  * 用例步骤，也是发布后保存在 case.json 中的 Action IR。
  * 由封闭 Playwright 原语、结构化定位器和可观察等待条件组成。
  */
@@ -74,6 +81,7 @@ export interface CaseStep {
   match?: MatchType;
   pageAlias?: string;
   opensPageAlias?: string;
+  origin?: CaseStepOrigin;
 }
 
 export interface BrowserConfig {

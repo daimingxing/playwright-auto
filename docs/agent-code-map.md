@@ -62,3 +62,4 @@
 ## 相关文档
 
 - 基础检查和定位质量规则：`docs/case-review-rules.md`
+- 页面探索正确性与结构化输出：`docs/exploration-correctness.md`

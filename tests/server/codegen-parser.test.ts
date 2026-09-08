@@ -75,6 +75,46 @@ test('test', async ({ page }) => {
     ]);
   });
 
+  it('录制步骤带结构化定位草稿和来源，便于同一套编辑器打开', () => {
+    const code = `
+import { test, expect } from '@playwright/test';
+
+test('test', async ({ page }) => {
+  await page.getByRole('textbox', { name: '名称' }).fill('测试订单');
+  await page.goto('/orders/list');
+  await expect(page.getByText('保存成功')).toBeVisible();
+});
+`;
+
+    const result = parseCodegenSpec(code);
+
+    expect(result.steps[0]).toMatchObject({
+      type: 'fill',
+      selector: "getByRole('textbox', { name: '名称' })",
+      origin: { kind: 'record' },
+      selectorDraft: {
+        mode: 'role',
+        role: 'textbox',
+        value: '名称'
+      }
+    });
+    expect(result.steps[1]).toMatchObject({
+      type: 'goto',
+      value: '/orders/list',
+      origin: { kind: 'record' }
+    });
+    expect(result.steps[1]?.selectorDraft).toBeUndefined();
+    expect(result.steps[2]).toMatchObject({
+      type: 'assertVisible',
+      selector: "getByText('保存成功')",
+      origin: { kind: 'record' },
+      selectorDraft: {
+        mode: 'text',
+        value: '保存成功'
+      }
+    });
+  });
+
   it('解析 codegen 时支持自定义默认等待时间', () => {
     const code = `
 import { test, expect } from '@playwright/test';

@@ -113,6 +113,39 @@ describe('用例编辑器录制组合函数', () => {
 
     expect(item.value?.steps.map((step) => step.id)).toEqual(['old-a', 'new-a']);
   });
+
+  it('停止录制后保留定位草稿和来源，供同一套编辑器继续改', async () => {
+    const item = ref(makeCase([makeStep('old-a')]));
+    const record = useCaseRecord({
+      projectKey: 'crm',
+      caseKey: 'case-a',
+      item,
+      activeEnv: ref(makeEnv('default')),
+      selectedId: ref(''),
+      showError: vi.fn()
+    });
+    record.recordId.value = 'record-1';
+    mocks.stopRecord.mockResolvedValue({
+      steps: [
+        {
+          id: 'new-a',
+          type: 'fill',
+          selector: "getByRole('textbox', { name: '名称' })",
+          selectorDraft: { mode: 'role', role: 'textbox', value: '名称', indexMode: 'none' },
+          value: '测试订单',
+          origin: { kind: 'record' }
+        }
+      ]
+    });
+
+    await record.stopRecordCase();
+
+    expect(item.value?.steps[1]).toMatchObject({
+      id: 'new-a',
+      origin: { kind: 'record' },
+      selectorDraft: { mode: 'role', role: 'textbox', value: '名称' }
+    });
+  });
 });
 
 describe('用例编辑器步骤批量组合函数', () => {

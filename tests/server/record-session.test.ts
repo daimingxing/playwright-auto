@@ -61,6 +61,8 @@ describe('录制会话服务', () => {
 
     expect(result.steps.length).toBeGreaterThan(0);
     expect(result.steps.some((step) => step.type === 'assertVisible')).toBe(true);
+    expect(result.steps.every((step) => step.origin?.kind === 'record')).toBe(true);
+    expect(result.steps.find((step) => step.type === 'fill')?.selectorDraft?.mode).toBe('role');
     expect(saved.steps).toEqual([]);
     await expect(stat(join(getProjectPath('crm'), 'cases', item.key, 'case.spec.ts'))).rejects.toThrow();
   });
