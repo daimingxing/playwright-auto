@@ -16,6 +16,6 @@ vendor/playwright/.registry
 output/
 
 .cursor
-
+.agents
 # 项目配置Config，尤其大模型的api key
 playwright-auto.config.json
