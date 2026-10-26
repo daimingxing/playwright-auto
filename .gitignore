@@ -15,7 +15,7 @@ vendor/playwright/*
 vendor/playwright/.registry
 output/
 
-.cursor/mcp.json
+.cursor
 
 # 项目配置Config，尤其大模型的api key
 playwright-auto.config.json
